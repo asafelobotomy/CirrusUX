@@ -2,14 +2,14 @@
 
 type RGB = [number, number, number];
 
-export function hexToRgb(hex: string): RGB {
+function hexToRgb(hex: string): RGB {
   let h = hex.replace('#', '').trim();
   if (h.length === 3) h = [...h].map((c) => c + c).join('');
   const n = parseInt(h.slice(0, 6), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-export function rgbToHex([r, g, b]: RGB): string {
+function rgbToHex([r, g, b]: RGB): string {
   return '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
 }
 

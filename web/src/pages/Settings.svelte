@@ -7,6 +7,11 @@
   import { activeTheme, allThemes, effectiveAccent, GRADIENTS, settings } from '../lib/state/settings.svelte';
   import { boards, resetBoards } from '../lib/state/layout.svelte';
   import { go, toast } from '../lib/state/ui.svelte';
+  import { mode } from '../lib/api.svelte';
+  import { live } from '../lib/state/live.svelte';
+
+  const uiVersion = __CIRRUSUX_VERSION__;
+  const mismatch = $derived(mode.live && ((mode.version && !mode.version.startsWith(uiVersion)) || (live.agentVersion && !live.agentVersion.startsWith(uiVersion))));
   import { Check, Download, Image, Palette, RotateCcw, TriangleAlert, Upload } from '../lib/icons';
 
   const SWATCHES = ['#7c9cff', '#4fe0c4', '#3ecf8e', '#f0a868', '#ff7a90', '#c084fc', '#f5d04a', '#5ec8f2'];
@@ -129,6 +134,17 @@
     <textarea bind:value={settings.customCss} spellcheck="false" placeholder={'/* e.g. */\n.cell { border-radius: 4px; }'} aria-label="Custom CSS"></textarea>
   </Card>
 
+  <Card title="About CirrusUX">
+    <dl class="about">
+      <dt>Web UI</dt><dd class="mono">{uiVersion}</dd>
+      <dt>Gateway</dt><dd class="mono">{mode.live ? mode.version || 'unknown' : 'none (demo data)'}</dd>
+      <dt>Agent on cloud64</dt><dd class="mono">{mode.live ? live.agentVersion || 'no report yet' : 'none (demo data)'}</dd>
+    </dl>
+    {#if mismatch}
+      <p class="adj"><TriangleAlert size={15} /> The parts run different versions. Install the same release on cloud64 and cloud-box.</p>
+    {/if}
+  </Card>
+
   <Card title="Grok" subtitle="What may be sent to xAI (decision D2 in the plan).">
     <ul class="pol">
       <li class="on"><Check size={15} /> Summaries only, with IPs, MACs and paths masked</li>
@@ -172,6 +188,9 @@
   .filebtn { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); font-weight: 550; font-size: 0.93rem; cursor: pointer; }
   .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   textarea { width: 100%; min-height: 120px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-2); font-family: var(--font-mono); font-size: 0.85rem; resize: vertical; }
+  .about { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--space-4); margin: 0; font-size: 0.9rem; }
+  .about dt { color: var(--text-muted); }
+  .about dd { margin: 0; }
   .pol { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem; color: var(--text-muted); }
   .pol li { display: flex; align-items: center; gap: 8px; }
   .pol .on { color: var(--text); } .pol .on :global(svg) { color: var(--ok); }

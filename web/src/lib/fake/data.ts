@@ -1,4 +1,4 @@
-// Sample data shaped after the cloud64 brief (1 Nov 2026). Prototype only.
+// Sample data for demo mode, shaped after the cloud64 brief (1 Nov 2026).
 import { at } from '../time.svelte';
 
 export type Health = 'healthy' | 'running' | 'starting' | 'unhealthy' | 'exited';

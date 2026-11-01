@@ -34,6 +34,8 @@ export const live = $state({
   idle: { ...data.idleConf },
   /** Sections the agent could not collect. */
   problems: [] as string[],
+  /** Version of the agent that sent the last snapshot. */
+  agentVersion: '',
 });
 
 export function nextWake(unitPrefix: string): Date | null {

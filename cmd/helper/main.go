@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"cirrusux/internal/helperapi"
+	"cirrusux/internal/version"
 )
 
 const (
@@ -30,6 +31,10 @@ const (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "version" {
+		fmt.Println("cirrusux-helper", version.String())
+		return
+	}
 	if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}

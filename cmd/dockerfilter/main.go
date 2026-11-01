@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +18,8 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	"cirrusux/internal/version"
 )
 
 // Optional API version prefix, then the path.
@@ -42,7 +45,12 @@ func allow(r *http.Request) bool {
 func main() {
 	upstream := flag.String("upstream", "/var/run/docker.sock", "real Docker socket")
 	listen := flag.String("listen", "", "unix socket to listen on when not socket-activated")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("cirrusux-dockerfilter", version.String())
+		return
+	}
 
 	ln, err := listener(*listen)
 	if err != nil {

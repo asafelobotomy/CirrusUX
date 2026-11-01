@@ -18,6 +18,7 @@ import (
 
 	"cirrusux/internal/grok"
 	"cirrusux/internal/snapshot"
+	"cirrusux/internal/version"
 )
 
 type Server struct {
@@ -136,7 +137,7 @@ func (s *Server) agentSnapshot(w http.ResponseWriter, r *http.Request) {
 // ---- API ----
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]any{"user": userOf(r), "dev": s.cfg.Dev, "grok": s.cfg.GrokEnabled()})
+	writeJSON(w, map[string]any{"user": userOf(r), "dev": s.cfg.Dev, "grok": s.cfg.GrokEnabled(), "version": version.String()})
 }
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {

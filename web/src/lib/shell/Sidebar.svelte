@@ -1,7 +1,7 @@
 <script lang="ts">
   import Logo from './Logo.svelte';
   import { MAIN_NAV, SECONDARY_NAV } from './nav';
-  import { go, ui } from '../state/ui.svelte';
+  import { ui } from '../state/ui.svelte';
 
   let { collapsed = false }: { collapsed?: boolean } = $props();
 </script>

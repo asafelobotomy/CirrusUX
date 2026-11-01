@@ -1,7 +1,8 @@
-# CirrusUX — web UI prototype (Phase 0.5)
+# CirrusUX — web UI
 
-Clickable prototype with sample data from the 1 Nov 2026 brief. No server is
-contacted. See `../docs/PLAN.md` §4 for the design spec.
+With a gateway answering on `/api` the UI shows cloud64's real state (live
+mode); without one it runs on sample data from the 1 Nov 2026 brief (demo
+mode, marked "Demo data"). See `../docs/PLAN.md` §4 for the design spec.
 
 ```bash
 npm ci
@@ -12,7 +13,7 @@ npm run build    # static files in dist/
 
 ## What to try
 
-- **Prototype** button (bottom centre): switch cloud64 between awake, asleep
+- **Prototype** button (bottom centre, demo mode only): switch cloud64 between awake, asleep
   and the wake sequence; simulate streaming activity; reset all settings.
 - **Edit layout** on Home: drag the grip to reorder, the corner to resize,
   add widgets, add boards. Phone, tablet and desktop each keep a layout; the
@@ -43,9 +44,9 @@ src/
   lib/fake/                  sample data and the stand-in settings store
 ```
 
-Prototype-only shortcuts, to replace in Phase 1:
+Demo mode only:
 
-- Settings and layouts persist in this browser (`lib/fake/store.ts`); the real
-  panel stores them on the gateway.
+- Settings and layouts persist in this browser (`lib/fake/store.ts`); live
+  mode stores them on the gateway.
 - Power state, actions and Grok answers are simulated.
 - The clock starts at 1 Nov 2026 20:40 GMT so the sample data lines up.

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"cirrusux/internal/snapshot"
+	"cirrusux/internal/version"
 )
 
 type Config struct {
@@ -103,12 +104,19 @@ func (a *Agent) cycle(ctx context.Context) bool {
 }
 
 func (a *Agent) snapshot(ctx context.Context) (snapshot.Snapshot, error) {
+	var s snapshot.Snapshot
 	if a.cfg.DemoFile != "" {
-		return demoSnapshot(a.cfg.DemoFile, time.Now())
+		var err error
+		if s, err = demoSnapshot(a.cfg.DemoFile, time.Now()); err != nil {
+			return s, err
+		}
+	} else {
+		cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		s = a.collector.Collect(cctx)
 	}
-	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-	return a.collector.Collect(cctx), nil
+	s.AgentVersion = version.String()
+	return s, nil
 }
 
 func (a *Agent) push(ctx context.Context, s snapshot.Snapshot) error {

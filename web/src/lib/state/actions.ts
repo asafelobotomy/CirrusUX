@@ -1,7 +1,7 @@
 // Every action the panel can take, as a confirmation (PLAN §3.3, rules 2–3).
 // Buttons, the command palette and Grok all go through these.
 import { live } from './live.svelte';
-import { allowSleep, power, stayAwake, wake } from './power.svelte';
+import { allowSleep, stayAwake, wake } from './power.svelte';
 import { ask, type Confirm } from './ui.svelte';
 import { now } from '../time.svelte';
 import { api, mode } from '../api.svelte';
@@ -114,4 +114,3 @@ export function confirmBackup(o: Opts = {}): void {
   });
 }
 
-export const isAsleep = () => power.state !== 'awake';

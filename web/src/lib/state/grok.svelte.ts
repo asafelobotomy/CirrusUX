@@ -1,5 +1,6 @@
-// Grok assistant, simulated. The real one runs on the gateway with read
-// tools over the snapshot cache and proposal-only action tools (PLAN §3.6).
+// Grok assistant. Live mode asks the gateway, which runs Grok with read tools
+// over the snapshot cache and proposal-only actions (PLAN §3.6); demo mode
+// answers from canned replies.
 import { ui } from './ui.svelte';
 import { power } from './power.svelte';
 import { live } from './live.svelte';

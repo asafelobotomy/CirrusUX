@@ -6,13 +6,15 @@ package snapshot
 import "time"
 
 type Snapshot struct {
-	Host       string      `json:"host"`
-	TakenAt    time.Time   `json:"takenAt"`
-	BootAt     time.Time   `json:"bootAt"`
-	Power      Power       `json:"power"`
-	Containers []Container `json:"containers"`
-	Backups    Backups     `json:"backups"`
-	Disk       *Disk       `json:"disk,omitempty"`
+	Host string `json:"host"`
+	// Version of the agent that took it, to spot a mismatch with the gateway.
+	AgentVersion string      `json:"agentVersion,omitempty"`
+	TakenAt      time.Time   `json:"takenAt"`
+	BootAt       time.Time   `json:"bootAt"`
+	Power        Power       `json:"power"`
+	Containers   []Container `json:"containers"`
+	Backups      Backups     `json:"backups"`
+	Disk         *Disk       `json:"disk,omitempty"`
 	// CPU temperature samples in °C, oldest first, one per sample interval.
 	Temps    []float64 `json:"temps"`
 	Security *Security `json:"security,omitempty"`

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"cirrusux/internal/agent"
+	"cirrusux/internal/version"
 )
 
 func main() {
@@ -24,9 +26,14 @@ func main() {
 		once     = flag.Bool("once", false, "collect once, print the snapshot as JSON and exit")
 		media    = flag.String("media", "/mnt/media", "media mount point")
 		dock     = flag.String("docker", "/run/cirrusux/docker.sock", "filtered Docker socket")
+		showVer  = flag.Bool("version", false, "print the version and exit")
 		helper   = flag.String("helper", "sudo -n /usr/local/sbin/cirrusux-helper", "root helper command; empty to skip")
 	)
 	flag.Parse()
+	if *showVer {
+		fmt.Println("cirrusux-agent", version.String())
+		return
+	}
 
 	c := &agent.Collector{
 		IdleConf:     "/etc/cloud64-idle.conf",

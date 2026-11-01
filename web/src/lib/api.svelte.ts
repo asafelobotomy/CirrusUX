@@ -7,6 +7,8 @@ export const mode = $state({
   user: '',
   grok: false,
   dev: false,
+  /** The gateway's version, e.g. "0.1.0 (a1b2c3d)". */
+  version: '',
 });
 
 export class ApiError extends Error {
@@ -28,8 +30,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 /** Looks for a gateway. Anything but a proper answer means demo mode. */
 export async function detectGateway(): Promise<boolean> {
   try {
-    const me = await api<{ user: string; grok: boolean; dev: boolean }>('/api/me');
-    Object.assign(mode, { live: true, user: me.user, grok: me.grok, dev: me.dev });
+    const me = await api<{ user: string; grok: boolean; dev: boolean; version: string }>('/api/me');
+    Object.assign(mode, { live: true, user: me.user, grok: me.grok, dev: me.dev, version: me.version });
     return true;
   } catch {
     return false;

@@ -1,6 +1,6 @@
-// UK time everywhere (brief §9 rule 8). The prototype runs on a fake clock
-// that starts at the fixture time and then ticks in real time, so the
-// sample data and the countdowns agree.
+// UK time everywhere (brief §9 rule 8). Demo mode runs on a fake clock that
+// starts at the sample data's time and then ticks in real time, so the data
+// and the countdowns agree; live mode switches to the real clock.
 
 const FIXTURE_NOW = Date.parse('2026-11-01T20:40:00Z');
 let base = FIXTURE_NOW;

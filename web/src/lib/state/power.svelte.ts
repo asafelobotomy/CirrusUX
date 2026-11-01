@@ -1,4 +1,5 @@
-// Power state as the gateway sees it (PLAN §3.1). Simulated in the prototype.
+// Power state shown in the UI (PLAN §3.1): set from the gateway in live mode
+// (sync.svelte.ts), simulated in demo mode.
 import { at, clock, now } from '../time.svelte';
 import { live } from './live.svelte';
 
@@ -21,7 +22,7 @@ interface Power {
   lastSnapshot: Date;
   stayAwakeUntil: Date | 'forever' | null;
   wakeStep: number;
-  /** Activity reasons from cloud64-idle-check --dry-run. */
+  /** What the idle check counts as activity right now (its last-msg file). */
   reasons: string[];
   /** State changes since the page loaded, for the timeline. */
   transitions: { at: Date; state: 'awake' | 'asleep'; reason?: string }[];

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { go, ui } from '../state/ui.svelte';
+  import { ui } from '../state/ui.svelte';
   import { House, Package, Search, Settings, Sparkles } from '../icons';
 </script>
 

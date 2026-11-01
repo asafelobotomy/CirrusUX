@@ -14,6 +14,7 @@ import type { Health } from './fake/data';
 
 interface Snap {
   takenAt: string;
+  agentVersion?: string;
   bootAt: string;
   power: {
     since: string; lastActivity?: string; idleMin: number; graceMin: number;
@@ -96,6 +97,7 @@ function apply(st: StateResp): void {
     : null;
   live.timeline = s.timeline.map((t) => ({ from: new Date(t.from), to: d(t.to), state: t.state, reason: t.reason }));
   live.problems = s.errors ?? [];
+  live.agentVersion = s.agentVersion ?? '';
 }
 
 export async function refresh(): Promise<void> {

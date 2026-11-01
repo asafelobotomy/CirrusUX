@@ -4,6 +4,8 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,10 +14,17 @@ import (
 	"time"
 
 	"cirrusux/internal/gateway"
+	"cirrusux/internal/version"
 	"cirrusux/web"
 )
 
 func main() {
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Println("cirrusux-gateway", version.String())
+		return
+	}
 	cfg, err := gateway.ConfigFromEnv()
 	if err != nil {
 		slog.Error("config", "err", err)
@@ -44,7 +53,7 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 	}()
-	slog.Info("gateway listening", "addr", cfg.Listen, "dev", cfg.Dev, "grok", cfg.GrokEnabled())
+	slog.Info("gateway listening", "version", version.String(), "addr", cfg.Listen, "dev", cfg.Dev, "grok", cfg.GrokEnabled())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("serve", "err", err)
 		os.Exit(1)

@@ -1,6 +1,6 @@
-// Stand-in for the gateway's settings store. The real panel saves UI
-// settings on the gateway (PLAN §4.5); the prototype keeps them in this
-// browser only, and works the same when storage is blocked.
+// Demo-mode settings store: this browser only, and works the same when
+// storage is blocked. In live mode the gateway stores settings instead
+// (sync.svelte.ts) and saving here is switched off.
 
 const PREFIX = 'cirrusux:';
 

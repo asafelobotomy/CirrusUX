@@ -2,18 +2,27 @@
 # because the gateway embeds it.
 
 GO      ?= go
-LDFLAGS := -s -w
 BIN     := bin
+# VERSION is the single source of the version number (see `make bump`).
+VERSION := $(shell cat VERSION)
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+STAMP   := -X cirrusux/internal/version.Version=$(VERSION) -X cirrusux/internal/version.Commit=$(COMMIT)
+LDFLAGS := -s -w $(STAMP)
 
 # Development only: a fixed token for the local gateway and agent.
 DEV_TOKEN := dev-only-token-not-a-secret-0123456789
 
-.PHONY: all web build test check dev-gateway dev-agent clean
+.PHONY: all web web-stub build test dev-gateway dev-agent bump clean
 
 all: build
 
 web:
 	cd web && npm ci && npm run build
+
+# go vet/test/run need web/dist, which the gateway embeds. Without a UI build
+# (a fresh clone) they get a placeholder page; `make web` replaces it.
+web-stub:
+	@test -f web/dist/index.html || { mkdir -p web/dist && printf '<!doctype html><title>CirrusUX</title><p>UI not built: run <code>make web</code>.</p>\n' > web/dist/index.html; }
 
 build: web
 	mkdir -p $(BIN)
@@ -22,18 +31,25 @@ build: web
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN)/cirrusux-helper ./cmd/helper
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN)/cirrusux-dockerfilter ./cmd/dockerfilter
 
-test:
+test: web-stub
+	test -z "$$(gofmt -l .)" || { gofmt -l .; echo "run gofmt -w ."; exit 1; }
 	$(GO) vet ./...
 	$(GO) test ./...
 	cd web && npm run check
 
 # Local run without cloud64 or Tailscale: the gateway in dev mode and an
-# agent pushing the recorded demo snapshot. Open http://127.0.0.1:8064.
-dev-gateway:
-	CIRRUS_DEV=1 CIRRUS_DATA_DIR=.dev-data CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) $(GO) run ./cmd/gateway
+# agent pushing the recorded demo snapshot. Open http://127.0.0.1:8064
+# (run `make web` first for the real UI).
+dev-gateway: web-stub
+	CIRRUS_DEV=1 CIRRUS_DATA_DIR=.dev-data CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) $(GO) run -ldflags '$(STAMP)' ./cmd/gateway
 
 dev-agent:
-	CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) $(GO) run ./cmd/agent -gateway http://127.0.0.1:8064/agent/snapshot -demo deploy/dev/demo-snapshot.json -interval 1m
+	CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) $(GO) run -ldflags '$(STAMP)' ./cmd/agent -gateway http://127.0.0.1:8064/agent/snapshot -demo deploy/dev/demo-snapshot.json -interval 1m
+
+# make bump V=0.2.0 — writes the version everywhere; doesn't commit or tag.
+bump:
+	@test -n "$(V)" || { echo "usage: make bump V=x.y.z"; exit 2; }
+	scripts/bump-version.sh $(V)
 
 clean:
 	rm -rf $(BIN) .dev-data web/dist
