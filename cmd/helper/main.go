@@ -1,6 +1,7 @@
-// cirrusux-helper runs as root through one sudoers rule per subcommand.
-// It only reads, takes no arguments beyond the subcommand name, and never
-// prints secrets: just the state the panel shows.
+// cirrusux-helper runs as root through one sudoers rule per command line.
+// Phase 1 subcommands only read; Phase 2 adds a few fixed actions (stay
+// awake, allow sleep, run backup). Nothing takes a path or free text from
+// the caller, and nothing prints secrets.
 package main
 
 import (
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -21,13 +23,16 @@ import (
 )
 
 const (
-	idleRunDir  = "/run/cloud64-idle"
-	stayAwake   = "/run/stay-awake"
-	idleLog     = "/var/log/cloud64-idle.log"
-	backupDir   = "/mnt/media/BackUp/cloud64-system"
-	avLog       = "/var/log/clamav/weekly-scan.log"
-	maxLines    = 400
-	maxStateLen = 4096
+	idleRunDir    = "/run/cloud64-idle"
+	stayAwake     = "/run/stay-awake"
+	stayAwakeBin  = "/usr/local/bin/stay-awake"
+	allowSleepBin = "/usr/local/bin/allow-sleep"
+	egressReport  = "/usr/local/sbin/egress-report.sh"
+	idleLog       = "/var/log/cloud64-idle.log"
+	backupDir     = "/mnt/media/BackUp/cloud64-system"
+	avLog         = "/var/log/clamav/weekly-scan.log"
+	maxLines      = 400
+	maxStateLen   = 4096
 )
 
 func main() {
@@ -35,7 +40,9 @@ func main() {
 		fmt.Println("cirrusux-helper", version.String())
 		return
 	}
-	if len(os.Args) != 2 {
+	if len(os.Args) == 3 && os.Args[1] == helperapi.CmdStayAwake && slices.Contains(helperapi.StayAwakeArgs, os.Args[2]) {
+		// the one subcommand with an argument, from a fixed list
+	} else if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -56,6 +63,19 @@ func main() {
 		out, err = tailFile(avLog, 80)
 	case helperapi.CmdSecurityStatus:
 		out = securityStatus(ctx)
+	case helperapi.CmdStayAwake:
+		if len(os.Args) != 3 {
+			fail("stay-awake needs one of %v", helperapi.StayAwakeArgs)
+		}
+		out, err = holdAwake(ctx, os.Args[2])
+	case helperapi.CmdAllowSleep:
+		out, err = run(ctx, allowSleepBin)
+	case helperapi.CmdNudgeAwake:
+		out, err = nudgeAwake(ctx)
+	case helperapi.CmdBackupRun:
+		out, err = run(ctx, "systemctl", "start", "--no-block", "cloud64-backup.service")
+	case helperapi.CmdEgressReport:
+		out, err = run(ctx, egressReport, "-n", "20")
 	default:
 		fail("unknown subcommand %q", os.Args[1])
 	}
@@ -163,6 +183,42 @@ func securityStatus(ctx context.Context) helperapi.SecurityStatus {
 		s.Errors = append(s.Errors, "1PANEL_BASIC_AFTER: "+err.Error())
 	}
 	return s
+}
+
+// holdAwake runs the existing stay-awake script: minutes, or no argument
+// for "until allow-sleep".
+func holdAwake(ctx context.Context, arg string) (helperapi.Result, error) {
+	if arg == "forever" {
+		return run(ctx, stayAwakeBin)
+	}
+	return run(ctx, stayAwakeBin, arg)
+}
+
+// nudgeAwake keeps cloud64 up for at least 10 minutes after an action
+// (decision D3) without shortening a hold that is already longer.
+func nudgeAwake(ctx context.Context) (helperapi.Result, error) {
+	if b, err := os.ReadFile(stayAwake); err == nil {
+		s := strings.TrimSpace(string(b))
+		if s == "" {
+			return helperapi.Result{Output: []string{"held until allow-sleep; unchanged"}}, nil
+		}
+		if n, err := strconv.ParseInt(strings.Fields(s)[0], 10, 64); err == nil && time.Unix(n, 0).After(time.Now().Add(10*time.Minute)) {
+			return helperapi.Result{Output: []string{"longer hold in place; unchanged"}}, nil
+		}
+	}
+	return run(ctx, stayAwakeBin, "10")
+}
+
+func run(ctx context.Context, name string, args ...string) (helperapi.Result, error) {
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		lines = []string{}
+	}
+	if err != nil {
+		return helperapi.Result{Output: lines}, fmt.Errorf("%v: %s", err, strings.Join(lines, " / "))
+	}
+	return helperapi.Result{Output: lines}, nil
 }
 
 func truncate(s string, n int) string {

@@ -4,7 +4,7 @@
 import { ui } from './ui.svelte';
 import { power } from './power.svelte';
 import { live } from './live.svelte';
-import { confirmBackup, confirmContainer, confirmStayAwake, confirmWake } from './actions';
+import { confirmAction, confirmBackup, confirmContainer, confirmStayAwake, confirmWake } from './actions';
 import { fmtTime } from '../time.svelte';
 import { api, mode } from '../api.svelte';
 
@@ -74,7 +74,7 @@ function answer(q: string): Msg {
   };
 }
 
-interface LiveReply { text: string; tools?: string[]; cached: boolean; proposal?: { action: string; label: string } }
+interface LiveReply { text: string; tools?: string[]; cached: boolean; proposal?: { action: string; label: string; args?: Record<string, string> } }
 
 async function askLive(): Promise<Msg> {
   if (!mode.grok) {
@@ -85,8 +85,8 @@ async function askLive(): Promise<Msg> {
     const r = await api<LiveReply>('/api/grok', { method: 'POST', body: JSON.stringify({ messages: history }) });
     return {
       role: 'grok', text: r.text, tools: r.tools ?? [], cached: r.cached,
-      proposal: r.proposal?.action === 'propose_wake'
-        ? { label: r.proposal.label || 'Wake cloud64', run: () => confirmWake({ source: 'grok' }) }
+      proposal: r.proposal
+        ? { label: r.proposal.label || r.proposal.action, run: () => confirmAction({ action: r.proposal!.action, args: r.proposal!.args }, { source: 'grok' }) }
         : undefined,
     };
   } catch (e) {

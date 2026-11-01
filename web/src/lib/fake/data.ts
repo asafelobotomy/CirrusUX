@@ -125,6 +125,8 @@ export interface ChangeEntry {
   who: string;
   what: string;
   undo?: string;
+  /** Live mode: the action that reverses this one. */
+  undoAction?: { action: string; args?: Record<string, string> };
 }
 
 export const changelog: ChangeEntry[] = [

@@ -1,7 +1,8 @@
 // cirrusux-dockerfilter sits between the agent and the real Docker socket.
 // It runs as root, socket-activated by systemd on a unix socket only the
-// cirrusux group can open, and passes through an allow-list of read-only
-// requests. Everything else gets 403. Unix sockets don't count as activity
+// cirrusux group can open, and passes through an allow-list: reads, plus
+// start/stop/restart of an existing container (Phase 2). Creating, deleting,
+// exec, pulls and everything else get 403. Unix sockets don't count as activity
 // for the idle check, unlike a TCP proxy container would (PLAN §3.4).
 package main
 
@@ -23,21 +24,31 @@ import (
 )
 
 // Optional API version prefix, then the path.
-var allowed = []*regexp.Regexp{
+var allowedGet = []*regexp.Regexp{
 	regexp.MustCompile(`^(/v[0-9.]+)?/_ping$`),
 	regexp.MustCompile(`^(/v[0-9.]+)?/version$`),
 	regexp.MustCompile(`^(/v[0-9.]+)?/containers/json$`),
 	regexp.MustCompile(`^(/v[0-9.]+)?/containers/[A-Za-z0-9_.-]+/json$`),
 }
 
+var allowedPost = regexp.MustCompile(`^(/v[0-9.]+)?/containers/[A-Za-z0-9_.-]+/(start|stop|restart)$`)
+
 func allow(r *http.Request) bool {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		return false
-	}
-	for _, re := range allowed {
-		if re.MatchString(r.URL.Path) {
-			return true
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		for _, re := range allowedGet {
+			if re.MatchString(r.URL.Path) {
+				return true
+			}
 		}
+	case http.MethodPost:
+		// Only the stop timeout may ride along; no other options.
+		for k := range r.URL.Query() {
+			if k != "t" {
+				return false
+			}
+		}
+		return allowedPost.MatchString(r.URL.Path)
 	}
 	return false
 }

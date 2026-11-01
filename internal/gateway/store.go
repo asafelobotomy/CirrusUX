@@ -39,6 +39,8 @@ type AuditEntry struct {
 	What   string    `json:"what"`
 	Undo   string    `json:"undo,omitempty"`
 	Result string    `json:"result,omitempty"`
+	// The action that reverses this one, for the UI's Undo button.
+	UndoAction *ActionReq `json:"undoAction,omitempty"`
 }
 
 const uiHistory = 20

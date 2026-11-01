@@ -9,13 +9,15 @@ import (
 
 func TestAllow(t *testing.T) {
 	ok := []string{
+		"POST /containers/kavita/restart",
+		"POST /v1.47/containers/abc/stop?t=10",
+		"POST /containers/abc/start",
 		"GET /containers/json?all=1",
 		"GET /v1.47/containers/json",
 		"GET /containers/abc123def456/json",
 		"GET /_ping",
 	}
 	denied := []string{
-		"POST /containers/abc/restart",
 		"POST /containers/create",
 		"GET /containers/abc/logs",
 		"GET /containers/abc/archive",
@@ -23,6 +25,12 @@ func TestAllow(t *testing.T) {
 		"DELETE /containers/abc",
 		"GET /containers/../images/json",
 		"POST /v1.47/containers/abc/exec",
+		"POST /containers/abc/kill",
+		"POST /containers/abc/pause",
+		"POST /containers/abc/update",
+		"POST /containers/abc/restart?signal=KILL",
+		"POST /containers/../images/create/start",
+		"PUT /containers/abc/archive",
 	}
 	for _, s := range ok {
 		if !allow(req(s)) {

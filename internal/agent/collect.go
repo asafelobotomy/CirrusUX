@@ -140,13 +140,13 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 	return s
 }
 
-func (c *Collector) helper(ctx context.Context, sub string, out any) error {
+func (c *Collector) helper(ctx context.Context, sub string, out any, args ...string) error {
 	if len(c.Helper) == 0 {
 		return fmt.Errorf("no helper configured")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
-	argv := append(append([]string{}, c.Helper...), sub)
+	argv := append(append(append([]string{}, c.Helper...), sub), args...)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
@@ -170,13 +170,17 @@ type dockerContainer struct {
 	} `json:"Ports"`
 }
 
-func (c *Collector) containers(ctx context.Context) ([]snapshot.Container, error) {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+func (c *Collector) docker(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
 		Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", c.DockerSocket)
 		}},
 	}
+}
+
+func (c *Collector) containers(ctx context.Context) ([]snapshot.Container, error) {
+	client := c.docker(10 * time.Second)
 	var list []dockerContainer
 	if err := getJSON(ctx, client, "http://docker/containers/json?all=1", &list); err != nil {
 		return nil, err

@@ -6,7 +6,6 @@
 
   const PLANNED: Record<string, string[]> = {
     storage: ['Usage per folder, refreshed rarely (du over USB 2 counts as activity)', 'USB link-speed warning', 'SMART and btrfs health once smartmontools and btrfs-progs are installed'],
-    security: ['fail2ban status', 'ClamAV last-scan summary', 'Firewall and lockdown integrity', 'Egress report: top destinations'],
     updates: ['Image tags vs pinned versions', 'apt upgrades after an approved apt update', 'Backup → set tag → pull → health check → changelog, with restore on failure'],
     media: ['Library counts and scans', 'Archive review with two-step delete', 'AVI re-encode queue (later)'],
     logs: ['cloud64-idle.log, backup journal, ClamAV log', 'Per-container logs, live tails time out after 5 min'],

@@ -1,7 +1,10 @@
-# Installing Phase 1
+# Installing CirrusUX
 
-Phase 1 only reads and wakes. Nothing here changes how cloud64 sleeps, its
-firewall, Tailscale or any app. Every step lists its undo.
+Phase 1 reads and wakes. Phase 2 adds actions you confirm in the panel:
+stay awake, allow sleep, start/stop/restart a container, run a backup. Both
+install the same way; the sudoers rule decides whether actions are allowed
+(§2). Nothing here changes cloud64's firewall, Tailscale or its apps'
+settings. Every step lists its undo.
 
 Do the Phase 0 checks first (§0). They are read-only.
 
@@ -52,8 +55,11 @@ recovered on its own. The panel copes with that:
   and the power card says so;
 - the agent retries a failed push after a minute instead of five.
 
-The agent opens **no listening port** in Phase 1, so no firewall change is
-needed on cloud64. It only connects out to cloud-box over the tailnet.
+The agent opens **no listening port**, in Phase 2 too, so no firewall change
+is needed on cloud64. It only connects out to cloud-box over the tailnet:
+snapshots go up every few minutes, and actions come back down over a long
+poll the agent keeps open (an outbound connection, which the idle check
+doesn't count).
 
 ## 1. Build
 
@@ -98,6 +104,23 @@ should show no new activity reasons (don't use `--dry-run`: it writes state).
 Open `https://cloud-box.<tailnet>.ts.net/` from a tailnet device. Logins not
 in `CIRRUS_ALLOWED_USERS` get 403. The browser then offers to install
 CirrusUX as an app (it needs the HTTPS that `tailscale serve` provides).
+
+### Actions (Phase 2)
+
+- The sudoers rule has two parts: `CIRRUS_READ` and `CIRRUS_ACT`. Remove
+  `CIRRUS_ACT` from the last line to keep the panel read-only; actions then
+  fail with a clear error and nothing else changes.
+- Containers can only be started, stopped or restarted: the Docker filter
+  refuses create, exec, kill, delete and pulls.
+- After a container action or a backup the agent keeps cloud64 awake for at
+  least 10 minutes (`nudge-awake`), without shortening a longer hold.
+- Every action is logged with who asked, and with an Undo where there is a
+  safe inverse (stay awake ↔ allow sleep, start ↔ stop).
+
+Upgrading from 0.1.x: install the new binaries on both machines, replace
+`/etc/sudoers.d/cirrusux` (check with `sudo visudo -c`), then
+`sudo systemctl restart cirrusux-agent cirrusux-dockerfilter.socket` on
+cloud64 and `sudo systemctl restart cirrusux-gateway` on cloud-box.
 
 ## 4. After 24 hours
 

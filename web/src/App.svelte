@@ -13,6 +13,7 @@
   import Services from './pages/Services.svelte';
   import Backups from './pages/Backups.svelte';
   import Changelog from './pages/Changelog.svelte';
+  import Security from './pages/Security.svelte';
   import Settings from './pages/Settings.svelte';
   import ThemeEditor from './pages/ThemeEditor.svelte';
   import Gallery from './pages/Gallery.svelte';
@@ -41,7 +42,7 @@
     if (ui.route !== 'home') ui.editLayout = false;
   });
 
-  const PAGES = { services: Services, backups: Backups, changelog: Changelog, settings: Settings, 'theme-editor': ThemeEditor, gallery: Gallery };
+  const PAGES = { services: Services, backups: Backups, changelog: Changelog, security: Security, settings: Settings, 'theme-editor': ThemeEditor, gallery: Gallery };
   const Page = $derived(PAGES[ui.route as keyof typeof PAGES] ?? Placeholder);
 </script>
 

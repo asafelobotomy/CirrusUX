@@ -1,9 +1,25 @@
 # /etc/sudoers.d/cirrusux on cloud64 (mode 440; check with `visudo -cf`).
-# The agent may run only these read-only helper subcommands as root.
+# The agent may run only these helper command lines as root, exactly as
+# written: no other arguments are accepted.
+
 Defaults:cirrusux !lecture, !requiretty, env_reset
-cirrusux ALL=(root) NOPASSWD: /usr/local/sbin/cirrusux-helper idle-status, \
-                              /usr/local/sbin/cirrusux-helper idle-log, \
-                              /usr/local/sbin/cirrusux-helper backup-list, \
-                              /usr/local/sbin/cirrusux-helper backup-last, \
-                              /usr/local/sbin/cirrusux-helper av-last, \
-                              /usr/local/sbin/cirrusux-helper security-status
+
+# Phase 1: reads.
+Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper idle-status, \
+                         /usr/local/sbin/cirrusux-helper idle-log, \
+                         /usr/local/sbin/cirrusux-helper backup-list, \
+                         /usr/local/sbin/cirrusux-helper backup-last, \
+                         /usr/local/sbin/cirrusux-helper av-last, \
+                         /usr/local/sbin/cirrusux-helper security-status, \
+                         /usr/local/sbin/cirrusux-helper egress-report
+
+# Phase 2: the actions you confirm in the panel. Leave this alias out to
+# keep the panel read-only.
+Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
+                        /usr/local/sbin/cirrusux-helper stay-awake 120, \
+                        /usr/local/sbin/cirrusux-helper stay-awake forever, \
+                        /usr/local/sbin/cirrusux-helper allow-sleep, \
+                        /usr/local/sbin/cirrusux-helper nudge-awake, \
+                        /usr/local/sbin/cirrusux-helper backup-run
+
+cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT

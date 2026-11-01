@@ -52,6 +52,7 @@ export function defaultBoards(): Board[] {
       ['note', [6, 2], [8, 2], [4, 2], { text: '332 legacy .avi files (~126 GB) are waiting for a decision on re-encoding. 15 videos in Mysteries, Politics and Stand Up are not in any library.' }],
     ]),
     board('maintenance', 'Maintenance', [
+      ['digest', [8, 3], [8, 3], [4, 4]],
       ['power', [4, 4], [4, 4], [4, 4]],
       ['backups', [4, 2], [4, 2], [4, 2]],
       ['security', [4, 2], [4, 2], [4, 2]],

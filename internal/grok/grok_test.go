@@ -33,13 +33,13 @@ func TestAskToolLoopAndRedaction(t *testing.T) {
 		{Name: "backups", Description: "backups", Run: func(json.RawMessage) (any, error) {
 			return map[string]string{"file": "/mnt/media/BackUp/x.age", "client": "192.0.2.23", "env": "TMM_PASSWORD=hunter2"}, nil
 		}},
-		{Name: "propose_wake", Description: "Wake cloud64", Proposal: true},
+		{Name: "propose_wake", Description: "Wake cloud64", Proposal: true, Action: "wake"},
 	}
 	reply, err := c.Ask(context.Background(), "system", []Turn{{Role: "user", Text: "my mac is 02:00:5e:00:00:01"}}, tools)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reply.Text != "Backup OK." || reply.Proposal == nil || reply.Proposal.Action != "propose_wake" {
+	if reply.Text != "Backup OK." || reply.Proposal == nil || reply.Proposal.Action != "wake" || reply.Proposal.Label != "Wake cloud64" {
 		t.Errorf("reply = %+v", reply)
 	}
 	if reply.TokensIn != 150 || reply.TokensOut != 15 {

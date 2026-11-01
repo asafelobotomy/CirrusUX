@@ -41,9 +41,12 @@ func main() {
 	power := gateway.NewPower(cfg.TailscalePeer, cfg.WakeCmd, !cfg.Dev)
 	go power.Run(ctx)
 
+	gw := gateway.NewServer(cfg, store, power, web.Dist())
+	go gw.RunDigest(ctx)
+
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           gateway.NewServer(cfg, store, power, web.Dist()).Handler(),
+		Handler:           gw.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}

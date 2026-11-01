@@ -57,3 +57,4 @@ export { default as History } from '@lucide/svelte/icons/clock-arrow-left';
 export { default as FlaskConical } from '@lucide/svelte/icons/flask-conical';
 export { default as Trash2 } from '@lucide/svelte/icons/trash';
 export { default as WifiOff } from '@lucide/svelte/icons/wifi-off';
+export { default as Sunrise } from '@lucide/svelte/icons/sunrise';

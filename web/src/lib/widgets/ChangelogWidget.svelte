@@ -3,6 +3,8 @@
   import { fmtDayTime } from '../time.svelte';
   import { Undo2 } from '../icons';
   import { toast } from '../state/ui.svelte';
+  import { confirmUndo } from '../state/actions';
+  import { mode } from '../api.svelte';
 
   let { limit = 0 }: { limit?: number } = $props();
   const entries = $derived(limit ? live.changelog.slice(0, limit) : live.changelog);
@@ -13,8 +15,8 @@
     <li>
       <span class="when faint num">{fmtDayTime(e.at)}</span>
       <span class="what">{e.what} <span class="faint">· {e.who}</span></span>
-      {#if e.undo}
-        <button class="undo" title={e.undo} onclick={() => toast('Undo would ask for confirmation first (prototype)', 'info')}>
+      {#if mode.live ? e.undoAction : e.undo}
+        <button class="undo" title="Undo: {e.undo}" onclick={() => (mode.live && e.undoAction ? confirmUndo(e.undoAction) : toast('Undo asks for confirmation first, then runs (demo)', 'info'))}>
           <Undo2 size={13} /> Undo
         </button>
       {/if}

@@ -9,7 +9,7 @@ export const MAIN_NAV: NavItem[] = [
   { route: 'services', label: 'Services', icon: I.Package },
   { route: 'backups', label: 'Backups', icon: I.Archive },
   { route: 'storage', label: 'Storage', icon: I.HardDrive, phase: 'Phase 3' },
-  { route: 'security', label: 'Security', icon: I.ShieldCheck, phase: 'Phase 2' },
+  { route: 'security', label: 'Security', icon: I.ShieldCheck },
   { route: 'updates', label: 'Updates', icon: I.RefreshCw, phase: 'Phase 3' },
   { route: 'media', label: 'Media', icon: I.Film, phase: 'Phase 3' },
   { route: 'logs', label: 'Logs', icon: I.ScrollText, phase: 'Phase 3' },

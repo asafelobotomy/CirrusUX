@@ -33,10 +33,11 @@ type Server struct {
 	power *Power
 	grok  *grok.Client
 	web   fs.FS
+	queue *Queue
 }
 
 func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
-	s := &Server{cfg: cfg, store: store, power: power, web: web}
+	s := &Server{cfg: cfg, store: store, power: power, web: web, queue: NewQueue()}
 	if cfg.GrokEnabled() {
 		s.grok = &grok.Client{Base: cfg.XAIBase, Model: cfg.XAIModel, Key: cfg.XAIKey}
 	}
@@ -45,7 +46,9 @@ func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /agent/snapshot", s.agentSnapshot)
+	mux.HandleFunc("POST /agent/snapshot", s.agentOnly(s.agentSnapshot))
+	mux.HandleFunc("GET /agent/commands", s.agentOnly(s.agentCommands))
+	mux.HandleFunc("POST /agent/results", s.agentOnly(s.agentResults))
 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/me", s.me)
@@ -54,6 +57,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/ui", s.getUI)
 	api.HandleFunc("PUT /api/ui", s.putUI)
 	api.HandleFunc("GET /api/changelog", s.changelog)
+	api.HandleFunc("POST /api/actions", s.postAction)
+	api.HandleFunc("GET /api/actions/{id}", s.getAction)
+	api.HandleFunc("GET /api/digest", s.getDigest)
 	api.HandleFunc("POST /api/grok", s.askGrok)
 	mux.Handle("/api/", s.auth(api))
 
@@ -116,12 +122,19 @@ func securityHeaders(next http.Handler) http.Handler {
 
 // ---- agent ----
 
-func (s *Server) agentSnapshot(w http.ResponseWriter, r *http.Request) {
-	tok, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if subtle.ConstantTimeCompare([]byte(tok), []byte(s.cfg.AgentToken)) != 1 {
-		http.Error(w, "bad token", http.StatusUnauthorized)
-		return
+// agentOnly requires the agent's token on /agent/ endpoints.
+func (s *Server) agentOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tok, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if subtle.ConstantTimeCompare([]byte(tok), []byte(s.cfg.AgentToken)) != 1 {
+			http.Error(w, "bad token", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
 	}
+}
+
+func (s *Server) agentSnapshot(w http.ResponseWriter, r *http.Request) {
 	var snap snapshot.Snapshot
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&snap); err != nil || snap.TakenAt.IsZero() {
 		http.Error(w, "bad snapshot", http.StatusBadRequest)
@@ -165,12 +178,14 @@ func (s *Server) wake(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "a wake is already in progress", http.StatusConflict)
 		return
 	}
-	s.record(r, "Woke cloud64", "")
+	s.record(AuditEntry{Who: userOf(r), What: "Woke cloud64"})
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (s *Server) record(r *http.Request, what, undo string) {
-	e := AuditEntry{At: time.Now(), Who: userOf(r), What: what, Undo: undo}
+// record writes one action to the audit log and, if configured, the admin
+// box's CHANGELOG.md.
+func (s *Server) record(e AuditEntry) {
+	e.At = time.Now()
 	if err := s.store.Audit(e); err != nil {
 		slog.Error("audit", "err", err)
 	}
@@ -201,8 +216,7 @@ func (s *Server) putUI(w http.ResponseWriter, r *http.Request) {
 	}
 	doc, err := s.store.SaveUI(body.BaseVersion, body.Data)
 	if errors.Is(err, ErrConflict) {
-		w.WriteHeader(http.StatusConflict)
-		writeJSON(w, doc)
+		writeJSONStatus(w, http.StatusConflict, doc)
 		return
 	}
 	if err != nil {
@@ -231,7 +245,12 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
+	writeJSONStatus(w, http.StatusOK, v)
+}
+
+func writeJSONStatus(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
 }

@@ -29,8 +29,9 @@ type Tool struct {
 	Params      map[string]any // JSON schema; nil means no parameters
 	Run         func(args json.RawMessage) (any, error)
 	// Proposal tools don't run anything: their call becomes a proposal for
-	// the UI to confirm.
+	// the UI to confirm. Action names it (defaults to Name).
 	Proposal bool
+	Action   string
 }
 
 type Turn struct {
@@ -39,8 +40,9 @@ type Turn struct {
 }
 
 type Proposal struct {
-	Action string `json:"action"`
-	Label  string `json:"label"`
+	Action string            `json:"action"`
+	Label  string            `json:"label"`
+	Args   map[string]string `json:"args,omitempty"`
 }
 
 type Reply struct {
@@ -126,9 +128,19 @@ func (c *Client) runTool(byName map[string]Tool, call toolCall, reply *Reply) st
 		return `{"error":"unknown tool"}`
 	}
 	if t.Proposal {
-		var p Proposal
-		_ = json.Unmarshal([]byte(call.Function.Arguments), &p)
-		p.Action = t.Name
+		var raw map[string]any
+		_ = json.Unmarshal([]byte(call.Function.Arguments), &raw)
+		p := Proposal{Action: t.Action, Args: map[string]string{}}
+		if p.Action == "" {
+			p.Action = t.Name
+		}
+		for k, v := range raw {
+			if k == "label" {
+				p.Label, _ = v.(string)
+			} else if s, ok := v.(string); ok {
+				p.Args[k] = s
+			}
+		}
 		if p.Label == "" {
 			p.Label = t.Description
 		}

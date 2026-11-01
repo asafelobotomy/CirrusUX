@@ -26,8 +26,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(path, { ...init, headers, credentials: 'same-origin', cache: 'no-store' });
   if (!init.method || init.method === 'GET') mode.offline = res.headers.get('X-Cirrus-Offline') === '1';
   if (!res.ok) throw new ApiError(res.status, (await res.text()).trim() || res.statusText);
-  if (res.status === 204 || res.status === 202) return undefined as T;
-  return res.json() as Promise<T>;
+  // 202/204 may come without a body (wake); actions answer 202 with JSON.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 /** Looks for a gateway. Anything but a proper answer means demo mode. */

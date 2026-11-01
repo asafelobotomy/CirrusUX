@@ -7,6 +7,33 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-01
+
+### Added
+- Phase 2 actions, each confirmed in the panel and logged with who asked:
+  stay awake (30 min, 2 h, until allowed to sleep), allow sleep, start,
+  stop and restart a container, run a backup now.
+- Command channel: the agent fetches actions over an outbound long poll,
+  checks them against its own list and reports results; cloud64 still opens
+  no port.
+- Undo on changelog entries that have a safe inverse.
+- Security page: ClamAV, firewall lockdown, fail2ban, and an on-demand
+  outbound-traffic (egress) report.
+- Daily digest at 08:00 UK from cached data, with a Grok summary when
+  configured, and a Daily digest widget.
+- Grok can propose any of the actions; the gateway drops proposals that
+  couldn't run, and you confirm the rest.
+
+### Changed
+- Container actions and backups keep cloud64 awake for at least 10 minutes
+  (decision D3).
+- The sudoers rule is split into read and action parts; remove the action
+  part to keep the panel read-only.
+
+### Fixed
+- The UI dropped the body of 202 replies, which actions use for their ID.
+- The settings-conflict reply was sent without its JSON content type.
+
 ## [0.1.1] - 2026-11-01
 
 ### Added

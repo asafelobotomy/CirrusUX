@@ -19,8 +19,9 @@ You answer from the panel's cached data, gathered by tools. Asking you never wak
 
 Rules:
 - Use the tools to check facts before answering. Say how old the data is when the server is asleep.
-- You cannot run anything yourself. If waking the server would help, call propose_wake; the owner confirms it in the panel.
-- Other actions (restarts, backups, updates) arrive in a later version: describe them, don't pretend to do them.
+- You cannot run anything yourself. When an action would help, call one propose_ tool; the owner sees a button and confirms it. Propose at most one action per answer, and only when it clearly helps.
+- Waking is only possible while cloud64 sleeps; every other action only while it's awake.
+- Updates and deleting things aren't available: describe them instead.
 - Never ask for or repeat passwords, keys or tokens. Some values in tool results are masked on purpose.
 - Be brief and concrete: a few sentences, no headings.`
 
@@ -60,9 +61,7 @@ func (s *Server) askGrok(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Grok could not answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	if reply.Proposal != nil && view.State == "awake" {
-		reply.Proposal = nil // nothing to wake
-	}
+	reply.Proposal = s.checkProposal(reply.Proposal, view, snap)
 	writeJSON(w, map[string]any{"text": reply.Text, "tools": reply.Tools, "proposal": reply.Proposal, "cached": view.State != "awake"})
 }
 
@@ -76,7 +75,7 @@ func (s *Server) grokTools(snap *snapshot.Snapshot, view PowerView) []grok.Tool 
 			return f(), nil
 		}
 	}
-	return []grok.Tool{
+	tools := []grok.Tool{
 		{Name: "power_status", Description: "Awake/asleep, since when, what keeps it awake, sleep settings and next scheduled wakes.", Run: none(func() any {
 			p := snap.Power
 			out := map[string]any{
@@ -148,11 +147,57 @@ func (s *Server) grokTools(snap *snapshot.Snapshot, view PowerView) []grok.Tool 
 			}
 			return out, nil
 		}},
-		{Name: "propose_wake", Description: "Propose waking cloud64. The owner confirms it in the panel.", Proposal: true,
-			Params: map[string]any{"type": "object", "properties": map[string]any{
-				"label": map[string]any{"type": "string", "description": "Button text, e.g. 'Wake cloud64'"},
-			}}},
 	}
+	return append(tools, proposalTools(snap)...)
+}
+
+// proposalTools let Grok suggest an action; the owner confirms each one.
+func proposalTools(snap *snapshot.Snapshot) []grok.Tool {
+	label := map[string]any{"type": "string", "description": "Short button text, e.g. 'Restart Jellyfin'"}
+	obj := func(props map[string]any, required ...string) map[string]any {
+		props["label"] = label
+		return map[string]any{"type": "object", "properties": props, "required": required}
+	}
+	var names []string
+	if snap != nil {
+		for _, c := range snap.Containers {
+			names = append(names, c.Name)
+		}
+	}
+	container := map[string]any{"name": map[string]any{"type": "string", "enum": names}}
+	return []grok.Tool{
+		{Name: "propose_wake", Action: "wake", Proposal: true, Description: "Propose waking cloud64.", Params: obj(map[string]any{})},
+		{Name: "propose_stay_awake", Action: "stay_awake", Proposal: true, Description: "Propose keeping cloud64 awake.",
+			Params: obj(map[string]any{"minutes": map[string]any{"type": "string", "enum": []string{"30", "120", "forever"}}}, "minutes")},
+		{Name: "propose_allow_sleep", Action: "allow_sleep", Proposal: true, Description: "Propose removing a stay-awake hold.", Params: obj(map[string]any{})},
+		{Name: "propose_restart_container", Action: "container_restart", Proposal: true, Description: "Propose restarting a container.", Params: obj(container, "name")},
+		{Name: "propose_start_container", Action: "container_start", Proposal: true, Description: "Propose starting a stopped container.", Params: obj(container, "name")},
+		{Name: "propose_run_backup", Action: "backup_run", Proposal: true, Description: "Propose running the system backup now.", Params: obj(map[string]any{})},
+	}
+}
+
+// checkProposal drops a proposal that couldn't run right now, so the UI
+// never shows a button that would fail.
+func (s *Server) checkProposal(p *grok.Proposal, view PowerView, snap *snapshot.Snapshot) *grok.Proposal {
+	if p == nil {
+		return nil
+	}
+	if p.Action == "wake" {
+		if view.State == "awake" {
+			return nil
+		}
+		p.Args = nil
+		return p
+	}
+	if view.State != "awake" {
+		return nil
+	}
+	clean, _, err := ActionReq{Action: p.Action, Args: p.Args}.Validate(snap)
+	if err != nil {
+		return nil
+	}
+	p.Args = clean.Args
+	return p
 }
 
 func uk(t *time.Time) string {

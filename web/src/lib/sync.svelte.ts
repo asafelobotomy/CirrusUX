@@ -113,7 +113,7 @@ export async function refresh(): Promise<void> {
 
 export async function loadChangelog(): Promise<void> {
   try {
-    const entries = await api<{ at: string; who: string; what: string; undo?: string }[]>('/api/changelog');
+    const entries = await api<{ at: string; who: string; what: string; undo?: string; undoAction?: { action: string; args?: Record<string, string> } }[]>('/api/changelog');
     live.changelog = entries.map((e) => ({ ...e, at: new Date(e.at) }));
   } catch {
     /* keep what we have */

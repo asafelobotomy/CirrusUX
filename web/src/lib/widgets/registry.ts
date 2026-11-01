@@ -14,6 +14,7 @@ import GrokWidget from './GrokWidget.svelte';
 import ChangelogWidget from './ChangelogWidget.svelte';
 import UpdatesWidget from './UpdatesWidget.svelte';
 import NoteWidget from './NoteWidget.svelte';
+import DigestWidget from './DigestWidget.svelte';
 
 export interface WidgetMeta {
   title: string;
@@ -39,5 +40,6 @@ export const WIDGETS: Record<string, WidgetMeta> = {
   grok: { title: 'Ask Grok', description: 'Quick question with suggestions', component: GrokWidget, icon: I.Sparkles, size: [5, 2], min: [3, 2] },
   changelog: { title: 'Changelog', description: 'Recent actions with undo', component: ChangelogWidget, icon: I.History, size: [6, 3], min: [3, 2] },
   updates: { title: 'Updates', description: 'Pending updates waiting for approval', component: UpdatesWidget, icon: I.RefreshCw, size: [4, 2], min: [3, 2] },
+  digest: { title: 'Daily digest', description: 'Morning summary built from cached data', component: DigestWidget, icon: I.Sunrise, size: [6, 3], min: [3, 2] },
   note: { title: 'Note', description: 'A short note of your own', component: NoteWidget, icon: I.FileText, size: [4, 2], min: [2, 2], config: { text: '' } },
 };

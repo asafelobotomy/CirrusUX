@@ -31,6 +31,8 @@ type Agent struct {
 	cfg       Config
 	collector *Collector
 	client    *http.Client
+	poll      *http.Client  // long poll for commands: longer timeout
+	pushNow   chan struct{} // an action changed state: report it now
 }
 
 func New(cfg Config, c *Collector) *Agent {
@@ -41,6 +43,11 @@ func New(cfg Config, c *Collector) *Agent {
 			Timeout:   20 * time.Second,
 			Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
 		},
+		poll: &http.Client{
+			Timeout:   45 * time.Second,
+			Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
+		},
+		pushNow: make(chan struct{}, 1),
 	}
 }
 
@@ -51,6 +58,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	tick := time.NewTicker(15 * time.Second)
 	defer tick.Stop()
 
+	go a.commandLoop(ctx)
 	a.cycle(ctx)
 	last := time.Now().Round(0)
 	nextPush := time.Now().Add(a.cfg.Interval)
@@ -61,6 +69,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-tick.C:
+		case <-a.pushNow:
+			nextPush = time.Now()
 		}
 		wall := time.Now().Round(0) // strip monotonic: it stops during suspend
 		if wall.Sub(last) > 60*time.Second {

@@ -213,7 +213,7 @@ Pinned versions everywhere (Go toolchain, Node for the build only, every npm pac
 
 ### Phase 0 — prerequisites (no code on the server yet)
 - Confirm decisions D1–D5 (§9).
-- Verify on cloud64, read-only: does tailnet traffic to a new port pass `ts-input` / `1PANEL_BASIC_AFTER`, or does 1Panel's firewall need a tailnet-only rule? (The brief lists only UDP 41641 in `ts-input`.)
+- ~~Verify whether tailnet traffic to a new agent port passes the firewall.~~ Not needed: the agent never listens (Phase 2 uses an outbound long poll).
 - Check that cloud-box's userspace tailscaled works with `tailscale serve` (brief §10 item 19 notes that it sometimes loses the coordination server).
 - **Done when:** the decisions are recorded here and the firewall answer is known.
 
@@ -232,11 +232,17 @@ Includes from the UI work: themes, boards with drag-and-drop layout, app tiles, 
 - **Done when:** with the server asleep, the panel shows the designed "Asleep" state, last-known containers and backups, and Grok answers "did last night's backup work?" without waking it. Wake brings it up and the panel goes green within ~60 s. Over 24 h of normal use, `cloud64-idle.log` shows no extra wakes and no suspend delayed by the panel.
 
 ### Phase 2 — actions with confirmation
+Built (1–2 Nov 2026), with these changes from the original plan:
+- **No agent port after all (D5 dropped).** The agent fetches actions from the gateway over its own outbound long poll (`/agent/commands`, results on `/agent/results`). Actions arrive within a second, cloud64 still opens no port, and the firewall question is gone. The agent checks every command again against its own fixed list.
+- **D3 implemented**: container actions and backups keep cloud64 awake ≥10 min (`nudge-awake`), never shortening a longer hold; viewing never does.
+- **Grok proposes**: wake, stay awake, allow sleep, start/restart a container, run a backup. The gateway drops any proposal that couldn't run right now (wrong state, unknown container); the owner still confirms each one.
+- **Daily digest**: built at 08:00 UK from the cache (and only once data exists), with a short Grok summary when Grok is configured.
+- **Moved to Phase 3**: the router (TR-064) power check, which needs the router password plumbing again, and "Explain this", which belongs with the Logs page.
 Stay-awake/Allow-sleep, start/stop/restart containers, Run backup now, Security page, CHANGELOG writing, Grok action proposals, TR-064 power check, "Explain this", daily digest. UI: theme editor and custom CSS (customisation levels 3–4).
 - **Done when:** every action leaves an audit row and a CHANGELOG entry with a working undo, and Grok can't run anything without a click.
 
 ### Phase 3 — maintenance
-Update workflow (images, then apt), Storage page, Media helpers, archive review with two-step delete, Logs page. UI: declarative custom widgets (customisation level 5).
+Update workflow (images, then apt), Storage page, Media helpers, archive review with two-step delete, Logs page with "Explain this" on log lines, router (TR-064) power check. UI: declarative custom widgets (customisation level 5).
 - **Done when:** one image update (e.g. Navidrome) goes through backup → tag → pull → health → changelog, and the restore path is tested once.
 
 ### Later
@@ -275,7 +281,7 @@ WoL proxy on an always-on LAN device (brief §5.6); offsite backup status; AVI r
 | D2 | What Grok may send to xAI | Summaries only, with IPs/MACs/paths masked; raw logs only when you ask for one |
 | D3 | Does acting in the panel extend wake time? | Yes: any action sets Stay-awake for 10 min; viewing does not |
 | D4 | Who may log in | Only your Tailscale login |
-| D5 | Agent port | 47064, tailnet IP only |
+| D5 | Agent port | ~~47064~~ Not needed: actions come over the agent's outbound long poll |
 | D6 | Visual direction and default theme | Decided from the Phase 0.5 prototype; *Graphite* (dark) proposed |
 | D7 | Wallpapers and uploaded logos | Allowed, stored on the gateway, size-limited (5 MB each) |
 
