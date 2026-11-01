@@ -1,0 +1,25 @@
+# /etc/systemd/system/c64panel-agent.service on cloud64
+[Unit]
+Description=cloud64 panel agent (pushes snapshots to the gateway)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=c64panel
+Group=c64panel
+EnvironmentFile=/etc/cloud64-panel/agent.env
+ExecStart=/usr/local/bin/c64panel-agent
+Restart=on-failure
+RestartSec=30s
+Nice=10
+# The agent calls the helper through sudo, so NoNewPrivileges and capability
+# limits would break it; keep the filesystem protections that don't.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+# /etc/systemd/system/c64panel-dockerfilter.socket on cloud64
+[Unit]
+Description=Read-only Docker API socket for the cloud64 panel agent
+
+[Socket]
+ListenStream=/run/c64panel/docker.sock
+SocketUser=root
+SocketGroup=c64panel
+SocketMode=0660
+DirectoryMode=0750
+
+[Install]
+WantedBy=sockets.target

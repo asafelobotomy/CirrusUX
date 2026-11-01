@@ -1,0 +1,4 @@
+# /etc/sudoers.d/c64panel-wake on cloud-box (mode 440; check with `visudo -cf`).
+# The gateway may run only the wake script, as the admin user, with no arguments.
+Defaults:c64panel !lecture, !requiretty, env_reset
+c64panel ALL=(<admin-user>) NOPASSWD: /home/<admin-user>/bin/cloud64-wake ""

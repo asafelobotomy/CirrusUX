@@ -1,0 +1,101 @@
+/*
+ * Base styles. Every colour comes from a theme token (set on :root by
+ * applyTheme); derived shades are mixed here so themes stay small.
+ */
+:root {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+/* Derived shades. Re-declared on .themed so a scoped theme (previews,
+   the gallery's theme matrix) mixes from its own tokens. */
+:root, .themed {
+  --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
+  --accent-line: color-mix(in oklab, var(--accent) 45%, transparent);
+  --ok-soft: color-mix(in oklab, var(--ok) 16%, transparent);
+  --warn-soft: color-mix(in oklab, var(--warn) 18%, transparent);
+  --bad-soft: color-mix(in oklab, var(--bad) 16%, transparent);
+  --sleep-soft: color-mix(in oklab, var(--sleep) 18%, transparent);
+  --hover: color-mix(in oklab, var(--text) 6%, transparent);
+  --press: color-mix(in oklab, var(--text) 10%, transparent);
+  --radius-sm: calc(var(--radius) * 0.55);
+  --radius-lg: calc(var(--radius) * 1.4);
+}
+
+:root {
+  --space-1: calc(4px * var(--density));
+  --space-2: calc(8px * var(--density));
+  --space-3: calc(12px * var(--density));
+  --space-4: calc(16px * var(--density));
+  --space-5: calc(24px * var(--density));
+  --space-6: calc(32px * var(--density));
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-1: 120ms;
+  --dur-2: 220ms;
+  --dur-3: 420ms;
+
+  --density: 1;
+  --text-scale: 1;
+  --row-h: calc(84px * var(--density));
+
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-size: calc(15px * var(--text-scale));
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color var(--dur-3) var(--ease), color var(--dur-3) var(--ease);
+}
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }
+p { margin: 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+code, kbd, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection { background: var(--accent-soft); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Scrollbars that follow the theme */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+/* Night look while cloud64 sleeps: calmer colour, live values dimmed. */
+:root[data-power='asleep'] .live,
+:root[data-power='unreachable'] .live {
+  opacity: 0.62;
+  filter: saturate(0.4);
+  transition: opacity var(--dur-3) var(--ease), filter var(--dur-3) var(--ease);
+}

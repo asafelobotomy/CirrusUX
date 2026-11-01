@@ -1,0 +1,16 @@
+# /etc/systemd/system/c64panel-dockerfilter.service on cloud64
+[Unit]
+Description=Read-only Docker API filter for the cloud64 panel agent
+Requires=c64panel-dockerfilter.socket
+After=docker.service
+
+[Service]
+ExecStart=/usr/local/sbin/c64panel-dockerfilter
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ReadWritePaths=/run/docker.sock
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX

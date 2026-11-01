@@ -1,0 +1,89 @@
+// App-wide UI state: routing, overlays, confirmations and toasts.
+import { live } from './live.svelte';
+import { now } from '../time.svelte';
+import { mode } from '../api.svelte';
+
+export type Route =
+  | 'home' | 'services' | 'backups' | 'storage' | 'security'
+  | 'updates' | 'media' | 'logs' | 'changelog'
+  | 'settings' | 'theme-editor' | 'gallery';
+
+function routeFromHash(): Route {
+  const r = location.hash.replace(/^#\/?/, '') as Route;
+  return r || 'home';
+}
+
+export const ui = $state({
+  route: routeFromHash(),
+  paletteOpen: false,
+  grokOpen: false,
+  editLayout: false,
+  device: 'desktop' as Device,
+  /** Layout used by the board: follows the board's own width, so opening
+   *  the Grok panel on a laptop switches to the tablet layout. */
+  boardDevice: 'desktop' as Device,
+});
+
+addEventListener('hashchange', () => (ui.route = routeFromHash()));
+
+export function go(route: Route): void {
+  location.hash = '/' + route;
+}
+
+// ---- device class, used for per-device layouts (PLAN §4.3) ----
+
+export type Device = 'phone' | 'tablet' | 'desktop';
+const phoneQ = matchMedia('(max-width: 639px)');
+const tabletQ = matchMedia('(max-width: 1099px)');
+const updateDevice = () => (ui.device = phoneQ.matches ? 'phone' : tabletQ.matches ? 'tablet' : 'desktop');
+phoneQ.addEventListener('change', updateDevice);
+tabletQ.addEventListener('change', updateDevice);
+updateDevice();
+
+// ---- confirmations: every action shows what runs and how to undo it ----
+
+export interface Confirm {
+  title: string;
+  body: string;
+  command: string;
+  undo?: string;
+  confirmLabel: string;
+  danger?: boolean;
+  /** When set, the user must type this word to confirm. */
+  typed?: string;
+  source?: 'grok';
+  run: () => void;
+  changelog: string;
+}
+
+export const confirmState = $state<{ current: Confirm | null }>({ current: null });
+
+export function ask(c: Confirm): void {
+  confirmState.current = c;
+}
+
+export function runConfirmed(): void {
+  const c = confirmState.current;
+  if (!c) return;
+  confirmState.current = null;
+  c.run();
+  // Live, the gateway writes the changelog and the action reports back.
+  if (mode.live) return;
+  live.changelog.unshift({ at: now(), who: c.source === 'grok' ? 'you (proposed by Grok)' : 'you', what: c.changelog, undo: c.undo });
+  toast(`${c.changelog}. Logged to CHANGELOG.`, 'ok');
+}
+
+// ---- toasts ----
+
+export interface Toast { id: number; text: string; tone: 'ok' | 'info' | 'warn' }
+export const toasts = $state<Toast[]>([]);
+let toastId = 0;
+
+export function toast(text: string, tone: Toast['tone'] = 'info'): void {
+  const id = ++toastId;
+  toasts.push({ id, text, tone });
+  setTimeout(() => {
+    const i = toasts.findIndex((t) => t.id === id);
+    if (i >= 0) toasts.splice(i, 1);
+  }, 4200);
+}

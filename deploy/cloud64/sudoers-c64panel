@@ -1,0 +1,9 @@
+# /etc/sudoers.d/c64panel on cloud64 (mode 440; check with `visudo -cf`).
+# The agent may run only these read-only helper subcommands as root.
+Defaults:c64panel !lecture, !requiretty, env_reset
+c64panel ALL=(root) NOPASSWD: /usr/local/sbin/c64panel-helper idle-status, \
+                              /usr/local/sbin/c64panel-helper idle-log, \
+                              /usr/local/sbin/c64panel-helper backup-list, \
+                              /usr/local/sbin/c64panel-helper backup-last, \
+                              /usr/local/sbin/c64panel-helper av-last, \
+                              /usr/local/sbin/c64panel-helper security-status

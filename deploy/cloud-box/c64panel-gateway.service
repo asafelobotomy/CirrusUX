@@ -1,0 +1,25 @@
+# /etc/systemd/system/c64panel-gateway.service on cloud-box
+[Unit]
+Description=cloud64 panel gateway
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=c64panel
+Group=c64panel
+EnvironmentFile=/etc/cloud64-panel/gateway.env
+ExecStart=/usr/local/bin/c64panel-gateway
+StateDirectory=c64panel
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=5s
+# The wake command goes through sudo (to the admin user), so no
+# NoNewPrivileges; everything else is locked down.
+ProtectSystem=full
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

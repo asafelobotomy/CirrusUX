@@ -1,0 +1,77 @@
+package gateway
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+)
+
+// Config comes from the environment (/etc/cloud64-panel/gateway.env, mode
+// 600). Secrets are never logged or sent to the browser.
+type Config struct {
+	Listen  string // 127.0.0.1:8064; published to the tailnet by `tailscale serve`
+	DataDir string
+	// Dev skips the Tailscale identity check and Tailscale power polling.
+	// Only for running on a workstation.
+	Dev          bool
+	AllowedUsers []string // Tailscale logins allowed to use the panel
+	AgentToken   string
+
+	TailscalePeer string   // cloud64
+	WakeCmd       []string // argv, no shell
+	Changelog     string   // optional CHANGELOG.md to append to
+
+	XAIKey          string
+	XAIBase         string
+	XAIModel        string
+	GrokDailyTokens int
+}
+
+func ConfigFromEnv() (Config, error) {
+	c := Config{
+		Listen:          env("C64_LISTEN", "127.0.0.1:8064"),
+		DataDir:         env("C64_DATA_DIR", "/var/lib/c64panel"),
+		Dev:             os.Getenv("C64_DEV") == "1",
+		AllowedUsers:    splitList(os.Getenv("C64_ALLOWED_USERS")),
+		AgentToken:      os.Getenv("C64_AGENT_TOKEN"),
+		TailscalePeer:   env("C64_TAILSCALE_PEER", "cloud64"),
+		WakeCmd:         strings.Fields(os.Getenv("C64_WAKE_CMD")),
+		Changelog:       os.Getenv("C64_CHANGELOG"),
+		XAIKey:          os.Getenv("XAI_API_KEY"),
+		XAIBase:         env("XAI_BASE_URL", "https://api.x.ai/v1"),
+		XAIModel:        os.Getenv("XAI_MODEL"),
+		GrokDailyTokens: envInt("C64_GROK_DAILY_TOKENS", 200_000),
+	}
+	if len(c.AgentToken) < 32 {
+		return c, fmt.Errorf("C64_AGENT_TOKEN must be set to at least 32 random characters")
+	}
+	if !c.Dev && len(c.AllowedUsers) == 0 {
+		return c, fmt.Errorf("C64_ALLOWED_USERS must list at least one Tailscale login")
+	}
+	return c, nil
+}
+
+func (c Config) GrokEnabled() bool { return c.XAIKey != "" && c.XAIModel != "" }
+
+func env(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
+}
+
+func envInt(k string, def int) int {
+	if n, err := strconv.Atoi(os.Getenv(k)); err == nil {
+		return n
+	}
+	return def
+}
+
+func splitList(s string) []string {
+	var out []string
+	for _, f := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' }) {
+		out = append(out, strings.ToLower(f))
+	}
+	return out
+}
