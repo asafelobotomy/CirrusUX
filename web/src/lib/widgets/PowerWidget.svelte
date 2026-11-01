@@ -4,7 +4,7 @@
   import { confirmAllowSleep, confirmStayAwake, confirmWake } from '../state/actions';
   import { clock, fmtDayTime, fmtDuration, fmtTime, tzLabel } from '../time.svelte';
   import { live } from '../state/live.svelte';
-  import { Check, Coffee, Loader, Moon, MoonStar, Power, Sun, Wifi, Zap } from '../icons';
+  import { Check, Coffee, Loader, Moon, MoonStar, Power, Sun, TriangleAlert, Wifi, Zap } from '../icons';
 
   const LABEL = { awake: 'Awake', asleep: 'Asleep', waking: 'Waking…', unreachable: 'No reports' };
 
@@ -37,6 +37,10 @@
       </span>
     </div>
   </div>
+
+  {#if power.notice}
+    <p class="notice" role="status"><TriangleAlert size={15} />{power.notice}</p>
+  {/if}
 
   {#if power.state === 'awake'}
     <div class="status">
@@ -121,6 +125,11 @@
   .eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); }
   .state { font-size: clamp(1.9rem, 4.5cqi, 2.6rem); font-weight: 680; letter-spacing: -0.03em; color: var(--text); }
   .since { font-size: 0.9rem; }
+  .notice {
+    display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius-sm);
+    background: var(--warn-soft); color: var(--text); font-size: 0.84rem; line-height: 1.35;
+  }
+  .notice :global(svg) { color: var(--warn); flex: none; margin-top: 2px; }
   .status { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
   .line { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
   .line :global(svg) { color: var(--c); flex: none; }

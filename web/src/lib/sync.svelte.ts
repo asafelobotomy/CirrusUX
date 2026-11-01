@@ -30,7 +30,7 @@ interface Snap {
 }
 
 interface StateResp {
-  power: { state: PowerState; since?: string; wakeStep?: number; wakeError?: string };
+  power: { state: PowerState; since?: string; wakeStep?: number; wakeError?: string; notice?: string };
   snapshot: Snap | null;
 }
 
@@ -61,6 +61,7 @@ function apply(st: StateResp): void {
   power.state = p.state;
   if (p.since) power.since = new Date(p.since);
   power.wakeStep = p.wakeStep ?? 0;
+  power.notice = p.notice ?? '';
   if (p.wakeError && p.wakeError !== lastWakeError) toast(p.wakeError, 'warn');
   lastWakeError = p.wakeError ?? '';
 

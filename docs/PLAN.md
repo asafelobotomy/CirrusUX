@@ -53,7 +53,7 @@ Why this shape:
 | Serving | Listens on 127.0.0.1 only. Published to the tailnet with `tailscale serve` (HTTPS with the `*.ts.net` cert). Never port-forwarded. |
 | Login | Tailscale Serve identity headers (`Tailscale-User-Login`), matched against an allow-list in the config. No passwords. Destructive actions need re-confirmation in the UI (typed confirmation for anything irreversible). Session cookies: HttpOnly, Secure, SameSite=Strict; CSRF tokens; rate limit. |
 | Power state | Primary: the cloud64 peer `Online` / `LastSeen` from the local tailscaled API (tailscaled on cloud64 is stopped during sleep, brief §5.5). Confirmed by the age of the last snapshot. Phase 2: router `GetSpecificHostEntry` as a second opinion. States shown: Awake, Asleep, Waking (≤ 6 min), Unreachable (not asleep, but not answering). |
-| Wake | Runs the existing `~/bin/cloud64-wake` (via a sudo rule for the admin user, that command only). The UI shows progress until the agent's first snapshot after resume (~20–30 s). |
+| Wake | Runs the existing `~/bin/cloud64-wake` through `c64panel-wake` (one sudoers rule, no arguments; the router password stays in a root-only file). The UI shows progress until the agent's first snapshot after resume (~20–30 s). |
 | Cache | SQLite: latest snapshot per area, wake/suspend history, audit log, Grok conversations (redacted). |
 | Changelog | Every action is appended to `/workspace/cloud64/CHANGELOG.md` (the existing file, with a lock) **and** to the gateway's audit table: UK time, who, what, backup path, undo command. |
 | Secrets | `/etc/cloud64-panel/gateway.env` (600): xAI API key, agent token. Shown in the UI only as `set` / `not set`. |
@@ -225,7 +225,8 @@ A clickable prototype with fake data: the design tokens, the four built-in theme
 Built (1 Nov 2026), with three changes from the original plan:
 - **No listening port on cloud64 yet.** The agent only pushes; Phase 1 needs nothing from the gateway that would require connecting in. The agent port (D5) and its firewall question move to Phase 2.
 - **JSON files instead of SQLite** on the gateway (snapshot, versioned UI settings, audit log). Enough for one household and keeps the Go code dependency-free.
-- **Log parsers are tolerant guesses** at formats the brief didn't show; INSTALL.md §0 lists the read-only commands whose output confirms them.
+- **Log parsers checked against real output** (INSTALL.md §0, 1 Nov). The agent reads the idle checker's state files rather than running `--dry-run`, which turned out not to be write-free.
+- **Wake goes through `c64panel-wake`**, a root wrapper that reads the router password from a root-only file and runs the existing `cloud64-wake` as the admin user. The password was only in the admin bot's process environment, which `sudo -u` can't reach.
 Gateway (login, Power page, Wake, cache), agent (snapshots), helper subcommands marked 1, Docker filter (read-only verbs), Services and Backups pages (view only), Grok with read tools only.
 Includes from the UI work: themes, boards with drag-and-drop layout, app tiles, command palette, PWA install, settings screen (customisation levels 1–2).
 - **Done when:** with the server asleep, the panel shows the designed "Asleep" state, last-known containers and backups, and Grok answers "did last night's backup work?" without waking it. Wake brings it up and the panel goes green within ~60 s. Over 24 h of normal use, `cloud64-idle.log` shows no extra wakes and no suspend delayed by the panel.
@@ -281,6 +282,6 @@ WoL proxy on an always-on LAN device (brief §5.6); offsite backup status; AVI r
 ## 10. Risks
 
 - **Calls to app APIs count as activity.** Jellyfin/Navidrome/ABS/Kavita API calls open TCP into the container's published port (brief §5.4 item 5). Keep them on-demand and short, and cache the results.
-- **cloud-box tailscaled drops out** (brief §10 item 19): the panel would show "Unreachable" for everything. Show that state clearly and suggest the known fix.
+- **cloud-box tailscaled drops out** (brief §10 item 19; seen again 1 Nov): handled. The gateway checks its own tailnet link, falls back to snapshot age and shows a notice; the agent retries after a minute. tailscaled there was also started by hand, not as a service: make it one before installing (INSTALL.md §0).
 - **1Panel firewall rules may be rewritten by 1Panel.** Any rule added for the agent port must be added through 1Panel itself, or re-checked like the lockdown timer.
 - **Prompt injection through logs.** Log text sent to Grok may contain instructions. Mitigated by proposal-only actions and confirm cards; Grok output is never executed.

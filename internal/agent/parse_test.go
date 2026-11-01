@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,7 +47,7 @@ func TestTimeline(t *testing.T) {
 			t.Errorf("segment %d state %s, want %s", i, s.State, want[i])
 		}
 	}
-	if segs[3].To != nil || segs[3].Reason != "Woken (irq 122)" {
+	if segs[3].To != nil || segs[3].Reason != "Woken by network (irq 122)" {
 		t.Errorf("last segment = %+v", segs[3])
 	}
 	if got := lastResume(ev, time.Time{}); !got.Equal(mustTime("2026-11-01T20:20:00Z")) {
@@ -57,13 +58,94 @@ func TestTimeline(t *testing.T) {
 	}
 }
 
-func TestReasonsFromDryRun(t *testing.T) {
-	got := reasonsFromDryRun("checking…\nACTIVE: ssh session (admin); tcp 22, jellyfin stream\n")
-	if len(got) != 3 || got[0] != "ssh session (admin)" || got[2] != "jellyfin stream" {
-		t.Errorf("got %q", got)
+func TestReasonsFromMsg(t *testing.T) {
+	cases := map[string][]string{
+		"ACTIVE: 1 remote login session(s) host conns: 22<-100.64.0.2 ":               {"1 remote login session(s)", "SSH from 100.64.0.2"},
+		"ACTIVE: host conns: 22457<-192.0.2.133 443<-192.0.2.40":                      {"1Panel from 192.0.2.133", "OpenResty from 192.0.2.40"},
+		"ACTIVE: playback by ignored client 192.0.2.23 (11 MB sent since last check)": {"playback by ignored client 192.0.2.23 (11 MB sent since last check)"},
+		"ACTIVE: stay-awake flag":             {"stay-awake flag"},
+		"IDLE: nothing active, timer started": nil,
+		"":                                    nil,
 	}
-	if got := reasonsFromDryRun("IDLE: nothing active, timer started"); len(got) != 0 {
-		t.Errorf("idle gave reasons %q", got)
+	for in, want := range cases {
+		got := reasonsFromMsg(in)
+		if strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("reasonsFromMsg(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Lines in the exact format of /var/log/cloud64-idle.log (1 Nov 2026),
+// addresses replaced with documentation ones.
+var realIdleLog = []string{
+	"2026-11-01 17:37:32 GMT WAKE-DIAG 20261101-173201: slept ~299s irq 122; inbound after resume: 192.0.2.1 Reply 198.51.100.7 (details /var/log/cloud64-wake/natural-20261101-173201.summary)",
+	"2026-11-01 17:37:52 GMT ACTIVE: 1 remote login session(s) host conns: 22<-100.64.0.2 ",
+	"2026-11-01 17:39:10 GMT IDLE: nothing active, timer started",
+	"2026-11-01 18:08:00 GMT SUSPEND: idle 1800s; RTC wake set Mon 2026-11-02 03:34:51 GMT",
+	"2026-11-01 18:23:39 GMT RESUMED (wakeup irq 122)",
+	"2026-11-01 18:24:04 GMT WAKE-DIAG 20261101-180800: slept ~933s irq 122; inbound after resume: Request 192.0.2.1 Reply ; last inbound before freeze: 198.51.100.7",
+	"2026-11-01 18:38:01 GMT ACTIVE: playback by ignored client 192.0.2.23 (11 MB sent since last check)",
+	"2026-11-01 18:59:45 GMT ACTIVE: host conns: 22<-100.64.0.2 ",
+	"2026-11-01 19:08:30 GMT RESUMED (wakeup irq 122)",
+	"2026-11-01 19:08:40 GMT IDLE: nothing active, timer started",
+	"2026-11-01 19:56:45 GMT SUSPEND: idle 1810s; RTC wake set Mon 2026-11-02 03:29:10 GMT",
+	"2026-11-02 03:29:12 GMT RESUMED (wakeup irq 8)",
+}
+
+func TestRealIdleLog(t *testing.T) {
+	ev := parseIdleLog(realIdleLog, now)
+	if len(ev) != len(realIdleLog) {
+		t.Fatalf("parsed %d of %d lines", len(ev), len(realIdleLog))
+	}
+	if ev[1].Kind != "ACTIVE" || !strings.HasPrefix(ev[1].Detail, "1 remote login") {
+		t.Errorf("zone label not stripped: %+v", ev[1])
+	}
+	if !ev[3].At.Equal(mustTime("2026-11-01T18:08:00Z")) || ev[3].Kind != "SUSPEND" {
+		t.Errorf("suspend = %+v", ev[3])
+	}
+
+	segs := timeline(ev[:11], now, time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC))
+	got := []string{}
+	for _, s := range segs {
+		got = append(got, s.State+"@"+s.From.UTC().Format("15:04")+" "+s.Reason)
+	}
+	want := []string{
+		"awake@00:00 ",
+		"asleep@18:08 ",
+		"awake@18:23 Woken by network (irq 122)",
+		// 19:08 RESUMED has no SUSPEND and no WAKE-DIAG: no sleep can be placed.
+		"asleep@19:56 ",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("timeline:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+
+	// Next day: the 03:29 resume matches the RTC alarm set at 19:56.
+	next := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	segs = timeline(ev, next, time.Time{})
+	if last := segs[len(segs)-1]; last.State != "awake" || last.Reason != "Scheduled wake (RTC)" {
+		t.Errorf("RTC wake = %+v", last)
+	}
+}
+
+func TestResumeWithoutSuspendUsesWakeDiag(t *testing.T) {
+	lines := []string{
+		"2026-11-01 17:00:00 GMT IDLE: nothing active, timer started",
+		"2026-11-01 17:40:00 GMT RESUMED (wakeup irq 122)",
+		"2026-11-01 17:40:25 GMT WAKE-DIAG x: slept ~600s irq 122; inbound after resume: 192.0.2.1",
+	}
+	segs := timeline(parseIdleLog(lines, now), now, time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC))
+	if len(segs) != 3 || segs[1].State != "asleep" || segs[1].From.UTC().Format("15:04") != "17:30" {
+		t.Errorf("segments = %+v", segs)
+	}
+}
+
+func TestParseEpoch(t *testing.T) {
+	if p := parseEpoch("1793571617\n"); p == nil || p.Unix() != 1793571617 {
+		t.Errorf("got %v", p)
+	}
+	if parseEpoch("") != nil || parseEpoch("x") != nil {
+		t.Error("bad input should give nil")
 	}
 }
 
@@ -91,6 +173,8 @@ func TestParseBackupJournal(t *testing.T) {
 		"2026-10-31T03:31:00+0000 cloud64 systemd[1]: Starting cloud64-backup.service - Nightly backup...",
 		"2026-10-31T03:31:40+0000 cloud64 systemd[1]: Finished cloud64-backup.service - Nightly backup.",
 		"2026-11-01T03:30:53+0000 cloud64 systemd[1]: Starting cloud64-backup.service - Nightly backup...",
+		"2026-11-01T03:30:53+00:00 cloud64 crontab[666619]: (root) LIST (root)",
+		"2026-11-01T03:31:33+00:00 cloud64 cloud64-backup.sh[666620]: tar: /etc/1panel/agent.sock: socket ignored",
 		"2026-11-01T03:31:33+0000 cloud64 cloud64-backup.sh[812]: OK 2.0G cloud64-system-2026-11-01_0330.tar.zst.age",
 		"2026-11-01T03:31:33+0000 cloud64 systemd[1]: cloud64-backup.service: Deactivated successfully.",
 		"2026-11-01T03:31:33+0000 cloud64 systemd[1]: Finished cloud64-backup.service - Nightly backup.",

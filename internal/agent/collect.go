@@ -70,8 +70,15 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 	if err := c.helper(ctx, helperapi.CmdIdleStatus, &idle); err != nil {
 		errf("idle status: %v", err)
 	} else {
-		if r := reasonsFromDryRun(idle.DryRun); r != nil {
+		// The checker's own state is more precise than its log.
+		if r := reasonsFromMsg(idle.State["last-msg"]); r != nil {
 			s.Power.Reasons = r
+		}
+		if t := parseEpoch(idle.State["last-active"]); t != nil && (s.Power.LastActivity == nil || t.After(*s.Power.LastActivity)) {
+			s.Power.LastActivity = t
+		}
+		if t := parseEpoch(idle.State["last-wake"]); t != nil && t.After(s.BootAt) && t.After(s.Power.Since) {
+			s.Power.Since = *t
 		}
 		if idle.StayAwake != nil {
 			s.Power.StayAwakeUntil, s.Power.StayAwakeForever = parseStayAwake(*idle.StayAwake)

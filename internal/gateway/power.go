@@ -51,6 +51,7 @@ type Power struct {
 	useTS   bool
 
 	mu       sync.Mutex
+	notice   string // a problem on cloud-box's side, shown in the UI
 	tsKnown  bool
 	online   bool
 	lastSeen time.Time
@@ -70,6 +71,9 @@ type PowerView struct {
 	WakeErr  string     `json:"wakeError,omitempty"`
 	// What the state is based on, for the UI's "how do we know" hint.
 	Source string `json:"source"`
+	// Set when the gateway can't trust its own view, e.g. cloud-box lost
+	// its connection to Tailscale's coordination server.
+	Notice string `json:"notice,omitempty"`
 }
 
 func NewPower(peer string, wakeCmd []string, useTailscale bool) *Power {
@@ -96,21 +100,49 @@ func (p *Power) pollTailscale(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "tailscale", "status", "--json").Output()
-	if err != nil {
-		slog.Warn("tailscale status", "err", err)
-		p.mu.Lock()
-		p.tsKnown = false
-		p.mu.Unlock()
-		return
-	}
-	online, lastSeen, found := findPeer(out, p.peer)
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.tsKnown = found
-	p.online, p.lastSeen = online, lastSeen
-	if p.waking != nil && online && p.waking.step < 3 {
+	if err != nil {
+		slog.Warn("tailscale status", "err", err)
+		p.tsKnown = false
+		p.notice = "The gateway can't read Tailscale's status, so awake/asleep comes from the agent's last report only."
+		return
+	}
+	st := parseStatus(out, p.peer)
+	if !st.selfOK {
+		// cloud-box's tailscaled has dropped off the coordination server
+		// (seen on 1 Nov). Peer states are stale then: fall back to the
+		// snapshot's age rather than calling cloud64 asleep.
+		p.tsKnown = false
+		p.notice = "cloud-box has lost its connection to Tailscale. Reports from cloud64 can't arrive until it reconnects."
+		return
+	}
+	p.notice = ""
+	p.tsKnown = st.found
+	p.online, p.lastSeen = st.online, st.lastSeen
+	if p.waking != nil && st.online && p.waking.step < 3 {
 		p.waking.step = 3
 	}
+}
+
+type tsStatus struct {
+	selfOK        bool // our own tailscaled is running and connected
+	found, online bool
+	lastSeen      time.Time
+}
+
+func parseStatus(statusJSON []byte, peer string) tsStatus {
+	var st struct {
+		BackendState string `json:"BackendState"`
+		Self         struct {
+			Online bool `json:"Online"`
+		} `json:"Self"`
+	}
+	if json.Unmarshal(statusJSON, &st) != nil {
+		return tsStatus{}
+	}
+	online, lastSeen, found := findPeer(statusJSON, peer)
+	return tsStatus{selfOK: st.BackendState == "Running" && st.Self.Online, found: found, online: online, lastSeen: lastSeen}
 }
 
 func findPeer(statusJSON []byte, name string) (online bool, lastSeen time.Time, found bool) {
@@ -137,6 +169,12 @@ func findPeer(statusJSON []byte, name string) (online bool, lastSeen time.Time, 
 func (p *Power) View(now time.Time, snap *snapshot.Snapshot) PowerView {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	v := p.view(now, snap)
+	v.Notice = p.notice
+	return v
+}
+
+func (p *Power) view(now time.Time, snap *snapshot.Snapshot) PowerView {
 	fresh := snap != nil && now.Sub(snap.TakenAt) < snapshotFresh
 
 	if w := p.waking; w != nil {

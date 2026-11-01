@@ -13,7 +13,7 @@ StateDirectory=c64panel
 StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=5s
-# The wake command goes through sudo (to the admin user), so no
+# The wake command goes through sudo (c64panel-wake), so no
 # NoNewPrivileges; everything else is locked down.
 ProtectSystem=full
 PrivateTmp=yes

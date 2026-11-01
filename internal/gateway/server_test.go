@@ -147,6 +147,17 @@ func TestPowerView(t *testing.T) {
 	}
 }
 
+func TestParseStatusSelfOffline(t *testing.T) {
+	up := []byte(`{"BackendState":"Running","Self":{"Online":true},"Peer":{"k":{"HostName":"cloud64","Online":false}}}`)
+	if st := parseStatus(up, "cloud64"); !st.selfOK || !st.found || st.online {
+		t.Errorf("connected: %+v", st)
+	}
+	down := []byte(`{"BackendState":"Running","Self":{"Online":false},"Peer":{"k":{"HostName":"cloud64","Online":false}}}`)
+	if st := parseStatus(down, "cloud64"); st.selfOK {
+		t.Errorf("disconnected cloud-box should not be trusted: %+v", st)
+	}
+}
+
 func TestFindPeer(t *testing.T) {
 	js := []byte(`{"Peer":{"nodekey:a":{"HostName":"tablet","Online":true},"nodekey:b":{"HostName":"localhost","DNSName":"cloud64.tail1234.ts.net.","Online":false,"LastSeen":"2026-11-01T19:56:00Z"}}}`)
 	online, seen, found := findPeer(js, "cloud64")

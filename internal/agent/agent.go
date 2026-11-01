@@ -76,7 +76,10 @@ func (a *Agent) Run(ctx context.Context) error {
 			case time.Now().Before(retryUntil):
 				nextPush = time.Now().Add(15 * time.Second)
 			default:
-				nextPush = time.Now().Add(a.cfg.Interval)
+				// The gateway or cloud-box's tailnet link is down (it
+				// drops now and then); try again soon rather than in a
+				// full interval.
+				nextPush = time.Now().Add(min(a.cfg.Interval, time.Minute))
 			}
 		}
 	}

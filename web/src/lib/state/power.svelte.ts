@@ -25,6 +25,8 @@ interface Power {
   reasons: string[];
   /** State changes since the page loaded, for the timeline. */
   transitions: { at: Date; state: 'awake' | 'asleep'; reason?: string }[];
+  /** A problem on the gateway's side, e.g. cloud-box offline from Tailscale. */
+  notice: string;
 }
 
 export const power: Power = $state({
@@ -36,6 +38,7 @@ export const power: Power = $state({
   wakeStep: 0,
   reasons: [],
   transitions: [],
+  notice: '',
 });
 
 /** Minutes until suspend, or null when something is holding it awake. */

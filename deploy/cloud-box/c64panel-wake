@@ -1,0 +1,29 @@
+#!/bin/sh
+# /usr/local/sbin/c64panel-wake on cloud-box — root:root, mode 755.
+#
+# Runs the admin user's existing cloud64-wake with the router password from
+# a root-only file. The gateway may run this (one sudoers rule, no
+# arguments) but can never read the password: it isn't in the gateway's
+# environment, files or memory. Exit codes are cloud64-wake's (0 woke,
+# 2 timed out).
+set -eu
+
+ADMIN_USER="<admin-user>"
+# root:root 600. One line: the variable cloud64-wake reads, e.g. NAME=value.
+SECRETS=/etc/cloud64-panel/router.env
+
+if [ "$#" -ne 0 ]; then
+	echo "c64panel-wake takes no arguments" >&2
+	exit 64
+fi
+if [ "$(stat -c '%u %a' "$SECRETS")" != "0 600" ]; then
+	echo "$SECRETS must be owned by root with mode 600" >&2
+	exit 1
+fi
+
+set -a
+. "$SECRETS"
+set +a
+# runuser drops to the admin user and keeps the exported variable; the
+# wake script then runs exactly as it does for the admin bot.
+exec runuser -u "$ADMIN_USER" -- "/home/$ADMIN_USER/bin/cloud64-wake"

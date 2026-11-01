@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	idleCheck   = "/usr/local/sbin/cloud64-idle-check"
 	idleRunDir  = "/run/cloud64-idle"
 	stayAwake   = "/run/stay-awake"
 	idleLog     = "/var/log/cloud64-idle.log"
@@ -41,7 +40,7 @@ func main() {
 	var err error
 	switch os.Args[1] {
 	case helperapi.CmdIdleStatus:
-		out, err = idleStatus(ctx)
+		out, err = idleStatus()
 	case helperapi.CmdIdleLog:
 		out, err = tailFile(idleLog, maxLines)
 	case helperapi.CmdBackupList:
@@ -68,15 +67,12 @@ func fail(format string, a ...any) {
 	os.Exit(1)
 }
 
-func idleStatus(ctx context.Context) (helperapi.IdleStatus, error) {
+func idleStatus() (helperapi.IdleStatus, error) {
 	st := helperapi.IdleStatus{State: map[string]string{}}
-	out, err := exec.CommandContext(ctx, idleCheck, "--dry-run").CombinedOutput()
-	if err != nil && len(out) == 0 {
+	entries, err := os.ReadDir(idleRunDir)
+	if err != nil {
 		return st, err
 	}
-	st.DryRun = strings.TrimSpace(string(out))
-
-	entries, _ := os.ReadDir(idleRunDir)
 	for _, e := range entries {
 		if !e.Type().IsRegular() {
 			continue

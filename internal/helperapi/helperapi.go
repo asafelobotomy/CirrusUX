@@ -16,9 +16,10 @@ const (
 var Commands = []string{CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus}
 
 type IdleStatus struct {
-	// Output of `cloud64-idle-check --dry-run`.
-	DryRun string `json:"dryRun"`
 	// Files in /run/cloud64-idle/, name → content (trimmed, size-limited).
+	// The checker rewrites them every minute: last-msg (its verdict),
+	// last-active, last-wake, last-suspend (unix seconds). The panel never
+	// runs cloud64-idle-check itself: its --dry-run is not write-free.
 	State map[string]string `json:"state"`
 	// Content of /run/stay-awake, nil when the file does not exist.
 	StayAwake *string `json:"stayAwake"`

@@ -1,12 +1,10 @@
 package agent
 
-// Parsers for the text the cloud64 scripts and services write. The exact
-// line formats were not in the brief, so each parser is tolerant: it looks
-// for a leading timestamp and well-known keywords, and skips what it can't
-// read. Verify against real output in Phase 0.
+// Parsers for the text the cloud64 scripts and services write. Formats
+// checked against real output on 1 Nov 2026 (INSTALL.md §0); each parser
+// still skips lines it can't read rather than failing.
 
 import (
-	"bufio"
 	"regexp"
 	"strconv"
 	"strings"
@@ -59,7 +57,12 @@ func splitTS(line string, now time.Time) (time.Time, string, bool) {
 				t = t.AddDate(-1, 0, 0)
 			}
 		}
-		return t, strings.TrimSpace(line[len(m[0]):]), true
+		rest := strings.TrimSpace(line[len(m[0]):])
+		// cloud64-idle.log writes "2026-11-01 17:37:32 GMT ACTIVE: …"
+		for _, z := range []string{"GMT ", "BST ", "UTC "} {
+			rest = strings.TrimPrefix(rest, z)
+		}
+		return t, rest, true
 	}
 	return time.Time{}, line, false
 }
@@ -92,7 +95,41 @@ func parseIdleLog(lines []string, now time.Time) []idleEvent {
 	return out
 }
 
-var irqRe = regexp.MustCompile(`irq\s*(\d+)`)
+var (
+	irqRe     = regexp.MustCompile(`irq\s*(\d+)`)
+	rtcSetRe  = regexp.MustCompile(`RTC wake set \w{3} (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})`)
+	sleptRe   = regexp.MustCompile(`slept ~(\d+)s`)
+	rtcWindow = 5 * time.Minute
+)
+
+// wakeReason tells a scheduled RTC wake from a network one: the checker logs
+// "RTC wake set <time>" when it suspends.
+func wakeReason(resume idleEvent, rtc time.Time) string {
+	if !rtc.IsZero() && resume.At.Sub(rtc).Abs() <= rtcWindow {
+		return "Scheduled wake (RTC)"
+	}
+	if m := irqRe.FindStringSubmatch(resume.Detail); m != nil {
+		return "Woken by network (irq " + m[1] + ")"
+	}
+	return "Woken"
+}
+
+// sleptBefore returns how long cloud64 slept before the RESUMED event at i,
+// from the WAKE-DIAG line logged shortly after it ("slept ~933s").
+func sleptBefore(events []idleEvent, i int) time.Duration {
+	for _, e := range events[i+1:] {
+		if e.At.Sub(events[i].At) > 2*time.Minute {
+			break
+		}
+		if e.Kind == "WAKE-DIAG" {
+			if m := sleptRe.FindStringSubmatch(e.Detail); m != nil {
+				n, _ := strconv.Atoi(m[1])
+				return time.Duration(n) * time.Second
+			}
+		}
+	}
+	return 0
+}
 
 // timeline builds today's awake/asleep segments (UK day) from idle events.
 func timeline(events []idleEvent, now time.Time, bootAt time.Time) []snapshot.Segment {
@@ -113,11 +150,16 @@ func timeline(events []idleEvent, now time.Time, bootAt time.Time) []snapshot.Se
 		t := to
 		segs = append(segs, snapshot.Segment{From: from, To: &t, State: state, Reason: reason})
 	}
-	for _, e := range events {
+	var rtc time.Time
+	for i, e := range events {
 		var next string
 		switch e.Kind {
 		case "SUSPEND":
 			next = "asleep"
+			rtc = time.Time{}
+			if m := rtcSetRe.FindStringSubmatch(e.Detail); m != nil {
+				rtc, _ = time.ParseInLocation("2006-01-02 15:04:05", m[1], London)
+			}
 		case "RESUMED":
 			next = "awake"
 		default:
@@ -127,16 +169,23 @@ func timeline(events []idleEvent, now time.Time, bootAt time.Time) []snapshot.Se
 			state, reason = next, ""
 			continue
 		}
+		if next == "awake" && state == "awake" {
+			// A resume with no SUSPEND logged before it (e.g. a manual
+			// test cycle): place the sleep using WAKE-DIAG's duration.
+			d := sleptBefore(events, i)
+			if d == 0 || e.At.Add(-d).Before(from) {
+				continue
+			}
+			push(e.At.Add(-d))
+			state, from, reason = "asleep", e.At.Add(-d), ""
+		}
 		if next == state {
 			continue
 		}
 		push(e.At)
 		state, from, reason = next, e.At, ""
 		if next == "awake" {
-			reason = "Woken"
-			if m := irqRe.FindStringSubmatch(e.Detail); m != nil {
-				reason = "Woken (irq " + m[1] + ")"
-			}
+			reason = wakeReason(e, rtc)
 		}
 	}
 	segs = append(segs, snapshot.Segment{From: from, State: state, Reason: reason})
@@ -164,24 +213,61 @@ func lastActivity(events []idleEvent) *time.Time {
 	return nil
 }
 
-// reasonsFromDryRun pulls the activity reasons out of
-// `cloud64-idle-check --dry-run` output: lines like "ACTIVE: ssh session; tcp 22".
-func reasonsFromDryRun(out string) []string {
+var (
+	// A new reason starts where a lowercase "label:" begins, e.g.
+	// "1 remote login session(s) host conns: 22<-100.64.0.2".
+	reasonSplit = regexp.MustCompile(`(?:^|\s+)[a-z][a-z -]*:\s`)
+	hostConnRe  = regexp.MustCompile(`(\d+)<-(\S+)`)
+	portNames   = map[string]string{"22": "SSH", "21": "FTP", "443": "OpenResty", "8080": "OpenResty", "22457": "1Panel"}
+)
+
+// reasonsFromMsg turns the checker's verdict (/run/cloud64-idle/last-msg),
+// e.g. "ACTIVE: 1 remote login session(s) host conns: 22<-100.64.0.2", into
+// readable reasons. Any other verdict (IDLE: …) means none.
+func reasonsFromMsg(msg string) []string {
+	msg = strings.TrimSpace(msg)
+	rest, ok := strings.CutPrefix(msg, "ACTIVE:")
+	if !ok {
+		return nil
+	}
+	rest = strings.TrimSpace(rest)
+	var parts []string
+	last := 0
+	for _, loc := range reasonSplit.FindAllStringIndex(rest, -1) {
+		parts = append(parts, rest[last:loc[0]])
+		last = loc[0]
+	}
+	parts = append(parts, rest[last:])
+
 	var reasons []string
-	sc := bufio.NewScanner(strings.NewReader(out))
-	for sc.Scan() {
-		line := sc.Text()
-		i := strings.Index(line, "ACTIVE")
-		if i < 0 {
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
 			continue
 		}
-		for _, r := range strings.FieldsFunc(strings.TrimLeft(line[i+len("ACTIVE"):], ": "), func(r rune) bool { return r == ';' || r == ',' }) {
-			if r = strings.TrimSpace(r); r != "" {
-				reasons = append(reasons, r)
+		if conns, ok := strings.CutPrefix(p, "host conns:"); ok {
+			for _, m := range hostConnRe.FindAllStringSubmatch(conns, -1) {
+				name := portNames[m[1]]
+				if name == "" {
+					name = "port " + m[1]
+				}
+				reasons = append(reasons, name+" from "+m[2])
 			}
+			continue
 		}
+		reasons = append(reasons, p)
 	}
 	return reasons
+}
+
+// parseEpoch reads a /run/cloud64-idle timestamp file (unix seconds).
+func parseEpoch(s string) *time.Time {
+	n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	if err != nil || n <= 0 {
+		return nil
+	}
+	t := time.Unix(n, 0)
+	return &t
 }
 
 // parseConf reads KEY=VALUE lines from a shell-sourced config file.
