@@ -3,6 +3,7 @@
   import { WIDGETS } from '../widgets/registry';
   import { COLUMNS, moveWidget, removeWidget, type Item } from '../state/layout.svelte';
   import { power } from '../state/power.svelte';
+  import { mode } from '../api.svelte';
   import { fmtTime } from '../time.svelte';
   import type { Device } from '../state/ui.svelte';
   import { GripVertical, X } from '../icons';
@@ -87,7 +88,7 @@
         {#if !meta.bare}
           <header>
             <h3><Icon size={15} />{item.config?.group ?? meta.title}</h3>
-            {#if meta.live && power.state !== 'awake'}
+            {#if meta.live && (power.state !== 'awake' || mode.offline)}
               <span class="asof num">as of {fmtTime(power.lastSnapshot)}</span>
             {/if}
           </header>

@@ -10,4 +10,12 @@ import { startLive } from './lib/sync.svelte';
 // the design prototype on sample data.
 if (await detectGateway()) await startLive();
 
+// Installable app with an offline shell (PLAN §4.6). Production builds only:
+// in development the worker's caching would hide changes.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(__CIRRUSUX_VERSION__)}`).catch(() => {
+    /* the panel works without it */
+  });
+}
+
 export default mount(App, { target: document.getElementById('app')! });

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"path"
 	"slices"
@@ -20,6 +21,11 @@ import (
 	"cirrusux/internal/snapshot"
 	"cirrusux/internal/version"
 )
+
+func init() {
+	// Go doesn't know the web app manifest type; browsers want it exact.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+}
 
 type Server struct {
 	cfg   Config

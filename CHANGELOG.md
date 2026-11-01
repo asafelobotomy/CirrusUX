@@ -7,6 +7,17 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-01
+
+### Added
+- Installable app (PWA): web manifest, app icons (regular, maskable and
+  Apple touch, rendered by `scripts/make-icons.sh`) and a service worker.
+- Offline mode: the panel opens without a connection and shows the last data
+  the gateway sent, with an "Offline · saved data" badge, a dated notice on
+  the power card and "as of" labels. No countdown and no wake while offline.
+  Only reads are saved; anything that changes state always goes to the
+  network.
+
 ## [0.1.0] - 2026-11-01
 
 ### Added

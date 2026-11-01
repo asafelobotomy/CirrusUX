@@ -29,6 +29,10 @@ async function liveWake(): Promise<void> {
 type Opts = { source?: 'grok' };
 
 export function confirmWake(o: Opts = {}): void {
+  if (mode.offline) {
+    toast("You're offline. Waking cloud64 needs the gateway.", 'warn');
+    return;
+  }
   ask({
     ...o,
     title: 'Wake cloud64?',

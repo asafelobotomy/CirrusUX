@@ -228,7 +228,7 @@ Built (1 Nov 2026), with three changes from the original plan:
 - **Log parsers checked against real output** (INSTALL.md §0, 1 Nov). The agent reads the idle checker's state files rather than running `--dry-run`, which turned out not to be write-free.
 - **Wake goes through `cirrusux-wake`**, a root wrapper that reads the router password from a root-only file and runs the existing `cloud64-wake` as the admin user. The password was only in the admin bot's process environment, which `sudo -u` can't reach.
 Gateway (login, Power page, Wake, cache), agent (snapshots), helper subcommands marked 1, Docker filter (read-only verbs), Services and Backups pages (view only), Grok with read tools only.
-Includes from the UI work: themes, boards with drag-and-drop layout, app tiles, command palette, PWA install, settings screen (customisation levels 1–2).
+Includes from the UI work: themes, boards with drag-and-drop layout, app tiles, command palette, PWA install, settings screen (customisation levels 1–2). PWA added 1 Nov: installable (Chrome reports no installability errors) with an offline shell that shows the last saved data, clearly marked as offline.
 - **Done when:** with the server asleep, the panel shows the designed "Asleep" state, last-known containers and backups, and Grok answers "did last night's backup work?" without waking it. Wake brings it up and the panel goes green within ~60 s. Over 24 h of normal use, `cloud64-idle.log` shows no extra wakes and no suspend delayed by the panel.
 
 ### Phase 2 — actions with confirmation

@@ -5,7 +5,7 @@
   import { ALL_NAV } from './nav';
   import { ui } from '../state/ui.svelte';
   import { activeBoard, addBoard, boards } from '../state/layout.svelte';
-  import { Check, Command, FlaskConical, Pencil, Plus, Search, Sparkles } from '../icons';
+  import { Check, Command, FlaskConical, Pencil, Plus, Search, Sparkles, WifiOff } from '../icons';
   import { mode } from '../api.svelte';
 
   let { onAddWidget }: { onAddWidget: () => void } = $props();
@@ -36,6 +36,9 @@
   {/if}
 
   <div class="right">
+    {#if mode.offline}
+      <span class="offline" title="The gateway is out of reach. Showing the data saved on this device."><WifiOff size={13} />{phone ? 'Offline' : 'Offline · saved data'}</span>
+    {/if}
     {#if !mode.live && !phone}
       <span class="demo" title="No gateway answered, so the panel shows sample data"><FlaskConical size={13} />Demo data</span>
     {/if}
@@ -83,6 +86,7 @@
   .tabs button.on { color: var(--text); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
   .tabs .add { width: 34px; padding: 0; display: grid; place-items: center; }
   .right { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); flex: none; }
+  .offline { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 600; color: var(--text); background: var(--surface-3); border: 1px solid var(--border-strong); white-space: nowrap; }
   .demo { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 600; color: var(--warn); background: var(--warn-soft); }
   .search {
     display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px 0 12px;

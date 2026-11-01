@@ -26,6 +26,10 @@ npm run build    # static files in dist/
   density, text size, wallpapers, custom CSS, export/import.
 - **Theme editor**: edit every token with live preview and WCAG checks.
 - **Components**: every component, plus the theme matrix.
+- **Install as an app** (production builds served by the gateway): the
+  browser offers to install CirrusUX. Stop the gateway and reload to see
+  offline mode: the last saved data with an "Offline · saved data" badge.
+  The service worker isn't registered by `npm run dev`.
 
 ## Layout
 

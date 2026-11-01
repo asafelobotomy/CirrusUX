@@ -12,6 +12,7 @@ backups and a Grok assistant, designed around a server that sleeps.
 - `cmd/dockerfilter` — on cloud64, root: read-only Docker API on a unix socket
 - `deploy/` — systemd units, sudoers rules, example env files, demo snapshot
 - `scripts/bump-version.sh` — used by `make bump`
+- `scripts/make-icons.sh` — renders the app icons in `web/public` from `web/icons/*.svg`
 
 ## Develop
 

@@ -1,12 +1,12 @@
 // Live mode: keeps the UI in step with the gateway. Polls only the gateway
 // (on cloud-box), never cloud64, and only while the tab is visible.
-import { api, ApiError } from './api.svelte';
+import { api, ApiError, mode } from './api.svelte';
 import { live } from './state/live.svelte';
 import { power, type PowerState } from './state/power.svelte';
 import { settings } from './state/settings.svelte';
 import { boards } from './state/layout.svelte';
 import { toast } from './state/ui.svelte';
-import { useRealClock } from './time.svelte';
+import { fmtTime, useRealClock } from './time.svelte';
 import { setPersistence } from './fake/store';
 import type { Health } from './fake/data';
 
@@ -70,6 +70,9 @@ function apply(st: StateResp): void {
   if (!s) return;
   const taken = new Date(s.takenAt);
   power.lastSnapshot = taken;
+  if (mode.offline) {
+    power.notice = `You're offline, so this is cloud64 as of ${fmtTime(taken)}, saved on this device. It may have changed since.`;
+  }
   power.lastActivity = d(s.power.lastActivity) ?? new Date(s.power.since);
   power.reasons = s.power.reasons ?? [];
   power.stayAwakeUntil = s.power.stayAwakeForever ? 'forever' : d(s.power.stayAwakeUntil);

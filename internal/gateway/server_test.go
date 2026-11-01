@@ -21,7 +21,12 @@ func newTestServer(t *testing.T) (*Server, http.Handler) {
 		t.Fatal(err)
 	}
 	cfg := Config{AllowedUsers: []string{"owner@example.com"}, AgentToken: token}
-	web := fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}}
+	web := fstest.MapFS{
+		"index.html":           {Data: []byte("<!doctype html>")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"CirrusUX"}`)},
+		"sw.js":                {Data: []byte("self.addEventListener('fetch', () => {})")},
+		"assets/app-abc123.js": {Data: []byte("console.log(1)")},
+	}
 	s := NewServer(cfg, store, NewPower("cloud64", nil, false), web)
 	return s, s.Handler()
 }
@@ -54,6 +59,23 @@ func TestIdentityRequired(t *testing.T) {
 	}
 	if w := do(h, "GET", "/", "", owner); w.Code != http.StatusOK || w.Header().Get("Content-Security-Policy") == "" {
 		t.Errorf("UI: %d, CSP %q", w.Code, w.Header().Get("Content-Security-Policy"))
+	}
+}
+
+func TestPWAFiles(t *testing.T) {
+	_, h := newTestServer(t)
+	w := do(h, "GET", "/manifest.webmanifest", "", owner)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "application/manifest+json" {
+		t.Errorf("manifest: %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	// The worker must be rechecked on every load, or a release never reaches the browser.
+	w = do(h, "GET", "/sw.js?v=0.1.0", "", owner)
+	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-cache" || !strings.Contains(w.Header().Get("Content-Type"), "javascript") {
+		t.Errorf("sw.js: %d %q %q", w.Code, w.Header().Get("Cache-Control"), w.Header().Get("Content-Type"))
+	}
+	w = do(h, "GET", "/assets/app-abc123.js", "", owner)
+	if !strings.Contains(w.Header().Get("Cache-Control"), "immutable") {
+		t.Errorf("assets cache: %q", w.Header().Get("Cache-Control"))
 	}
 }
 

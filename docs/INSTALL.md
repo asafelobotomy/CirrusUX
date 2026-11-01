@@ -96,7 +96,8 @@ should show no new activity reasons (don't use `--dry-run`: it writes state).
 | Tailnet | `sudo tailscale serve --bg --https=443 http://127.0.0.1:8064` | `sudo tailscale serve --https=443 off` |
 
 Open `https://cloud-box.<tailnet>.ts.net/` from a tailnet device. Logins not
-in `CIRRUS_ALLOWED_USERS` get 403.
+in `CIRRUS_ALLOWED_USERS` get 403. The browser then offers to install
+CirrusUX as an app (it needs the HTTPS that `tailscale serve` provides).
 
 ## 4. After 24 hours
 

@@ -2,6 +2,7 @@
 // (sync.svelte.ts), simulated in demo mode.
 import { at, clock, now } from '../time.svelte';
 import { live } from './live.svelte';
+import { mode } from '../api.svelte';
 
 /** unreachable: cloud64 is on the tailnet but its agent isn't reporting. */
 export type PowerState = 'awake' | 'waking' | 'asleep' | 'unreachable';
@@ -44,7 +45,8 @@ export const power: Power = $state({
 
 /** Minutes until suspend, or null when something is holding it awake. */
 export function sleepsInMs(): number | null {
-  if (power.state !== 'awake' || power.reasons.length) return null;
+  // Offline the data is old, so a countdown would be a guess.
+  if (power.state !== 'awake' || power.reasons.length || mode.offline) return null;
   const t = clock.now;
   const stay = power.stayAwakeUntil;
   if (stay === 'forever') return null;
