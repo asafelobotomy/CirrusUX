@@ -7,7 +7,7 @@
 </script>
 
 <nav class="side" class:collapsed aria-label="Main">
-  <a class="brand" href="#/home" aria-label="cloud64 home"><Logo compact={collapsed} /></a>
+  <a class="brand" href="#/home" aria-label="CirrusUX home"><Logo compact={collapsed} /></a>
   <ul>
     {#each MAIN_NAV as n}
       {@const Icon = n.icon}

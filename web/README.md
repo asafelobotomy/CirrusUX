@@ -1,4 +1,4 @@
-# cloud64 panel — web UI prototype (Phase 0.5)
+# CirrusUX — web UI prototype (Phase 0.5)
 
 Clickable prototype with sample data from the 1 Nov 2026 brief. No server is
 contacted. See `../docs/PLAN.md` §4 for the design spec.

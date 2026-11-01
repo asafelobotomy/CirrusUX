@@ -1,4 +1,4 @@
-# cloud64 panel
+# CirrusUX
 
 A web panel for the cloud64 home server: power state and wake, services,
 backups and a Grok assistant, designed around a server that sleeps.

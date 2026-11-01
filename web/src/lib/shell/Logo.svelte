@@ -7,7 +7,7 @@
     <rect width="32" height="32" rx="9" fill="var(--accent)" />
     <path d="M10 20.5a4.5 4.5 0 0 1 .6-8.96A6 6 0 0 1 22 13a3.75 3.75 0 0 1 .25 7.5H10z" fill="var(--on-accent)" />
   </svg>
-  {#if !compact}<span class="word">cloud<b>64</b></span>{/if}
+  {#if !compact}<span class="word">Cirrus<b>UX</b></span>{/if}
 </span>
 
 <style>

@@ -156,7 +156,7 @@ function applyUI(doc: UIDoc): void {
 async function saveUI(json: string): Promise<void> {
   const res = await fetch('/api/ui', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'X-C64-Request': '1' },
+    headers: { 'Content-Type': 'application/json', 'X-Cirrus-Request': '1' },
     body: JSON.stringify({ baseVersion: uiVersion, data: JSON.parse(json) }),
   });
   if (res.status === 409) {

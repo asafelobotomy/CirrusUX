@@ -1,4 +1,4 @@
-# cloud64 panel — build plan
+# CirrusUX — build plan
 
 Written 1 Nov 2026. Based on `cloud64-server-brief.pdf` (1 Nov 2026, 20:30 GMT).
 Section numbers like "brief §5.4" point into that brief. Status: **Phase 0.5 signed off. Phase 1 code built and tested locally; not installed yet (Phase 0 checks pending, see INSTALL.md).**
@@ -30,7 +30,7 @@ Non-goals: replacing 1Panel's firewall, FTP-account or OpenResty management; res
                │ (only while you use it)        │  outbound from cloud64)
                ▼                                │
 ┌──────────────────────────── cloud64 (sleeps) ───────────────────────────┐
-│  panel-agent (Go, unprivileged user `c64panel`, tailnet IP only)        │
+│  panel-agent (Go, unprivileged user `cirrusux`, tailnet IP only)        │
 │   │ unix sockets only, never TCP loopback                               │
 │   ├── panel-helper (root, fixed allow-list of subcommands, via sudoers) │
 │   └── docker filter (root, socket-activated, unix socket, allow-list)   │
@@ -53,14 +53,14 @@ Why this shape:
 | Serving | Listens on 127.0.0.1 only. Published to the tailnet with `tailscale serve` (HTTPS with the `*.ts.net` cert). Never port-forwarded. |
 | Login | Tailscale Serve identity headers (`Tailscale-User-Login`), matched against an allow-list in the config. No passwords. Destructive actions need re-confirmation in the UI (typed confirmation for anything irreversible). Session cookies: HttpOnly, Secure, SameSite=Strict; CSRF tokens; rate limit. |
 | Power state | Primary: the cloud64 peer `Online` / `LastSeen` from the local tailscaled API (tailscaled on cloud64 is stopped during sleep, brief §5.5). Confirmed by the age of the last snapshot. Phase 2: router `GetSpecificHostEntry` as a second opinion. States shown: Awake, Asleep, Waking (≤ 6 min), Unreachable (not asleep, but not answering). |
-| Wake | Runs the existing `~/bin/cloud64-wake` through `c64panel-wake` (one sudoers rule, no arguments; the router password stays in a root-only file). The UI shows progress until the agent's first snapshot after resume (~20–30 s). |
+| Wake | Runs the existing `~/bin/cloud64-wake` through `cirrusux-wake` (one sudoers rule, no arguments; the router password stays in a root-only file). The UI shows progress until the agent's first snapshot after resume (~20–30 s). |
 | Cache | SQLite: latest snapshot per area, wake/suspend history, audit log, Grok conversations (redacted). |
 | Changelog | Every action is appended to `/workspace/cloud64/CHANGELOG.md` (the existing file, with a lock) **and** to the gateway's audit table: UK time, who, what, backup path, undo command. |
-| Secrets | `/etc/cloud64-panel/gateway.env` (600): xAI API key, agent token. Shown in the UI only as `set` / `not set`. |
+| Secrets | `/etc/cirrusux/gateway.env` (600): xAI API key, agent token. Shown in the UI only as `set` / `not set`. |
 
 ### 3.2 panel-agent (cloud64)
 
-- Runs as a new system user `c64panel` (no shell, no login), member of nothing privileged.
+- Runs as a new system user `cirrusux` (no shell, no login), member of nothing privileged.
 - Listens on the **tailnet IP only** (`100.64.0.10`), on a new port (proposed 47064). It accepts only requests from the cloud-box node, checked with `tailscale whois` on the peer address, plus a shared token.
 - This port is **not** added to `HOST_PORTS` in `cloud64-idle.conf`. Viewing the panel never holds the server awake; the Stay-awake control does that on purpose (brief §11.2 option (b)).
 - Reads directly, without root: `/etc/cloud64-idle.conf`, `/var/log/cloud64-idle.log`, `/sys/class/thermal`, `/sys/power/mem_sleep`, systemd over D-Bus (timers, unit state), `tailscale status --json` (local socket).
@@ -69,7 +69,7 @@ Why this shape:
 
 ### 3.3 panel-helper (cloud64, root)
 
-A single binary called with `sudo /usr/local/sbin/c64panel-helper <subcommand>`. The sudoers entry lists the subcommands literally; arguments are validated against fixed lists (container names, unit names) inside the helper. No generic shell, no paths from the caller.
+A single binary called with `sudo /usr/local/sbin/cirrusux-helper <subcommand>`. The sudoers entry lists the subcommands literally; arguments are validated against fixed lists (container names, unit names) inside the helper. No generic shell, no paths from the caller.
 
 | Subcommand | Does | Phase |
 |---|---|---|
@@ -86,7 +86,7 @@ A single binary called with `sudo /usr/local/sbin/c64panel-helper <subcommand>`.
 
 ### 3.4 Docker filter (cloud64, root)
 
-A small socket-activated service: `/run/c64panel/docker.sock` (group `c64panel`, 660) → `/var/run/docker.sock`. Allows only `GET` list/inspect/logs/stats and `POST` start/stop/restart on the known container names. Everything else (create, exec, pull, volumes, networks) returns 403. Pulls happen only in the helper's update workflow.
+A small socket-activated service: `/run/cirrusux/docker.sock` (group `cirrusux`, 660) → `/var/run/docker.sock`. Allows only `GET` list/inspect/logs/stats and `POST` start/stop/restart on the known container names. Everything else (create, exec, pull, volumes, networks) returns 403. Pulls happen only in the helper's update workflow.
 
 ### 3.5 App updates (phase 3)
 
@@ -197,12 +197,12 @@ Behaviour rules: polling only while the tab is visible, at most once a minute, w
 ## 5. Repository layout
 
 ```
-cloud64-panel/
+cirrusux/
   cmd/gateway/   cmd/agent/   cmd/helper/   cmd/dockerfilter/
   internal/      power, snapshot, docker, systemd, grok, redact, audit, changelog
   web/           SvelteKit (static adapter), built into cmd/gateway via embed
   deploy/
-    cloud64/     systemd units, sudoers.d/c64panel, install.sh, uninstall.sh
+    cloud64/     systemd units, sudoers.d/cirrusux, install.sh, uninstall.sh
     cloud-box/   systemd unit, serve config, install.sh
   docs/          PLAN.md, SECURITY.md, ACTIONS.md (every action + its undo)
 ```
@@ -226,7 +226,7 @@ Built (1 Nov 2026), with three changes from the original plan:
 - **No listening port on cloud64 yet.** The agent only pushes; Phase 1 needs nothing from the gateway that would require connecting in. The agent port (D5) and its firewall question move to Phase 2.
 - **JSON files instead of SQLite** on the gateway (snapshot, versioned UI settings, audit log). Enough for one household and keeps the Go code dependency-free.
 - **Log parsers checked against real output** (INSTALL.md §0, 1 Nov). The agent reads the idle checker's state files rather than running `--dry-run`, which turned out not to be write-free.
-- **Wake goes through `c64panel-wake`**, a root wrapper that reads the router password from a root-only file and runs the existing `cloud64-wake` as the admin user. The password was only in the admin bot's process environment, which `sudo -u` can't reach.
+- **Wake goes through `cirrusux-wake`**, a root wrapper that reads the router password from a root-only file and runs the existing `cloud64-wake` as the admin user. The password was only in the admin bot's process environment, which `sudo -u` can't reach.
 Gateway (login, Power page, Wake, cache), agent (snapshots), helper subcommands marked 1, Docker filter (read-only verbs), Services and Backups pages (view only), Grok with read tools only.
 Includes from the UI work: themes, boards with drag-and-drop layout, app tiles, command palette, PWA install, settings screen (customisation levels 1–2).
 - **Done when:** with the server asleep, the panel shows the designed "Asleep" state, last-known containers and backups, and Grok answers "did last night's backup work?" without waking it. Wake brings it up and the panel goes green within ~60 s. Over 24 h of normal use, `cloud64-idle.log` shows no extra wakes and no suspend delayed by the panel.

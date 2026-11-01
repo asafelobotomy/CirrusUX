@@ -1,5 +1,5 @@
 #!/bin/sh
-# /usr/local/sbin/c64panel-wake on cloud-box — root:root, mode 755.
+# /usr/local/sbin/cirrusux-wake on cloud-box — root:root, mode 755.
 #
 # Runs the admin user's existing cloud64-wake with the router password from
 # a root-only file. The gateway may run this (one sudoers rule, no
@@ -10,10 +10,10 @@ set -eu
 
 ADMIN_USER="<admin-user>"
 # root:root 600. One line: the variable cloud64-wake reads, e.g. NAME=value.
-SECRETS=/etc/cloud64-panel/router.env
+SECRETS=/etc/cirrusux/router.env
 
 if [ "$#" -ne 0 ]; then
-	echo "c64panel-wake takes no arguments" >&2
+	echo "cirrusux-wake takes no arguments" >&2
 	exit 64
 fi
 if [ "$(stat -c '%u %a' "$SECRETS")" != "0 600" ]; then

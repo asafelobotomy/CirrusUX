@@ -1,0 +1,9 @@
+# /etc/sudoers.d/cirrusux on cloud64 (mode 440; check with `visudo -cf`).
+# The agent may run only these read-only helper subcommands as root.
+Defaults:cirrusux !lecture, !requiretty, env_reset
+cirrusux ALL=(root) NOPASSWD: /usr/local/sbin/cirrusux-helper idle-status, \
+                              /usr/local/sbin/cirrusux-helper idle-log, \
+                              /usr/local/sbin/cirrusux-helper backup-list, \
+                              /usr/local/sbin/cirrusux-helper backup-last, \
+                              /usr/local/sbin/cirrusux-helper av-last, \
+                              /usr/local/sbin/cirrusux-helper security-status

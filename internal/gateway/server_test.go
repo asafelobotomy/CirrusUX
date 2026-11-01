@@ -9,7 +9,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"cloud64-panel/internal/snapshot"
+	"cirrusux/internal/snapshot"
 )
 
 const token = "0123456789abcdef0123456789abcdef"
@@ -60,9 +60,9 @@ func TestIdentityRequired(t *testing.T) {
 func TestCSRF(t *testing.T) {
 	_, h := newTestServer(t)
 	if w := do(h, "POST", "/api/wake", "", owner); w.Code != http.StatusForbidden {
-		t.Errorf("POST without X-C64-Request: %d", w.Code)
+		t.Errorf("POST without X-Cirrus-Request: %d", w.Code)
 	}
-	hdr := map[string]string{"Tailscale-User-Login": "owner@example.com", "X-C64-Request": "1", "Origin": "https://evil.example"}
+	hdr := map[string]string{"Tailscale-User-Login": "owner@example.com", "X-Cirrus-Request": "1", "Origin": "https://evil.example"}
 	if w := do(h, "POST", "/api/wake", "", hdr); w.Code != http.StatusForbidden {
 		t.Errorf("cross-origin POST: %d", w.Code)
 	}
@@ -94,7 +94,7 @@ func TestAgentToken(t *testing.T) {
 
 func TestUIVersioning(t *testing.T) {
 	_, h := newTestServer(t)
-	hdr := map[string]string{"Tailscale-User-Login": "owner@example.com", "X-C64-Request": "1"}
+	hdr := map[string]string{"Tailscale-User-Login": "owner@example.com", "X-Cirrus-Request": "1"}
 	if w := do(h, "PUT", "/api/ui", `{"baseVersion":0,"data":{"a":1}}`, hdr); w.Code != http.StatusOK {
 		t.Fatalf("first save: %d", w.Code)
 	}

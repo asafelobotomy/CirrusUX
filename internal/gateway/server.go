@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"cloud64-panel/internal/grok"
-	"cloud64-panel/internal/snapshot"
+	"cirrusux/internal/grok"
+	"cirrusux/internal/snapshot"
 )
 
 type Server struct {
@@ -78,7 +78,7 @@ func (s *Server) auth(next http.Handler) http.Handler {
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			if r.Header.Get("X-C64-Request") != "1" || !sameOrigin(r) {
+			if r.Header.Get("X-Cirrus-Request") != "1" || !sameOrigin(r) {
 				http.Error(w, "cross-site request refused", http.StatusForbidden)
 				return
 			}

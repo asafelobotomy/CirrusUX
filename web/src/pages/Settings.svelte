@@ -32,7 +32,7 @@
     const data = JSON.stringify({ version: 1, settings: $state.snapshot(settings), boards: $state.snapshot(boards) }, null, 2);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-    a.download = 'cloud64-ui.json';
+    a.download = 'cirrusux-ui.json';
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -47,7 +47,7 @@
         if (d.boards?.list) boards.list = d.boards.list;
         toast('Imported settings and layouts', 'ok');
       } catch {
-        toast('That file is not a cloud64 UI export', 'warn');
+        toast('That file is not a CirrusUX export', 'warn');
       }
     });
   }

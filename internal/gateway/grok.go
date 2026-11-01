@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"cloud64-panel/internal/grok"
-	"cloud64-panel/internal/snapshot"
+	"cirrusux/internal/grok"
+	"cirrusux/internal/snapshot"
 )
 
-const systemPrompt = `You are the assistant inside the cloud64 home-server panel. cloud64 is a low-power Debian media server (Jellyfin, Navidrome, Audiobookshelf, Kavita, tinyMediaManager, Picard) that sleeps after 30 idle minutes and only wakes from a magic packet or its RTC alarm.
+const systemPrompt = `You are the assistant inside CirrusUX, the web panel for the cloud64 home server. cloud64 is a low-power Debian media server (Jellyfin, Navidrome, Audiobookshelf, Kavita, tinyMediaManager, Picard) that sleeps after 30 idle minutes and only wakes from a magic packet or its RTC alarm.
 
 You answer from the panel's cached data, gathered by tools. Asking you never wakes the server. Times are UK time (Europe/London).
 

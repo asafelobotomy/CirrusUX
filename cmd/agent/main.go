@@ -1,4 +1,4 @@
-// c64panel-agent runs on cloud64 as the unprivileged user c64panel and
+// cirrusux-agent runs on cloud64 as the unprivileged user cirrusux and
 // pushes snapshots to the gateway on cloud-box. See docs/PLAN.md §3.2.
 package main
 
@@ -13,18 +13,18 @@ import (
 	"syscall"
 	"time"
 
-	"cloud64-panel/internal/agent"
+	"cirrusux/internal/agent"
 )
 
 func main() {
 	var (
-		gateway  = flag.String("gateway", env("C64_GATEWAY_URL", ""), "gateway snapshot URL")
+		gateway  = flag.String("gateway", env("CIRRUS_GATEWAY_URL", ""), "gateway snapshot URL")
 		interval = flag.Duration("interval", 5*time.Minute, "push interval while awake")
 		demo     = flag.String("demo", "", "push a recorded snapshot instead of collecting (development)")
 		once     = flag.Bool("once", false, "collect once, print the snapshot as JSON and exit")
 		media    = flag.String("media", "/mnt/media", "media mount point")
-		dock     = flag.String("docker", "/run/c64panel/docker.sock", "filtered Docker socket")
-		helper   = flag.String("helper", "sudo -n /usr/local/sbin/c64panel-helper", "root helper command; empty to skip")
+		dock     = flag.String("docker", "/run/cirrusux/docker.sock", "filtered Docker socket")
+		helper   = flag.String("helper", "sudo -n /usr/local/sbin/cirrusux-helper", "root helper command; empty to skip")
 	)
 	flag.Parse()
 
@@ -44,9 +44,9 @@ func main() {
 		return
 	}
 
-	token := os.Getenv("C64_AGENT_TOKEN")
+	token := os.Getenv("CIRRUS_AGENT_TOKEN")
 	if *gateway == "" || token == "" {
-		slog.Error("C64_GATEWAY_URL and C64_AGENT_TOKEN are required")
+		slog.Error("CIRRUS_GATEWAY_URL and CIRRUS_AGENT_TOKEN are required")
 		os.Exit(2)
 	}
 	a := agent.New(agent.Config{GatewayURL: *gateway, Token: token, Interval: *interval, DemoFile: *demo}, c)

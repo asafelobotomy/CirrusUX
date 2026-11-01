@@ -1,6 +1,6 @@
-// c64panel-dockerfilter sits between the agent and the real Docker socket.
+// cirrusux-dockerfilter sits between the agent and the real Docker socket.
 // It runs as root, socket-activated by systemd on a unix socket only the
-// c64panel group can open, and passes through an allow-list of read-only
+// cirrusux group can open, and passes through an allow-list of read-only
 // requests. Everything else gets 403. Unix sockets don't count as activity
 // for the idle check, unlike a TCP proxy container would (PLAN §3.4).
 package main
@@ -60,7 +60,7 @@ func main() {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !allow(r) {
 			slog.Warn("denied", "method", r.Method, "path", r.URL.Path)
-			http.Error(w, "not allowed by c64panel-dockerfilter", http.StatusForbidden)
+			http.Error(w, "not allowed by cirrusux-dockerfilter", http.StatusForbidden)
 			return
 		}
 		proxy.ServeHTTP(w, r)

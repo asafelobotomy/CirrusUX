@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"cloud64-panel/internal/redact"
+	"cirrusux/internal/redact"
 )
 
 type Client struct {

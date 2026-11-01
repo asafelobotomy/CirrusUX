@@ -1,11 +1,11 @@
-# /etc/systemd/system/c64panel-dockerfilter.service on cloud64
+# /etc/systemd/system/cirrusux-dockerfilter.service on cloud64
 [Unit]
-Description=Read-only Docker API filter for the cloud64 panel agent
-Requires=c64panel-dockerfilter.socket
+Description=Read-only Docker API filter for the CirrusUX agent
+Requires=cirrusux-dockerfilter.socket
 After=docker.service
 
 [Service]
-ExecStart=/usr/local/sbin/c64panel-dockerfilter
+ExecStart=/usr/local/sbin/cirrusux-dockerfilter
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

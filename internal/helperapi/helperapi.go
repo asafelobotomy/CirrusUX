@@ -1,5 +1,5 @@
 // Package helperapi is the contract between the agent (unprivileged) and
-// c64panel-helper (root, via sudo). Every subcommand is fixed and takes no
+// cirrusux-helper (root, via sudo). Every subcommand is fixed and takes no
 // caller-supplied paths; the helper prints one JSON value on stdout.
 package helperapi
 

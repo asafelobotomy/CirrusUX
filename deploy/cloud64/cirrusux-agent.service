@@ -1,14 +1,14 @@
-# /etc/systemd/system/c64panel-agent.service on cloud64
+# /etc/systemd/system/cirrusux-agent.service on cloud64
 [Unit]
-Description=cloud64 panel agent (pushes snapshots to the gateway)
+Description=CirrusUX agent (pushes snapshots to the gateway)
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
-User=c64panel
-Group=c64panel
-EnvironmentFile=/etc/cloud64-panel/agent.env
-ExecStart=/usr/local/bin/c64panel-agent
+User=cirrusux
+Group=cirrusux
+EnvironmentFile=/etc/cirrusux/agent.env
+ExecStart=/usr/local/bin/cirrusux-agent
 Restart=on-failure
 RestartSec=30s
 Nice=10

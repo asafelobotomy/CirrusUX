@@ -14,7 +14,7 @@ import (
 	"os"
 	"time"
 
-	"cloud64-panel/internal/snapshot"
+	"cirrusux/internal/snapshot"
 )
 
 type Config struct {

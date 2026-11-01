@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"cloud64-panel/internal/helperapi"
-	"cloud64-panel/internal/snapshot"
+	"cirrusux/internal/helperapi"
+	"cirrusux/internal/snapshot"
 )
 
 // Collector gathers one snapshot. Every source is read locally: files,
@@ -25,9 +25,9 @@ import (
 type Collector struct {
 	IdleConf     string // /etc/cloud64-idle.conf
 	MediaMount   string // /mnt/media
-	DockerSocket string // the filtered socket, /run/c64panel/docker.sock
+	DockerSocket string // the filtered socket, /run/cirrusux/docker.sock
 	// Helper is the argv prefix for the root helper, e.g.
-	// ["sudo", "-n", "/usr/local/sbin/c64panel-helper"]. Empty skips it.
+	// ["sudo", "-n", "/usr/local/sbin/cirrusux-helper"]. Empty skips it.
 	Helper []string
 
 	temps []float64

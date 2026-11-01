@@ -1,3 +1,3 @@
-module cloud64-panel
+module cirrusux
 
 go 1.27

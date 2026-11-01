@@ -1,19 +1,19 @@
-# /etc/systemd/system/c64panel-gateway.service on cloud-box
+# /etc/systemd/system/cirrusux-gateway.service on cloud-box
 [Unit]
-Description=cloud64 panel gateway
+Description=CirrusUX gateway
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
-User=c64panel
-Group=c64panel
-EnvironmentFile=/etc/cloud64-panel/gateway.env
-ExecStart=/usr/local/bin/c64panel-gateway
-StateDirectory=c64panel
+User=cirrusux
+Group=cirrusux
+EnvironmentFile=/etc/cirrusux/gateway.env
+ExecStart=/usr/local/bin/cirrusux-gateway
+StateDirectory=cirrusux
 StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=5s
-# The wake command goes through sudo (c64panel-wake), so no
+# The wake command goes through sudo (cirrusux-wake), so no
 # NoNewPrivileges; everything else is locked down.
 ProtectSystem=full
 PrivateTmp=yes

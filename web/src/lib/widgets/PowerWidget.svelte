@@ -82,7 +82,7 @@
     </div>
   {:else if power.state === 'unreachable'}
     <div class="status">
-      <p class="muted">cloud64 is on the tailnet, but its agent hasn't reported since {fmtTime(power.lastSnapshot)}. Check <code>c64panel-agent.service</code> on cloud64.</p>
+      <p class="muted">cloud64 is on the tailnet, but its agent hasn't reported since {fmtTime(power.lastSnapshot)}. Check <code>cirrusux-agent.service</code> on cloud64.</p>
     </div>
   {:else}
     <ol class="steps">

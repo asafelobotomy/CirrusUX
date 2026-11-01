@@ -1,0 +1,4 @@
+# /etc/sudoers.d/cirrusux-wake on cloud-box (mode 440; check with `visudo -cf`).
+# The gateway may run only the wake wrapper, as root, with no arguments.
+Defaults:cirrusux !lecture, !requiretty, env_reset
+cirrusux ALL=(root) NOPASSWD: /usr/local/sbin/cirrusux-wake ""

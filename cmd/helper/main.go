@@ -1,4 +1,4 @@
-// c64panel-helper runs as root through one sudoers rule per subcommand.
+// cirrusux-helper runs as root through one sudoers rule per subcommand.
 // It only reads, takes no arguments beyond the subcommand name, and never
 // prints secrets: just the state the panel shows.
 package main
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"cloud64-panel/internal/helperapi"
+	"cirrusux/internal/helperapi"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 
 func main() {
 	if len(os.Args) != 2 {
-		fail("usage: c64panel-helper <%s>", strings.Join(helperapi.Commands, "|"))
+		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -63,7 +63,7 @@ func main() {
 }
 
 func fail(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "c64panel-helper: "+format+"\n", a...)
+	fmt.Fprintf(os.Stderr, "cirrusux-helper: "+format+"\n", a...)
 	os.Exit(1)
 }
 

@@ -2,7 +2,7 @@
 // settings on the gateway (PLAN §4.5); the prototype keeps them in this
 // browser only, and works the same when storage is blocked.
 
-const PREFIX = 'c64proto:';
+const PREFIX = 'cirrusux:';
 
 // Off in live mode, where the gateway stores settings instead.
 let persist = true;

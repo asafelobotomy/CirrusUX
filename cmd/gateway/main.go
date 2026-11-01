@@ -1,4 +1,4 @@
-// c64panel-gateway runs on cloud-box. See docs/PLAN.md §3.1.
+// cirrusux-gateway runs on cloud-box. See docs/PLAN.md §3.1.
 package main
 
 import (
@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"cloud64-panel/internal/gateway"
-	"cloud64-panel/web"
+	"cirrusux/internal/gateway"
+	"cirrusux/web"
 )
 
 func main() {

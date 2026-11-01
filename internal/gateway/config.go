@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Config comes from the environment (/etc/cloud64-panel/gateway.env, mode
+// Config comes from the environment (/etc/cirrusux/gateway.env, mode
 // 600). Secrets are never logged or sent to the browser.
 type Config struct {
 	Listen  string // 127.0.0.1:8064; published to the tailnet by `tailscale serve`
@@ -30,24 +30,24 @@ type Config struct {
 
 func ConfigFromEnv() (Config, error) {
 	c := Config{
-		Listen:          env("C64_LISTEN", "127.0.0.1:8064"),
-		DataDir:         env("C64_DATA_DIR", "/var/lib/c64panel"),
-		Dev:             os.Getenv("C64_DEV") == "1",
-		AllowedUsers:    splitList(os.Getenv("C64_ALLOWED_USERS")),
-		AgentToken:      os.Getenv("C64_AGENT_TOKEN"),
-		TailscalePeer:   env("C64_TAILSCALE_PEER", "cloud64"),
-		WakeCmd:         strings.Fields(os.Getenv("C64_WAKE_CMD")),
-		Changelog:       os.Getenv("C64_CHANGELOG"),
+		Listen:          env("CIRRUS_LISTEN", "127.0.0.1:8064"),
+		DataDir:         env("CIRRUS_DATA_DIR", "/var/lib/cirrusux"),
+		Dev:             os.Getenv("CIRRUS_DEV") == "1",
+		AllowedUsers:    splitList(os.Getenv("CIRRUS_ALLOWED_USERS")),
+		AgentToken:      os.Getenv("CIRRUS_AGENT_TOKEN"),
+		TailscalePeer:   env("CIRRUS_TAILSCALE_PEER", "cloud64"),
+		WakeCmd:         strings.Fields(os.Getenv("CIRRUS_WAKE_CMD")),
+		Changelog:       os.Getenv("CIRRUS_CHANGELOG"),
 		XAIKey:          os.Getenv("XAI_API_KEY"),
 		XAIBase:         env("XAI_BASE_URL", "https://api.x.ai/v1"),
 		XAIModel:        os.Getenv("XAI_MODEL"),
-		GrokDailyTokens: envInt("C64_GROK_DAILY_TOKENS", 200_000),
+		GrokDailyTokens: envInt("CIRRUS_GROK_DAILY_TOKENS", 200_000),
 	}
 	if len(c.AgentToken) < 32 {
-		return c, fmt.Errorf("C64_AGENT_TOKEN must be set to at least 32 random characters")
+		return c, fmt.Errorf("CIRRUS_AGENT_TOKEN must be set to at least 32 random characters")
 	}
 	if !c.Dev && len(c.AllowedUsers) == 0 {
-		return c, fmt.Errorf("C64_ALLOWED_USERS must list at least one Tailscale login")
+		return c, fmt.Errorf("CIRRUS_ALLOWED_USERS must list at least one Tailscale login")
 	}
 	return c, nil
 }

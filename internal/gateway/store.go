@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"cloud64-panel/internal/snapshot"
+	"cirrusux/internal/snapshot"
 )
 
 // Store keeps the gateway's state as small JSON files in DataDir, written
@@ -177,7 +177,7 @@ func appendChangelog(path string, e AuditEntry) error {
 		return err
 	}
 	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	line := fmt.Sprintf("- %s — %s (cloud64 panel): %s", ukStamp(e.At), e.Who, e.What)
+	line := fmt.Sprintf("- %s — %s (CirrusUX): %s", ukStamp(e.At), e.Who, e.What)
 	if e.Undo != "" {
 		line += fmt.Sprintf(" — undo: `%s`", e.Undo)
 	}

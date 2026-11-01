@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"cloud64-panel/internal/snapshot"
+	"cirrusux/internal/snapshot"
 )
 
 var london = mustLoc("Europe/London")

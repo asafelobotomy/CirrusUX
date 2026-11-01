@@ -1,4 +1,4 @@
-// Gateway API client. Every state-changing call carries X-C64-Request,
+// Gateway API client. Every state-changing call carries X-Cirrus-Request,
 // which the gateway requires as CSRF protection.
 
 export const mode = $state({
@@ -17,7 +17,7 @@ export class ApiError extends Error {
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.method && init.method !== 'GET') headers.set('X-C64-Request', '1');
+  if (init.method && init.method !== 'GET') headers.set('X-Cirrus-Request', '1');
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   const res = await fetch(path, { ...init, headers, credentials: 'same-origin', cache: 'no-store' });
   if (!res.ok) throw new ApiError(res.status, (await res.text()).trim() || res.statusText);
