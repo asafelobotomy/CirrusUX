@@ -4,7 +4,7 @@
     {
       "name": "cirrusux-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/home/solon/Projects/cirrusux/web", "run", "dev"],
+      "runtimeArgs": ["--prefix", "/home/solon/Projects/CirrusUX/web", "run", "dev"],
       "port": 5174
     }
   ]
