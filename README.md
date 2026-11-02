@@ -58,3 +58,10 @@ make build            # binaries print their version with -version
 The gateway logs its version, `/api/me` reports it, the agent puts its own in
 every snapshot, and Settings → About shows all three with a warning when
 they differ.
+
+## Licence
+
+CirrusUX is free software under the GNU Affero General Public License,
+version 3 or (at your option) any later version; see `LICENSE`. If you run a
+changed version for other people over a network, the AGPL asks you to offer
+them its source code.

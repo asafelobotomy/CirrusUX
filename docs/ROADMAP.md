@@ -77,16 +77,26 @@ The build plan, part by part, is in [PHASES-4-6.md](PHASES-4-6.md).
 
 ### Phase 7 — public release
 
-- **Licence** (D10): no LICENSE file yet.
+- **Licence** (D10): AGPL-3.0-or-later, in `LICENSE`. Done.
 - **Docs:** a public install guide for both setups, a configuration reference
   and an app-definition reference.
-- **History:** check the git history for personal details once more, or start
-  the public repository from a clean first commit.
-- **CI:** GitHub Actions running `make test` on every push.
+- **History:** the public repository starts from a clean first commit of
+  the scrubbed tree; this private repository keeps the full history.
+  **Decided.**
+- **CI:** GitHub Actions running `make test`, the race detector, the host
+  script tests and the build on every push (`.github/workflows/test.yml`,
+  actions pinned to commits). Done.
 - **Releases:** binaries with checksums; an install script and `.deb`
   packages for Debian and Ubuntu.
-- **Project files:** `SECURITY.md`, `CONTRIBUTING.md`, issue templates.
-- **Name:** check that "CirrusUX" doesn't clash with an existing project.
+- **Project files:** `SECURITY.md` (private reporting through GitHub),
+  `CONTRIBUTING.md`, issue templates. Done.
+- **Name:** no project or product called CirrusUX turned up (checked
+  2026-11-02); the nearest are Cirrus CI, Cirrus Logic and CirrusLabs, none
+  of them in self-hosting. Done.
+- **Before the clean commit:** leave out `deploy/profiles/cloud64` (the
+  helper test that loads it skips by itself), and rewrite the cloud64-specific parts of
+  `PLAN.md`, `ROADMAP.md` §3 and `CHANGELOG.md` for any server. The demo's
+  Trakt log lines can stay: they name a public plugin, not a person.
 
 ### Phase 8 — reinstall cloud64
 
@@ -145,6 +155,6 @@ changed in the config.
 |---|---|---|
 | D8 | How cloud64 moves off 1Panel | Full reinstall, Debian included; apps start clean; old app folders archived. **Decided** |
 | D9 | Default container runtime for the app store | Podman with Quadlet units (no always-running daemon, containers are systemd units); Docker supported |
-| D10 | Licence | Open. Permissive (MIT or Apache-2.0) or copyleft that also covers hosted use (AGPL-3.0) |
+| D10 | Licence | AGPL-3.0-or-later: copyleft that also covers hosted use. **Decided** |
 | D11 | Sign-in providers for v1 of the public release | Tailscale and a reverse proxy's trusted header first; built-in accounts with passkeys after |
 | D12 | Config format | Plain `NAME=value` env files, one per part (gateway, agent, helper). **Decided:** Go's standard library has no TOML reader, and systemd reads env files natively |

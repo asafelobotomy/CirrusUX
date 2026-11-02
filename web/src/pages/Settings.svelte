@@ -152,6 +152,7 @@
       <dt>Web UI</dt><dd class="mono">{uiVersion}</dd>
       <dt>Gateway</dt><dd class="mono">{mode.live ? mode.version || 'unknown' : 'none (demo data)'}</dd>
       <dt>Agent on {mode.server}</dt><dd class="mono">{mode.live ? live.agentVersion || 'no report yet' : 'none (demo data)'}</dd>
+      <dt>Licence</dt><dd>GNU AGPL 3.0 or later</dd>
     </dl>
     {#if mismatch}
       <p class="adj"><TriangleAlert size={15} /> The parts run different versions. Install the same release everywhere.</p>

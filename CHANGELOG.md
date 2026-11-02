@@ -7,6 +7,18 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Added
+
+- Licence: the GNU AGPL 3.0 or later (`LICENSE`), shown in Settings → About.
+- CI on GitHub Actions: `make test`, the race detector, the host script
+  tests and the build, on every push and pull request.
+- `SECURITY.md`, `CONTRIBUTING.md` and issue templates.
+
+### Removed
+
+- A stray `helper` binary and the local `.claude/` preview config from the
+  repository.
+
 ## [0.5.0] - 2026-11-02
 
 ### Added

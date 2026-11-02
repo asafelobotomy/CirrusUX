@@ -60,7 +60,7 @@ func TestCountedAndReason(t *testing.T) {
 }
 
 func TestSmallParsers(t *testing.T) {
-	if ParseWho("solon pts/0 2026-11-02 11:00 (192.0.2.5)\nsolon pts/1 2026-11-02 11:05\n") != 2 {
+	if ParseWho("alice pts/0 2026-11-02 11:00 (192.0.2.5)\nalice pts/1 2026-11-02 11:05\n") != 2 {
 		t.Error("who")
 	}
 	if ParseLoad("0.42 1.75 1.10 2/400 1234") != 1.75 {
