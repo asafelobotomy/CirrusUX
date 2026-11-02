@@ -7,6 +7,8 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-02
+
 ### Added
 
 - `cirrusux-setup` (roadmap Phase 4, first part): re-runnable host modules
