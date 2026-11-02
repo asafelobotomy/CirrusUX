@@ -80,7 +80,7 @@
       {/each}
     </ul>
   </Card>
-  <p class="faint note">Every app is pinned to an exact version and checked again on {mode.server} before anything runs. Removing an app archives its folder; nothing is deleted.</p>
+  <p class="faint note">Every app is pinned to an exact version and checked again on {mode.server} before anything runs. Removing an app archives its folder, so its settings and data are kept; only its downloaded image goes.</p>
 </div>
 
 <AppPage />

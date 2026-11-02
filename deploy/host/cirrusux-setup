@@ -9,7 +9,8 @@
 #   cirrusux-setup firewall-confirm    keep a new firewall (see the firewall module)
 #
 # Without MODULE it runs the modules in HOST_MODULES. Changes are logged to
-# /var/lib/cirrusux/setup.log; replaced files keep a .bak-YYYYMMDD-HHMM copy.
+# /var/lib/cirrusux/setup.log; replaced files keep a .bak-YYYYMMDD-HHMM copy
+# (programs keep only their previous version, in /var/lib/cirrusux/previous).
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)

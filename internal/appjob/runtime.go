@@ -71,6 +71,10 @@ func (d Docker) Up(ctx context.Context, p catalogue.Plan, appDir string) error {
 	return d.Exec(ctx, nil, "docker", "compose", "-p", p.Name, "-f", file, "up", "-d")
 }
 
+func (d Docker) RemoveImage(ctx context.Context, ref string) error {
+	return d.Exec(ctx, nil, "docker", "image", "rm", ref)
+}
+
 func (d Docker) Down(ctx context.Context, appID, appDir string) error {
 	file := filepath.Join(appDir, "compose.yml")
 	if _, err := os.Stat(file); err != nil {
@@ -120,6 +124,10 @@ func (p Podman) Up(ctx context.Context, plan catalogue.Plan, appDir string) erro
 	}
 	// restart: starts it if stopped, and moves a running app to the new unit.
 	return p.systemctl(ctx, "restart", p.service(plan.Name))
+}
+
+func (p Podman) RemoveImage(ctx context.Context, ref string) error {
+	return p.Exec(ctx, nil, "podman", "image", "rm", ref)
 }
 
 func (p Podman) Down(ctx context.Context, appID, _ string) error {

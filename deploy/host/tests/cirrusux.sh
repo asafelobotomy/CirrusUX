@@ -49,7 +49,8 @@ echo "binary agent v2" > $T/rel/bin/cirrusux-agent
 : > $T/calls
 $H/cirrusux-setup apply cirrusux > $T/out 2>&1
 grep -q "restart cirrusux-agent.service" $T/calls || fail "no restart after new binary"
-ls $ROOT/usr/local/bin/ | grep -q "cirrusux-agent.bak-" || fail "old binary not kept"
+[ -f $ROOT/var/lib/cirrusux/previous/cirrusux-agent ] && ! grep -q v2 $ROOT/var/lib/cirrusux/previous/cirrusux-agent || fail "old binary not kept"
+ls $ROOT/usr/local/bin/ | grep -q "\.bak-" && fail "a dated copy of a binary left on the PATH"
 echo "4 new binary: old one kept, agent restarted"
 
 printf 'CIRRUS_ROLE=single\nCIRRUS_ACTIONS=no\n' > $CONFIG

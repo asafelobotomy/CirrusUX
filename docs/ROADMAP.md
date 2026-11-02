@@ -144,7 +144,9 @@ changed in the config.
 
 - No secrets in plain text, in the browser, URLs or logs.
 - Every change is confirmed, logged and has an undo where one exists.
-- Archive instead of delete; deletion is a separate two-step review.
+- Archive instead of delete; deletion is a separate two-step review. Only
+  downloaded images, which hold nothing of the owner's, go without one:
+  when their app is removed, or when an update leaves them unused.
 - Pinned image versions; `:latest` is refused.
 - No telemetry and no automatic updates; checks run only when asked.
 - The assistant only proposes actions; a person confirms every one, and what

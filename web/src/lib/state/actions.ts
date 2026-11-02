@@ -191,7 +191,7 @@ export function confirmRemove(app: CatalogueApp): void {
   if (offline()) return;
   ask({
     title: `Remove ${app.name}?`,
-    body: `Stops ${app.name} and moves its folder to the archive. Nothing is deleted: archive review is where that happens, in two steps.${d3()}`,
+    body: `Stops ${app.name} and moves its folder to the archive; its settings and data are kept there until you delete them in archive review. Its downloaded image goes, as a reinstall downloads it again.${d3()}`,
     command: `cirrusux-helper app-job (remove ${app.id})`,
     confirmLabel: 'Remove',
     danger: true,

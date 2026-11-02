@@ -42,11 +42,23 @@ change() {
 ok() { say "  = $*"; }
 
 # backup FILE: keep a dated copy before it's replaced. Never deletes.
+# Programs are the exception (see prev_copy): one previous copy, kept off
+# the PATH, so updates don't pile copies up in /usr/local/sbin.
 backup() {
 	local f=$1
 	[ -e "$f" ] || return 0
+	if is_program "${f#"$ROOT"}"; then
+		mkdir -p "$ROOT$PREV_DIR"
+		cp -a "$f" "$ROOT$(prev_copy "${f#"$ROOT"}")"
+		return 0
+	fi
 	[ -e "$f.bak-$STAMP" ] || cp -a "$f" "$f.bak-$STAMP"
 }
+
+# Programs setup installs keep only the version before the last update.
+PREV_DIR=/var/lib/cirrusux/previous
+is_program() { case "$1" in /usr/local/bin/* | /usr/local/sbin/*) return 0 ;; *) return 1 ;; esac; }
+prev_copy() { echo "$PREV_DIR/$(basename "$1")"; }
 
 # put_file DEST MODE OWNER:GROUP < content — install content if it differs.
 put_file() {
@@ -59,6 +71,7 @@ put_file() {
 		return 0
 	fi
 	local undo="restore $dest.bak-$STAMP"
+	is_program "$dest" && undo="restore $(prev_copy "$dest")"
 	[ -e "$ROOT$dest" ] || undo="rm $dest"
 	change "write $dest" "$undo" _install "$tmp" "$ROOT$dest" "$mode" "$owner"
 	rm -f "$tmp"

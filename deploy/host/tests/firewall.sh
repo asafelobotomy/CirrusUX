@@ -28,7 +28,8 @@ $H/cirrusux-setup apply firewall >/dev/null || fail apply
 nft list table inet cirrusux | grep -q "policy drop" || fail "not loaded"
 [ -f $ROOT/var/lib/cirrusux/firewall/pending ] || fail "no pending marker"
 echo "2 apply loads it"
-sleep 5; sleep 1
+# The rollback is due after 3 s; allow a busy machine up to 20.
+for _ in $(seq 40); do nft list table inet cirrusux >/dev/null 2>&1 || break; sleep 0.5; done
 nft list table inet cirrusux >/dev/null 2>&1 && fail "not rolled back"
 echo "3 unconfirmed: rolled back by itself"
 

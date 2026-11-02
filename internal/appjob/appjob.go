@@ -99,6 +99,9 @@ type Runtime interface {
 	Pull(ctx context.Context, ref string, progress func(string)) error
 	Up(ctx context.Context, p catalogue.Plan, appDir string) error
 	Down(ctx context.Context, appID, appDir string) error
+	// RemoveImage deletes a downloaded image; it fails if a container
+	// still uses it.
+	RemoveImage(ctx context.Context, ref string) error
 }
 
 // Env is the server: where things go, and how to ask it things.
@@ -316,10 +319,18 @@ func (e *Env) update(ctx context.Context, st *Status, app catalogue.App, tag, di
 		if rerr := e.Runtime.Up(ctx, oldPlan, appDir); rerr != nil {
 			return fmt.Errorf("update failed (%v), and so did going back: %v; the backup is in %s", err, rerr, backup)
 		}
+		if digest != prevDigest {
+			e.dropImage(ctx, app, digest) // the version that didn't work
+		}
 		return fmt.Errorf("update failed (%v); %s is back on %s", err, app.Name, rec.Tag)
 	}
 
 	e.step(st, "Recording the update", "")
+	// Only the version before this one is kept, to go back to: the one
+	// before that has no use any more.
+	if d := rec.PreviousDigest; d != "" && d != prevDigest && d != digest {
+		e.dropImage(ctx, app, d)
+	}
 	rec.PreviousTag, rec.PreviousDigest = rec.Tag, prevDigest
 	rec.Tag, rec.Digest, rec.Updated = tag, digest, e.Now()
 	st.Detail = "backup in " + backup
@@ -360,9 +371,18 @@ func (e *Env) record(id string) (Record, error) {
 
 func (e *Env) remove(ctx context.Context, st *Status, app catalogue.App) error {
 	appDir := filepath.Join(e.Host.AppsDir, app.ID)
+	rec, _ := e.record(app.ID)
 	e.step(st, "Stopping "+app.Name, "")
 	if err := e.Runtime.Down(ctx, app.ID, appDir); err != nil {
 		return fmt.Errorf("stop: %w", err)
+	}
+	// Its images go: they hold no data of the owner's, and a reinstall
+	// downloads them again. Its folder is what's kept.
+	e.step(st, "Removing its images", "")
+	for _, d := range []string{rec.Digest, rec.PreviousDigest} {
+		if d != "" {
+			e.dropImage(ctx, app, d)
+		}
 	}
 	e.step(st, "Archiving its folder", "")
 	dest := filepath.Join(e.ArchiveDir, app.ID+"-"+e.Now().Format("20060102-150405"))
@@ -376,12 +396,18 @@ func (e *Env) remove(ctx context.Context, st *Status, app catalogue.App) error {
 	} else if err := os.MkdirAll(dest, 0o750); err != nil {
 		return err
 	}
-	rec := filepath.Join(e.RecordsDir, app.ID+".json")
-	if b, err := os.ReadFile(rec); err == nil {
+	recFile := filepath.Join(e.RecordsDir, app.ID+".json")
+	if b, err := os.ReadFile(recFile); err == nil {
 		_ = os.WriteFile(filepath.Join(dest, "cirrusux-record.json"), b, 0o644)
 	}
 	st.Detail = "archived to " + dest
-	return os.Remove(rec)
+	return os.Remove(recFile)
+}
+
+// dropImage removes one version's image, if nothing else uses it. Failing
+// to (another container shares it) never fails the job.
+func (e *Env) dropImage(ctx context.Context, app catalogue.App, digest string) {
+	_ = e.Runtime.RemoveImage(context.WithoutCancel(ctx), app.Image+"@"+digest)
 }
 
 func (e *Env) waitHealthy(ctx context.Context, url string) error {

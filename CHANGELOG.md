@@ -7,6 +7,8 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-02
+
 ### Added
 
 - Licence: the GNU AGPL 3.0 or later (`LICENSE`), shown in Settings → About.
@@ -16,6 +18,15 @@ gets a minor version.
 - `docs/APPS.md`: how to write an app definition for the store.
 
 ### Changed
+
+- Removing an app also removes its downloaded images (the current one and
+  the one kept for going back), and an update removes the image that falls
+  out of use; a failed update removes the version that didn't work. Its
+  folder still goes to the archive. Images hold none of the owner's data,
+  and a reinstall downloads them again.
+- Setup keeps one previous copy of each program it updates, in
+  `/var/lib/cirrusux/previous/`, instead of a dated `.bak-` copy beside it
+  on the PATH every time. Config and unit files still keep dated copies.
 
 - `docs/INSTALL.md` walks through both setups from a fresh machine, and
   explains each `cirrusux-setup` module. `docs/CONFIG.md` adds `sleep.env`

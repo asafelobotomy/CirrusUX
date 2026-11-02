@@ -19,14 +19,18 @@ class H(http.server.BaseHTTPRequestHandler):
         mac = body.split('<NewMACAddress>')[1].split('<')[0]
         self.send_response(200 if mac in active else 500); self.end_headers()
         self.wfile.write(('<NewActive>%s</NewActive>' % active[mac] if mac in active else '<errorCode>714</errorCode><errorDescription>NoSuchEntryInArray</errorDescription>').encode())
-http.server.HTTPServer(('127.0.0.1', int(sys.argv[1])), H).serve_forever()
+# Port 0: the kernel picks a free one, written where the test reads it.
+srv = http.server.HTTPServer(('127.0.0.1', 0), H)
+open(sys.argv[1] + '.tmp', 'w').write(str(srv.server_port)); os.rename(sys.argv[1] + '.tmp', sys.argv[1])
+srv.serve_forever()
 PY
 # A password made now, so nothing else on the machine can contain it.
 PASS="pw $(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 export PASS
-PORT=$((20000 + RANDOM % 20000))
-python3 -I $T/router.py $PORT & SRV=$!
-sleep 0.5
+python3 -I $T/router.py $T/port & SRV=$!
+# Ready once it has a port: no fixed wait, which a busy machine can outrun.
+for _ in $(seq 100); do [ -s $T/port ] && break; sleep 0.1; done
+PORT=$(cat $T/port 2>/dev/null) || fail "the stand-in router didn't start"
 conf() { printf 'ROUTER_URL=http://127.0.0.1:%s\nROUTER_USER=admin\nROUTER_PASSWORD="%s"\nSERVER_MAC=%s\n' $PORT "$PASS" "$1" > $T/router.env; chmod 600 $T/router.env; }
 run() { CIRRUS_ROUTER_ENV=$T/router.env $H/gateway/cirrusux-router-check; }
 

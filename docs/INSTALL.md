@@ -129,7 +129,8 @@ one module at a time, and can be re-run whenever you change `host.env`.
 After the first run it's also on the PATH, as `sudo cirrusux-setup`.
 
 Every change goes to `/var/lib/cirrusux/setup.log` with its undo, and replaced
-files keep a dated `.bak-` copy. Config files are created once (with a shared
+files keep a dated `.bak-` copy; programs keep just the version before the
+last update, in `/var/lib/cirrusux/previous/`. Config files are created once (with a shared
 token in the single setup) and then left to you; services start once nothing
 in them is still a placeholder. `cirrusux-setup list` shows the modules.
 

@@ -3,8 +3,9 @@
 ROADMAP.md says what each phase is for; this file says how it's built, in
 the order it's built. Each part ends in something that runs and is tested,
 and each lands as its own commit. The rules in ROADMAP §4 hold throughout:
-changes are confirmed and logged with an undo, nothing is deleted outside
-archive review, image versions are pinned, nothing updates by itself, and
+changes are confirmed and logged with an undo, nothing of the owner's is
+deleted outside archive review (downloaded images aren't: a reinstall
+fetches them again), image versions are pinned, nothing updates by itself, and
 nothing the panel does keeps a sleeping server awake.
 
 ## Phase 4 — host modules

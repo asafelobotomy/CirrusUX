@@ -31,6 +31,10 @@ func (f *fakeRuntime) Down(_ context.Context, id, _ string) error {
 	f.calls = append(f.calls, "down "+id)
 	return nil
 }
+func (f *fakeRuntime) RemoveImage(_ context.Context, ref string) error {
+	f.calls = append(f.calls, "rmi "+ref)
+	return nil
+}
 
 func testEnv(t *testing.T) (*Env, *fakeRuntime, string) {
 	root := t.TempDir()
@@ -279,8 +283,8 @@ func TestUpdateAndRollback(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(data, "navidrome.db")); string(b) != "v1 library" {
 		t.Errorf("data not restored: %q", b)
 	}
-	if rt.calls[len(rt.calls)-1] != "up navidrome 0.65.0" {
-		t.Errorf("old version not restarted: %v", rt.calls)
+	if n := len(rt.calls); rt.calls[n-2] != "up navidrome 0.65.0" || rt.calls[n-1] != "rmi docker.io/deluan/navidrome@"+newDigest[:70]+"2" {
+		t.Errorf("old version not restarted, or the broken one's image kept: %v", rt.calls)
 	}
 	if rec := Records(e.RecordsDir)[0]; rec.Tag != "0.65.0" {
 		t.Errorf("record changed by a failed update: %+v", rec)
@@ -297,6 +301,15 @@ func TestUpdateAndRollback(t *testing.T) {
 	}
 	if rec := Records(e.RecordsDir)[0]; rec.Tag != "0.64.2" || rec.PreviousTag != "0.65.0" {
 		t.Errorf("after rollback: %+v", rec)
+	}
+
+	// Removing it takes both images it kept, the current and the previous.
+	rt.calls = nil
+	if err := e.Run(ctx, Request{Job: "gggg1111", Action: "remove", App: "navidrome"}); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if got := strings.Join(rt.calls, ","); !strings.Contains(got, "rmi docker.io/deluan/navidrome@"+rec.PreviousDigest) || !strings.Contains(got, "rmi docker.io/deluan/navidrome@"+newDigest) {
+		t.Errorf("images not removed with the app: %v", rt.calls)
 	}
 }
 
