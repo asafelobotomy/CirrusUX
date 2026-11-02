@@ -3,13 +3,13 @@
 # namespace (and network namespace for the firewall), never as real root.
 set -eu
 cd "$(dirname "$0")/.."
-shellcheck -x -s bash cirrusux-setup lib.sh modules/*.sh ../profiles/*/capture.sh
+shellcheck -x -s bash cirrusux-setup lib.sh modules/*.sh files/cirrusux-backup ../profiles/*/capture.sh
 echo "shellcheck: ok"
 if ! unshare -r true 2>/dev/null; then
 	echo "skipping module tests: unprivileged user namespaces are off" >&2
 	exit 0
 fi
-for t in base cirrusux; do
+for t in base cirrusux modules; do
 	echo "$t:"
 	unshare -r bash "tests/$t.sh" 2> >(grep -v 'sudo.conf' >&2)
 done

@@ -72,6 +72,9 @@ this file, which must belong to root and be writable only by root. Each
 module is on when its settings are set. Without any, the panel still shows
 containers, disk and temperature, and hides what the server doesn't have.
 
+The helper reads `helper.env`, then every `helper.d/*.env` in name order
+(written by `cirrusux-setup` modules); each must belong to root.
+
 | Module | Settings | Adds |
 |---|---|---|
 | sleep | `IDLE_STATE_DIR`, `IDLE_LOG` | Sleep countdown, activity reasons, the sleep timeline |
@@ -106,3 +109,18 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `FIREWALL_TAILSCALE` | `yes` | firewall: also allow the tailnet |
 | `FIREWALL_PUBLIC_TCP` | — | firewall: ports open to everyone |
 | `FIREWALL_CONFIRM_SECONDS` | `120` | firewall: time to confirm before rollback |
+| `NET_WOL_IFACE` | — | network: wired interface to keep Wake-on-LAN on |
+| `NET_TAILSCALE` | `yes` | network: check tailscaled starts at boot and is logged in |
+| `BACKUP_AGE_RECIPIENT` | — (required) | backup: age public key(s); the private key stays elsewhere |
+| `BACKUP_DIR` | `/srv/backups` | backup: where archives go |
+| `BACKUP_PATHS` | `/etc /root /home /usr/local /var/lib/cirrusux /srv/cirrusux` | backup: what goes in |
+| `BACKUP_EXCLUDE` | — | backup: what stays out |
+| `BACKUP_SCHEDULE` | `*-*-* 03:30` | backup: systemd `OnCalendar`; the timer wakes a sleeping server |
+| `BACKUP_KEEP` | `7` | backup: newest archives kept; `0` keeps all (the only automatic deletion) |
+| `SEC_FAIL2BAN` | `yes` | security: fail2ban `sshd` jail, reading the journal |
+| `SEC_AV` | `yes` | security: weekly ClamAV scan; signatures update just before it |
+| `SEC_AV_PATHS` | `/home /srv /usr/local /tmp /var/tmp` | security: what the scan covers |
+| `SEC_AV_SCHEDULE` | `Sun *-*-* 04:00` | security: when it runs |
+
+Modules that the panel shows (backup, virus scan, security) tell the helper
+about themselves in `/etc/cirrusux/helper.d/`, so `helper.env` stays yours.

@@ -61,66 +61,18 @@ What is tied to cloud64 today, and what replaces it:
 - The docs stop citing the owner's brief; anything still needed from it moves
   into the docs themselves or the private profile.
 
-### Phase 4 — host modules
+### Phases 4–6 — host modules, app store, maintenance
 
-**Status:** in progress. Done: `cirrusux-setup` with check and apply, and the
-base, firewall and cirrusux modules, tested in private namespaces
-(`make test-host`). The cloud64 capture script is ready to run. Still to
-come: network, sleep manager (after the capture), backups and security.
+The build plan, part by part, is in [PHASES-4-6.md](PHASES-4-6.md).
 
-Re-runnable setup scripts under `deploy/host/`, each with a check-only mode
-that reports what it would change. Each module is optional:
-
-- **Base:** the cirrusux user, time zone, no automatic updates. SSH settings
-  are left alone: how people log in stays the owner's choice (rule 10).
-- **Network:** Tailscale, wake-on-LAN on the network card.
-- **Firewall:** an nftables ruleset owned by CirrusUX, versioned and backed up.
-  Changes apply with an automatic rollback: unless confirmed within 2 minutes,
-  the previous rules come back, so a bad rule can't lock anyone out.
-- **Sleep manager:** idle check, suspend, RTC wakes for timers, stay-awake
-  holds. Built from the captured cloud64 scripts (§3.1), made configurable.
-- **Backups:** age-encrypted system backups with only the public key on the
-  server; media excluded by default.
-- **Security:** fail2ban, scheduled ClamAV scan, egress report.
-- **CirrusUX itself:** agent, helper, container-API filter.
-
-### Phase 5 — app store
-
-- **Catalogue:** app definitions kept in the repo and shipped with each
-  release. No remote store is contacted, so no telemetry and no automatic
-  updates. Optional extra catalogues by URL, fetched only when the owner asks.
-- **One definition, two runtimes:** each definition renders to a compose file
-  for Docker or a Quadlet unit for Podman (D9). This replaces the earlier
-  "Docker or Podman option" for the containers CirrusUX manages.
-- **A definition lists:** image with pinned tag and digest; ports; config
-  folder; media folders (read-only by default); devices such as `/dev/dri`;
-  extra groups; time zone; health check.
-- **Install flow:**
-  1. Browse the store.
-  2. The app's page shows exactly what it can reach.
-  3. Choose a port and the media folders.
-  4. A confirmation shows the exact file that will be written.
-  5. The helper installs it, waits for the health check and logs the change
-     with an undo.
-- **Removing an app** stops it and archives its config folder; nothing is
-  deleted.
-- **Safety:** the browser and the assistant only ever send an app ID plus
-  options from fixed lists, never file contents. The helper checks them
-  against its own root-owned copy of the catalogue. The container-API filter
-  stays limited to reads plus start, stop and restart: installs go through the
-  helper, not the API.
-- **Background jobs:** pulling an image can outlast the 4-minute command
-  limit. Installs and updates run as background jobs on the server
-  (`systemd-run` units) that keep it awake while they run, and their progress
-  appears in the panel through the agent's reports.
-
-### Phase 6 — maintenance (the old Phase 3)
-
-Update workflow on the app store's pinned tags (backup → tag → pull → health →
-changelog, with restore), OS package updates on request, Storage page, Media
-helpers, archive review with two-step delete, Logs page with "Explain this",
-router (TR-064) power check as a wake-driver feature, declarative custom
-widgets (customisation level 5).
+- **Phase 4, host modules** (`cirrusux-setup`): base, firewall, cirrusux
+  (4a), network, backup and security (4b) are done. Next: CirrusUX's own
+  sleep manager (4c).
+- **Phase 5, app store:** a catalogue of app definitions rendered to compose
+  files or Quadlet units (5a), installs as background jobs on the server
+  (5b), and the store in the UI (5c).
+- **Phase 6, maintenance:** updates on request, Logs page with "Explain
+  this", Storage page, archive review, router power check, custom widgets.
 
 ### Phase 7 — public release
 

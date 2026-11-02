@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -15,6 +16,25 @@ import (
 // and where their files are. It must belong to root and be writable only
 // by root, because the helper runs as root; the agent can't pass paths.
 const configPath = "/etc/cirrusux/helper.env"
+
+// confDir holds files that setup modules write for themselves
+// (cirrusux-setup's backup module writes backup.env, and so on), so they
+// never edit the owner's helper.env. Same rules, read after it.
+const confDir = "/etc/cirrusux/helper.d"
+
+// loadAll reads helper.env, then helper.d/*.env in name order. A later
+// file's value wins; firewall checks add up.
+func loadAll(main, dir string) (conf, error) {
+	var c conf
+	files, _ := filepath.Glob(filepath.Join(dir, "*.env"))
+	sort.Strings(files)
+	for _, p := range append([]string{main}, files...) {
+		if err := loadInto(&c, p); err != nil {
+			return c, err
+		}
+	}
+	return c, nil
+}
 
 // conf is the helper's view of the machine. Empty values switch a module
 // off: a fresh install with no modules still lists containers.
@@ -119,19 +139,24 @@ func isWord(s string) bool {
 	return true
 }
 
-// loadConf reads configPath. A missing file means no modules.
+// loadConf reads one file. A missing file means no modules.
 func loadConf(p string) (conf, error) {
 	var c conf
+	err := loadInto(&c, p)
+	return c, err
+}
+
+func loadInto(c *conf, p string) error {
 	f, err := os.Open(p)
 	if os.IsNotExist(err) {
-		return c, nil
+		return nil
 	}
 	if err != nil {
-		return c, err
+		return err
 	}
 	defer f.Close()
 	if err := ownerCheck(f); err != nil {
-		return c, err
+		return err
 	}
 	sc := bufio.NewScanner(f)
 	for n := 1; sc.Scan(); n++ {
@@ -142,17 +167,17 @@ func loadConf(p string) (conf, error) {
 		k, v, ok := strings.Cut(line, "=")
 		set, known := keys[strings.TrimSpace(k)]
 		if !ok || !known {
-			return c, fmt.Errorf("%s:%d: unknown setting %q", p, n, k)
+			return fmt.Errorf("%s:%d: unknown setting %q", p, n, k)
 		}
 		v = strings.Trim(strings.TrimSpace(v), `"'`)
 		if v == "" {
 			continue
 		}
-		if err := set(&c, v); err != nil {
-			return c, fmt.Errorf("%s:%d: %s: %v", p, n, k, err)
+		if err := set(c, v); err != nil {
+			return fmt.Errorf("%s:%d: %s: %v", p, n, k, err)
 		}
 	}
-	return c, sc.Err()
+	return sc.Err()
 }
 
 // ownerCheck is rootOnly; tests, which can't create root's files, swap it.

@@ -31,6 +31,12 @@ files keep a dated `.bak-` copy. Config files are created once (with a shared
 token in the single setup) and then left to you; services start once nothing
 in them is still a placeholder. `cirrusux-setup list` shows the modules.
 
+Other modules: **network** (Wake-on-LAN that survives reboots, Tailscale at
+boot), **backup** (age-encrypted system backups on a timer that wakes a
+sleeping server; only the public key goes on the machine) and **security**
+(fail2ban for SSH, a weekly virus scan). Each switches its page on in the
+panel by itself.
+
 The **firewall** module (add it to `HOST_MODULES` when ready) writes an
 nftables table of its own: LAN and tailnet only, and containers' published
 ports closed to everything else. A new ruleset rolls back after two minutes

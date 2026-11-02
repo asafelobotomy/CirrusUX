@@ -6,7 +6,7 @@ sleeps to save power, answering from the last report while it does.
 
 - `docs/INSTALL.md` — installing, in either setup
 - `docs/CONFIG.md` — every setting and module
-- `docs/ROADMAP.md` — what comes next: host modules, an app store, a public release
+- `docs/ROADMAP.md` — what comes next; `docs/PHASES-4-6.md` — how phases 4–6 are built
 - `docs/PLAN.md` — the original plan and design spec (Phases 0–2)
 - `web/` — the UI (Svelte 5); runs on sample data when no gateway answers
 - `cmd/gateway` — serves the UI, caches reports, wakes a sleeping server, runs the assistant

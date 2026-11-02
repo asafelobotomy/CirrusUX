@@ -20,6 +20,17 @@ gets a minor version.
   - cirrusux: binaries, units, a visudo-checked sudoers rule and config
     files (created once, with a shared token in the single setup); services
     start once their config has no placeholders left.
+- More `cirrusux-setup` modules (Phase 4b):
+  - network: Wake-on-LAN kept on across reboots (a `.link` file that keeps
+    the card's name), tailscaled started at boot, login reported.
+  - backup: `cirrusux-backup`, tar + zstd encrypted with age to a public
+    key, written as `.partial` and renamed only when complete; a timer that
+    wakes a sleeping server; `BACKUP_KEEP` retention (0 keeps all).
+  - security: fail2ban's `sshd` jail on the journal, a weekly ClamAV scan
+    that updates its signatures just before it runs (no daemon).
+- The helper reads `/etc/cirrusux/helper.d/*.env` after `helper.env`, so
+  setup modules switch panel modules on without touching the owner's file.
+- `docs/PHASES-4-6.md`: the build plan for phases 4–6.
 - `make test-host`: shellcheck plus each module tested as root in a private
   namespace, never on the real machine.
 - The helper can check nftables chains (`family/table/chain:pattern`).

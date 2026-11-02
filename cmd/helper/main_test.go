@@ -139,3 +139,23 @@ func TestShippedConfigs(t *testing.T) {
 		t.Errorf("cloud64: %v %v", c.features(), err)
 	}
 }
+
+// Setup modules drop their own files in helper.d; they add to helper.env.
+func TestLoadAll(t *testing.T) {
+	main := writeConf(t, "IDLE_LOG=/var/log/idle.log\nFIREWALL_CHECKS=DOCKER-USER:DROP\n")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "50-backup.env"), []byte("BACKUP_UNIT=cirrusux-backup.service\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "60-security.env"), []byte("FIREWALL_CHECKS=inet/cirrusux/input:drop\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignored"), 0o644)
+	c, err := loadAll(main, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.BackupUnit != "cirrusux-backup.service" || c.IdleLog == "" || len(c.FirewallChecks) != 2 {
+		t.Errorf("merged = %+v", c)
+	}
+	os.WriteFile(filepath.Join(dir, "70-bad.env"), []byte("SHELL=/bin/sh\n"), 0o644)
+	if _, err := loadAll(main, dir); err == nil {
+		t.Error("a bad helper.d file should fail the whole load")
+	}
+}

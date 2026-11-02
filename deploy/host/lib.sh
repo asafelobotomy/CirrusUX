@@ -105,3 +105,22 @@ load_config() {
 	# shellcheck disable=SC1090 # the path is the config file
 	. "$f"
 }
+
+# need_packages PKG...: install the Debian packages a module needs. Only
+# missing ones; nothing is ever upgraded.
+need_packages() {
+	local p missing=()
+	for p in "$@"; do
+		dpkg-query -W -f '${Status}' "$p" 2>/dev/null | grep -q 'install ok installed' || missing+=("$p")
+	done
+	if [ ${#missing[@]} -eq 0 ]; then
+		ok "packages: $*"
+		return 0
+	fi
+	change "install packages: ${missing[*]}" "apt-get remove ${missing[*]}" \
+		env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"
+}
+
+# helper_module NAME < settings — the file a setup module writes so the
+# panel's helper knows about it (/etc/cirrusux/helper.d/NAME.env).
+helper_module() { put_file "/etc/cirrusux/helper.d/$1.env" 644 root:root; }

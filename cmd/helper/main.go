@@ -38,7 +38,7 @@ func main() {
 	} else if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}
-	c, err := loadConf(configPath)
+	c, err := loadAll(configPath, confDir)
 	if err != nil {
 		fail("%v", err)
 	}
