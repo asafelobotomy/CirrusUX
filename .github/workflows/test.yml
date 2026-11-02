@@ -30,8 +30,14 @@ jobs:
       - name: Race detector
         run: go test -race ./...
       - name: Host scripts
+        # Ubuntu's AppArmor blocks unprivileged user namespaces, which the
+        # module tests run in; this throwaway runner may allow them.
+        # A skipped test fails the step here: CI should run all of them.
+        shell: bash # with pipefail, so a failing test still fails the step
         run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           sudo apt-get install -y --no-install-recommends shellcheck nftables
-          make test-host
+          make test-host 2>&1 | tee "$RUNNER_TEMP/host.log"
+          ! grep -q '^skipping' "$RUNNER_TEMP/host.log"
       - name: Build
         run: make build
