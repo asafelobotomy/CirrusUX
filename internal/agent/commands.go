@@ -163,7 +163,7 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		return helper(helperapi.CmdBackupRun)
 	case "egress_report":
 		return helper(helperapi.CmdEgressReport)
-	case "app_install", "app_remove":
+	case "app_install", "app_remove", "app_update":
 		if err := writeRequest(c); err != nil {
 			return nil, err
 		}
@@ -191,6 +191,9 @@ var requestsDir = helperapi.RequestsDir
 // again in full: the agent can't pass free text to root on the command line.
 func writeRequest(c command) error {
 	req := appjob.Request{Job: c.ID, Action: strings.TrimPrefix(c.Action, "app_"), App: c.Args["app"]}
+	if req.Action == "update" {
+		req.Tag, req.Digest = c.Args["tag"], c.Args["digest"]
+	}
 	if opts := c.Args["options"]; opts != "" && req.Action == "install" {
 		o, err := catalogue.ParseOptions(opts)
 		if err != nil {

@@ -81,6 +81,18 @@ var actionSpecs = map[string]actionSpec{
 			return &ActionReq{Action: "app_remove", Args: map[string]string{"app": a["app"]}}
 		},
 	},
+	"app_update": {
+		label: func(a map[string]string) string { return "Started updating " + appName(a["app"]) + " to " + a["tag"] },
+		check: func(a map[string]string, snap *snapshot.Snapshot) error {
+			if err := checkInstalled(a, snap); err != nil {
+				return err
+			}
+			if !catalogue.ValidPin(a["tag"], a["digest"]) {
+				return errBadPin
+			}
+			return nil
+		},
+	},
 	"app_remove": {
 		label: func(a map[string]string) string {
 			return "Started removing " + appName(a["app"]) + " (its folder is archived)"
@@ -210,7 +222,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 		return q, spec, fmt.Errorf("unknown action %q", q.Action)
 	}
 	clean := ActionReq{Action: q.Action}
-	for _, k := range []string{"minutes", "name", "app", "options"} {
+	for _, k := range []string{"minutes", "name", "app", "options", "tag", "digest"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}
@@ -368,6 +380,19 @@ func (s *Server) postAction(w http.ResponseWriter, r *http.Request) {
 	c := &Command{ActionReq: clean, Label: s.label(spec, clean.Args), Who: userOf(r), ReadOnly: spec.readOnly}
 	if spec.undo != nil {
 		c.Undo = spec.undo(clean.Args)
+	}
+	if clean.Action == "app_update" {
+		// Only versions the last check found, or back to the previous one.
+		if err := s.checkUpdate(clean.Args, snap); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// Its undo goes back to what runs now.
+		for _, x := range snap.Apps {
+			if x.ID == clean.Args["app"] && catalogue.ValidPin(x.Tag, x.Digest) {
+				c.Undo = &ActionReq{Action: "app_update", Args: map[string]string{"app": x.ID, "tag": x.Tag, "digest": x.Digest}}
+			}
+		}
 	}
 	s.queue.Add(c)
 	writeJSONStatus(w, http.StatusAccepted, map[string]string{"id": c.ID})

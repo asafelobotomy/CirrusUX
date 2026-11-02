@@ -1,19 +1,26 @@
 <script lang="ts">
   import Button from '../components/Button.svelte';
-  import { live } from '../state/live.svelte';
   import { go } from '../state/ui.svelte';
+  import { onMount } from 'svelte';
+  import { loadUpdates, pendingUpdates, store } from '../state/store.svelte';
+  import { fmtAgo } from '../time.svelte';
+
+  const waiting = $derived(pendingUpdates());
+  onMount(() => void loadUpdates());
 </script>
 
 <div class="u">
-  {#if live.updates.length}
-    <p><strong class="num">{live.updates.length}</strong> <span class="muted">updates waiting for approval</span></p>
+  {#if waiting.length}
+    <p><strong class="num">{waiting.length}</strong> <span class="muted">update{waiting.length === 1 ? '' : 's'} waiting</span></p>
     <ul>
-      {#each live.updates as u}
-        <li><span>{u.name}</span><code class="faint">{u.from} → {u.to}</code></li>
+      {#each waiting as u}
+        <li><span>{u.name}</span><code class="faint">{u.current} → {u.latest}</code></li>
       {/each}
     </ul>
+  {:else if store.updates.checked}
+    <p class="muted">Up to date, as of {fmtAgo(store.updates.checked)}.</p>
   {:else}
-    <p class="muted">Update checks arrive in Phase 3. They run only when you ask.</p>
+    <p class="muted">Not checked yet. Checks run only when you ask.</p>
   {/if}
   <Button size="sm" onclick={() => go('updates')}>Review</Button>
 </div>

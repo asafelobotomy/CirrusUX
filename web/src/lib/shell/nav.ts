@@ -12,7 +12,7 @@ export const MAIN_NAV: NavItem[] = [
   { route: 'backups', label: 'Backups', icon: I.Archive, available: () => has('backup') },
   { route: 'storage', label: 'Storage', icon: I.HardDrive, phase: 'Phase 3' },
   { route: 'security', label: 'Security', icon: I.ShieldCheck, available: () => has('security') || has('av') || has('egress') },
-  { route: 'updates', label: 'Updates', icon: I.RefreshCw, phase: 'Phase 3' },
+  { route: 'updates', label: 'Updates', icon: I.RefreshCw, available: () => has('apps') },
   { route: 'media', label: 'Media', icon: I.Film, phase: 'Phase 3' },
   { route: 'logs', label: 'Logs', icon: I.ScrollText, phase: 'Phase 3' },
   { route: 'changelog', label: 'Changelog', icon: I.History },

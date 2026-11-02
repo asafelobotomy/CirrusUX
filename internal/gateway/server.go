@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"cirrusux/internal/assistant"
+	"cirrusux/internal/registry"
 	"cirrusux/internal/snapshot"
 	"cirrusux/internal/version"
 )
@@ -35,10 +36,12 @@ type Server struct {
 	assistant *assistant.Client
 	web       fs.FS
 	queue     *Queue
+	// registry answers update checks; tests replace it.
+	registry *registry.Client
 }
 
 func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
-	s := &Server{cfg: cfg, store: store, power: power, web: web, queue: NewQueue()}
+	s := &Server{cfg: cfg, store: store, power: power, web: web, queue: NewQueue(), registry: &registry.Client{}}
 	if cfg.TZ != nil {
 		zone = cfg.TZ
 	}
@@ -70,6 +73,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/assistant", s.askAssistant)
 	api.HandleFunc("GET /api/catalogue", s.getCatalogue)
 	api.HandleFunc("POST /api/apps/preview", s.previewApp)
+	api.HandleFunc("GET /api/updates", s.getUpdates)
+	api.HandleFunc("POST /api/updates/check", s.checkUpdates)
 	mux.Handle("/api/", s.auth(api))
 
 	mux.Handle("/", s.auth(http.HandlerFunc(s.static)))

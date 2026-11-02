@@ -96,13 +96,17 @@ type Disk struct {
 
 // App is one app the app store installed.
 type App struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Tag       string    `json:"tag"`
-	Runtime   string    `json:"runtime"`
-	MainPort  int       `json:"mainPort"`
-	HTTPS     bool      `json:"https,omitempty"`
-	Installed time.Time `json:"installed"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Tag    string `json:"tag"`
+	Digest string `json:"digest,omitempty"`
+	// The version before the last update, for rolling back.
+	PreviousTag    string    `json:"previousTag,omitempty"`
+	PreviousDigest string    `json:"previousDigest,omitempty"`
+	Runtime        string    `json:"runtime"`
+	MainPort       int       `json:"mainPort"`
+	HTTPS          bool      `json:"https,omitempty"`
+	Installed      time.Time `json:"installed"`
 }
 
 // Job is an app-store install or removal, running or recent.

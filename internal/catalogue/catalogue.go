@@ -259,6 +259,18 @@ func (a App) Validate() error {
 	return nil
 }
 
+// ValidPin reports whether a tag and digest could pin this image: an exact
+// tag, never latest, and a sha256 digest. Updates move the pin with these.
+func ValidPin(tag, digest string) bool {
+	return tagRe.MatchString(tag) && tag != "latest" && digestRe.MatchString(digest)
+}
+
+// WithPin is the app pinned to another version of the same image.
+func (a App) WithPin(tag, digest string) App {
+	a.Tag, a.Digest = tag, digest
+	return a
+}
+
 // ImageRef is the full pinned reference: image:tag@digest.
 func (a App) ImageRef() string { return a.Image + ":" + a.Tag + "@" + a.Digest }
 

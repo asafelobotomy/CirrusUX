@@ -31,8 +31,8 @@ interface Snap {
   features?: string[];
   timeline: { from: string; to?: string; state: 'awake' | 'asleep'; reason?: string }[];
   errors?: string[];
-  apps?: { id: string; name: string; tag: string; runtime: string; mainPort: number; https?: boolean; installed: string }[];
-  jobs?: { id: string; action: 'install' | 'remove'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
+  apps?: { id: string; name: string; tag: string; digest?: string; previousTag?: string; previousDigest?: string; runtime: string; mainPort: number; https?: boolean; installed: string }[];
+  jobs?: { id: string; action: 'install' | 'remove' | 'update'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
   appsHost?: AppsHost;
 }
 

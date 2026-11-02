@@ -10,7 +10,7 @@ import { api, mode, sleeps } from '../api.svelte';
 import { loadChangelog, refreshSoon } from '../sync.svelte';
 import { toast } from './ui.svelte';
 import { cleanOptions, type AppOptions, type CatalogueApp } from '../catalogue';
-import { demoJob, findApp } from './store.svelte';
+import { demoJob, findApp, store } from './store.svelte';
 
 type Opts = { source?: 'assistant' };
 
@@ -199,6 +199,25 @@ export function confirmRemove(app: CatalogueApp): void {
   });
 }
 
+/** Moves an installed app to another version: an update, or back to the previous one. */
+export function confirmUpdate(app: CatalogueApp, from: string, tag: string, digest: string, rollback = false): void {
+  if (offline()) return;
+  ask({
+    title: rollback ? `Put ${app.name} back to ${tag}?` : `Update ${app.name} to ${tag}?`,
+    body:
+      `Downloads ${app.image}:${tag} (pinned to its digest), backs up ${app.name}'s settings and data, then restarts it on the new version. ` +
+      `If it doesn't answer afterwards, ${from} and its settings come back by themselves.${d3()}`,
+    command: `cirrusux-helper app-job (update ${app.id}: ${from} → ${tag})`,
+    undo: `Update ${app.name} back to ${from}`,
+    confirmLabel: rollback ? 'Go back' : 'Update',
+    changelog: `Started updating ${app.name} to ${tag}`,
+    run: () => {
+      if (!mode.live) return demoJob('update', app, tag);
+      void sendAction({ action: 'app_update', args: { app: app.id, tag, digest } }, `Started updating ${app.name} to ${tag}`).then(() => refreshSoon());
+    },
+  });
+}
+
 /** Runs an action given by name, e.g. from an assistant proposal or an Undo. */
 export function confirmAction(req: ActionReq, o: Opts = {}): void {
   const a = req.args ?? {};
@@ -215,6 +234,12 @@ export function confirmAction(req: ActionReq, o: Opts = {}): void {
       return confirmContainer(a.name, req.action.slice('container_'.length) as 'start' | 'stop' | 'restart', o);
     case 'backup_run':
       return confirmBackup(o);
+    case 'app_update': {
+      const app = findApp(a.app);
+      const rec = store.installed.find((x) => x.id === a.app);
+      if (app && rec) return confirmUpdate(app, rec.tag, a.tag, a.digest, true);
+      return;
+    }
     case 'app_remove': {
       const app = findApp(a.app);
       if (app) return confirmRemove(app);

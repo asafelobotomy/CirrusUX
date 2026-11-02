@@ -142,24 +142,54 @@ guesswork.
 
 ## Phase 6 — maintenance
 
-- **Updates**, checked only when asked: newer tags for each installed app
-  (registry tag lists, compared as versions), and pending OS packages. An
-  app update is a job: back up the app folder → set the tag → pull →
-  recreate → health check → changelog entry with an undo that restores the
-  previous tag and folder; a failed health check offers the restore at once.
-  OS updates run as a job too.
-- **Logs page**: per-container logs (the Docker filter allows the logs
-  endpoint with a line limit) and the journal of CirrusUX's own units, live
-  tails that stop after 5 minutes, and "Explain this" sending the selected
-  lines (redacted) to the assistant.
-- **Storage page**: folder sizes measured on request as a job and cached,
-  with a note of when.
-- **Archive review**: archived app folders and old backups, with the only
-  deletion in CirrusUX: two steps, the second showing exactly what goes.
-- **Router power check** as a wake-driver option (TR-064 `GetSpecificHostEntry`),
-  through a root wrapper so the gateway never holds the router password.
-- **Custom widgets** (customisation level 5): declarative widgets built from
-  the snapshot's data, no code.
+In four parts, each its own commit.
+
+### 6a. App updates, on request — done
+
+- **Checking** happens on the gateway, only when asked, so a sleeping
+  server isn't woken: for each installed app it lists the image's tags from
+  its registry (the standard registry API, anonymous tokens for Docker Hub,
+  GHCR and others), keeps those shaped like the pinned one (same suffix, no
+  beta/rc/dev), and offers the newest higher version with its digest. The
+  result is cached with the time it was checked.
+- **Updating** is a job (`app_update`): back up the app's own folders
+  (settings and data, not cache) → write the file with the new tag and
+  digest → pull → restart → health check → record. If the health check
+  fails, the job puts the previous file and folders back and restarts the
+  old version by itself. The update's undo is an update back to the previous
+  tag and digest.
+- The helper accepts an update only for the catalogue's own image name;
+  the tag and digest must be well-formed and never `latest`.
+- An Updates page: installed apps with their version, "Check now", what's
+  newer, and Update with the same confirmation and live progress as installs.
+- Tested: version picking on real tag lists, the registry client against
+  the real Docker Hub (`go test -tags live ./internal/registry`; its digest
+  for Navidrome's pin matches the catalogue), and the restore path: a new
+  version that breaks its data and never answers gets the old version and
+  its data back by itself.
+
+### 6b. OS updates and the Logs page
+
+- Pending OS packages, checked on request (`apt-get update` then the list),
+  and an upgrade run as a job. Nothing updates by itself.
+- Per-container logs (the Docker filter allows the logs endpoint with a line
+  limit) and the journal of CirrusUX's own units; live tails stop after 5
+  minutes; "Explain this" sends the selected lines (redacted) to the
+  assistant.
+
+### 6c. Storage and archive review
+
+- Folder sizes measured on request as a job and cached, with a note of when.
+- Archived app folders, pre-update backups and old system backups, with the
+  only deletion in CirrusUX: two steps, the second showing exactly what goes.
+
+### 6d. Router power check and custom widgets
+
+- A router power check as a wake-driver option (TR-064
+  `GetSpecificHostEntry`), through a root wrapper so the gateway never holds
+  the router password.
+- Custom widgets (customisation level 5): declarative widgets built from the
+  snapshot's data, no code.
 
 **Done when:** one app update goes through backup → tag → pull → health →
 changelog, and its restore path is tested once.

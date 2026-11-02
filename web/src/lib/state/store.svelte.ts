@@ -11,6 +11,10 @@ export interface InstalledApp {
   id: string;
   name: string;
   tag: string;
+  digest?: string;
+  /** The version before the last update, for rolling back. */
+  previousTag?: string;
+  previousDigest?: string;
   runtime: string;
   mainPort: number;
   https?: boolean;
@@ -19,7 +23,7 @@ export interface InstalledApp {
 
 export interface Job {
   id: string;
-  action: 'install' | 'remove';
+  action: 'install' | 'remove' | 'update';
   app: string;
   name: string;
   state: 'running' | 'done' | 'failed';
@@ -46,7 +50,57 @@ export const store = $state({
   host: null as AppsHost | null,
   /** The app whose page is open. */
   open: null as string | null,
+  /** The last update check (gateway, on request). */
+  updates: { checked: null as Date | null, apps: [] as AppUpdate[] },
 });
+
+/** One installed app's update check (gateway.AppUpdate). */
+export interface AppUpdate {
+  app: string;
+  name: string;
+  current: string;
+  latest?: string;
+  digest?: string;
+  error?: string;
+}
+
+const toUpdates = (u: { checked: string; apps: AppUpdate[] }) => ({ checked: u.checked && !u.checked.startsWith('0001') ? new Date(u.checked) : null, apps: u.apps ?? [] });
+
+/** The last check's result, kept by the gateway. */
+export async function loadUpdates(): Promise<void> {
+  if (!mode.live) return;
+  try {
+    store.updates = toUpdates(await api('/api/updates'));
+  } catch {
+    /* keep what we have */
+  }
+}
+
+/** Asks the registries now: the gateway does it, so a sleeping server stays asleep. */
+export async function checkUpdates(): Promise<void> {
+  if (!mode.live) {
+    // Demo: Jellyfin has a newer version.
+    await new Promise((r) => setTimeout(r, 900));
+    store.updates = {
+      checked: now(),
+      apps: store.installed.map((a) =>
+        a.id === 'jellyfin'
+          ? { app: a.id, name: a.name, current: a.tag, latest: '12.5.20261110-090000', digest: 'sha256:' + '7'.repeat(64) }
+          : { app: a.id, name: a.name, current: a.tag },
+      ),
+    };
+    return;
+  }
+  try {
+    store.updates = toUpdates(await api('/api/updates/check', { method: 'POST' }));
+  } catch (e) {
+    toast(`Couldn't check for updates: ${(e as Error).message}`, 'warn');
+  }
+}
+
+/** Updates waiting: newer than what runs now. */
+export const pendingUpdates = () =>
+  store.updates.apps.filter((u) => u.latest && store.installed.find((a) => a.id === u.app)?.tag === u.current);
 
 /** Demo mode starts with two apps installed. */
 export function startDemoStore(): void {
@@ -55,7 +109,7 @@ export function startDemoStore(): void {
   store.installed = ['jellyfin', 'navidrome'].map((id) => {
     const a = demoCatalogue.find((x) => x.id === id)!;
     const main = a.ports.find((p) => p.main) ?? a.ports[0];
-    return { id, name: a.name, tag: a.tag, runtime: 'podman', mainPort: main.host, https: main.https, installed: new Date(now().getTime() - 9 * 86400_000) };
+    return { id, name: a.name, tag: a.tag, digest: a.digest, runtime: 'podman', mainPort: main.host, https: main.https, installed: new Date(now().getTime() - 9 * 86400_000) };
   });
 }
 
@@ -79,13 +133,15 @@ export const runningJob = (id?: string) => store.jobs.find((j) => j.state === 'r
 
 // ---- demo jobs: the same steps the server's job reports ----
 
-export function demoJob(action: 'install' | 'remove', app: CatalogueApp): void {
+export function demoJob(action: 'install' | 'remove' | 'update', app: CatalogueApp, tag?: string): void {
   const job: Job = { id: Math.random().toString(16).slice(2, 10), action, app: app.id, name: app.name, state: 'running', step: '', started: now(), finished: null };
   store.jobs.unshift(job);
   const steps =
     action === 'install'
       ? ["Creating the app's folders", `Downloading ${app.image}:${app.tag}`, `Starting ${app.name}`, `Waiting for ${app.name} to answer`, 'Recording the install']
-      : [`Stopping ${app.name}`, 'Archiving its folder'];
+      : action === 'update'
+        ? [`Downloading ${app.image}:${tag}`, `Backing up ${app.name}'s settings and data`, `Starting ${app.name} ${tag}`, `Waiting for ${app.name} to answer`, 'Recording the update']
+        : [`Stopping ${app.name}`, 'Archiving its folder'];
   steps.forEach((s, i) =>
     setTimeout(() => {
       const j = store.jobs.find((x) => x.id === job.id)!;
@@ -98,7 +154,14 @@ export function demoJob(action: 'install' | 'remove', app: CatalogueApp): void {
     j.state = 'done';
     j.finished = now();
     j.detail = undefined;
-    if (action === 'install') {
+    if (action === 'update') {
+      const rec = store.installed.find((a) => a.id === app.id)!;
+      rec.previousTag = rec.tag;
+      rec.previousDigest = rec.digest ?? app.digest;
+      rec.tag = tag!;
+      j.step = `${app.name} is updated`;
+      j.detail = `backup in /srv/cirrusux/archive/${app.id}-before-${rec.previousTag}-…`;
+    } else if (action === 'install') {
       const main = app.ports.find((p) => p.main) ?? app.ports[0];
       store.installed.push({ id: app.id, name: app.name, tag: app.tag, runtime: 'podman', mainPort: main.host, https: main.https, installed: now() });
       j.step = `${app.name} is installed`;

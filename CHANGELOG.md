@@ -7,6 +7,25 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Added
+
+- App updates, on request (Phase 6a). "Check now" on the new Updates page
+  asks the registries from the gateway (standard registry API, anonymous
+  tokens; a sleeping server isn't woken) and offers the newest release of
+  the same shape as each app's pinned version: same suffix, never betas or
+  `:latest`. An update is a job: download → back up the app's settings and
+  data → restart on the new version → health check → record. If the new
+  version doesn't answer, the previous version and its data come back by
+  themselves. The gateway only lets an update move to a version the check
+  found, or back to the previous one; each update's undo goes back.
+- Installed apps' records keep their digest and the version before the
+  last update.
+
+### Changed
+
+- Podman apps are started with `systemctl restart`, so an update moves a
+  running app to its new unit.
+
 ## [0.4.0] - 2026-11-02
 
 ### Added

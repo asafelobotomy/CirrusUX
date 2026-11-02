@@ -22,9 +22,13 @@ import (
 // Request is what the agent asks for: one file per job.
 type Request struct {
 	Job     string            `json:"job"`
-	Action  string            `json:"action"` // install or remove
+	Action  string            `json:"action"` // install, remove or update
 	App     string            `json:"app"`
 	Options catalogue.Options `json:"options"`
+	// Update only: the version to move to, always of the catalogue's own
+	// image. Rolling back is an update to the previous version.
+	Tag    string `json:"tag,omitempty"`
+	Digest string `json:"digest,omitempty"`
 }
 
 var jobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
@@ -43,7 +47,16 @@ func ParseRequest(b []byte) (Request, error) {
 	if !jobRe.MatchString(r.Job) {
 		return r, fmt.Errorf("bad job id %q", r.Job)
 	}
-	if r.Action != "install" && r.Action != "remove" {
+	switch r.Action {
+	case "install", "remove":
+		if r.Tag != "" || r.Digest != "" {
+			return r, fmt.Errorf("%s takes no version", r.Action)
+		}
+	case "update":
+		if !catalogue.ValidPin(r.Tag, r.Digest) {
+			return r, fmt.Errorf("update needs an exact tag (never latest) and a sha256 digest")
+		}
+	default:
 		return r, fmt.Errorf("unknown action %q", r.Action)
 	}
 	return r, nil
@@ -65,14 +78,19 @@ type Status struct {
 
 // Record is an installed app, kept in RecordsDir/<id>.json.
 type Record struct {
-	App       string            `json:"app"`
-	Name      string            `json:"name"`
-	Tag       string            `json:"tag"`
-	Runtime   string            `json:"runtime"`
-	MainPort  int               `json:"mainPort"`
-	HTTPS     bool              `json:"https,omitempty"`
-	Options   catalogue.Options `json:"options"`
-	Installed time.Time         `json:"installed"`
+	App    string `json:"app"`
+	Name   string `json:"name"`
+	Tag    string `json:"tag"`
+	Digest string `json:"digest,omitempty"`
+	// The version before the last update, for rolling back.
+	PreviousTag    string            `json:"previousTag,omitempty"`
+	PreviousDigest string            `json:"previousDigest,omitempty"`
+	Updated        time.Time         `json:"updated,omitempty"`
+	Runtime        string            `json:"runtime"`
+	MainPort       int               `json:"mainPort"`
+	HTTPS          bool              `json:"https,omitempty"`
+	Options        catalogue.Options `json:"options"`
+	Installed      time.Time         `json:"installed"`
 }
 
 // Runtime starts and stops an app on Docker or Podman.
@@ -99,6 +117,8 @@ type Env struct {
 	HealthTimeout time.Duration
 	// Chown gives the app's folders to the apps user; nil skips (tests).
 	Chown func(path string, uid, gid int) error
+	// Copy copies a folder with owners and modes; nil uses CopyTree.
+	Copy func(src, dst string) error
 }
 
 // Check validates a request fully, without changing anything: the helper
@@ -131,12 +151,21 @@ func (e *Env) Check(r Request) (catalogue.App, error) {
 				}
 			}
 		}
-	case "remove":
+	case "remove", "update":
 		if !installed {
 			return app, fmt.Errorf("%s isn't installed by the app store", app.Name)
 		}
 		if !emptyOptions(r.Options) {
-			return app, errors.New("remove takes no options")
+			return app, fmt.Errorf("%s takes no options", r.Action)
+		}
+		if r.Action == "update" {
+			rec, err := e.record(app.ID)
+			if err != nil {
+				return app, err
+			}
+			if rec.Tag == r.Tag && (rec.Digest == "" || rec.Digest == r.Digest) {
+				return app, fmt.Errorf("%s is already at %s", app.Name, r.Tag)
+			}
 		}
 	}
 	return app, nil
@@ -149,8 +178,11 @@ func (e *Env) Run(ctx context.Context, r Request) error {
 	if err != nil {
 		return e.finish(&st, err)
 	}
-	if r.Action == "remove" {
+	switch r.Action {
+	case "remove":
 		return e.finish(&st, e.remove(ctx, &st, app))
+	case "update":
+		return e.finish(&st, e.update(ctx, &st, app, r.Tag, r.Digest))
 	}
 	return e.finish(&st, e.install(ctx, &st, app, r.Options))
 }
@@ -211,8 +243,119 @@ func (e *Env) install(ctx context.Context, st *Status, app catalogue.App, o cata
 	}
 
 	e.step(st, "Recording the install", "")
-	rec := Record{App: app.ID, Name: app.Name, Tag: app.Tag, Runtime: e.Runtime.Name(), MainPort: hostPortOf(p, app.MainPort()), HTTPS: app.MainPort().HTTPS, Options: o, Installed: e.Now()}
+	rec := Record{App: app.ID, Name: app.Name, Tag: app.Tag, Digest: app.Digest, Runtime: e.Runtime.Name(), MainPort: hostPortOf(p, app.MainPort()), HTTPS: app.MainPort().HTTPS, Options: o, Installed: e.Now()}
 	return writeJSON(filepath.Join(e.RecordsDir, app.ID+".json"), rec, 0o644)
+}
+
+// update moves an installed app to another version: back up its own
+// folders, start the new version, and if it doesn't answer, put the folders
+// and the previous version back by itself.
+func (e *Env) update(ctx context.Context, st *Status, app catalogue.App, tag, digest string) error {
+	rec, err := e.record(app.ID)
+	if err != nil {
+		return err
+	}
+	prevDigest := rec.Digest
+	if prevDigest == "" && rec.Tag == app.Tag {
+		prevDigest = app.Digest // installed before records kept the digest
+	}
+	old, next := app.WithPin(rec.Tag, prevDigest), app.WithPin(tag, digest)
+	oldPlan, err := catalogue.Resolve(old, rec.Options, e.Host)
+	if err != nil {
+		return err
+	}
+	newPlan, err := catalogue.Resolve(next, rec.Options, e.Host)
+	if err != nil {
+		return err
+	}
+	appDir := filepath.Join(e.Host.AppsDir, app.ID)
+
+	e.step(st, "Downloading "+app.Image+":"+tag, "")
+	if err := e.Runtime.Pull(ctx, next.ImageRef(), func(line string) { e.step(st, st.Step, line) }); err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+
+	// Settings and data are copied aside first; the cache isn't worth it.
+	backup := filepath.Join(e.ArchiveDir, fmt.Sprintf("%s-before-%s-%s", app.ID, rec.Tag, e.Now().Format("20060102-150405")))
+	e.step(st, "Backing up "+app.Name+"'s settings and data", backup)
+	var saved []string
+	for _, v := range app.Volumes {
+		if v.Kind != catalogue.KindConfig && v.Kind != catalogue.KindData {
+			continue
+		}
+		src := filepath.Join(appDir, v.Name)
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		if err := os.MkdirAll(backup, 0o750); err != nil {
+			return err
+		}
+		if err := e.copy(src, filepath.Join(backup, v.Name)); err != nil {
+			return fmt.Errorf("backup: %w", err)
+		}
+		saved = append(saved, v.Name)
+	}
+
+	e.step(st, fmt.Sprintf("Starting %s %s", app.Name, tag), "")
+	err = e.Runtime.Up(ctx, newPlan, appDir)
+	if err == nil {
+		if url := e.healthURL(app, newPlan); url != "" {
+			e.step(st, "Waiting for "+app.Name+" to answer", url)
+			err = e.waitHealthy(ctx, url)
+		}
+	}
+	if err != nil {
+		e.step(st, fmt.Sprintf("%s %s didn't work: going back to %s", app.Name, tag, rec.Tag), err.Error())
+		ctx := context.WithoutCancel(ctx)
+		for _, name := range saved {
+			dst := filepath.Join(appDir, name)
+			if rerr := os.RemoveAll(dst); rerr == nil {
+				_ = e.copy(filepath.Join(backup, name), dst)
+			}
+		}
+		if rerr := e.Runtime.Up(ctx, oldPlan, appDir); rerr != nil {
+			return fmt.Errorf("update failed (%v), and so did going back: %v; the backup is in %s", err, rerr, backup)
+		}
+		return fmt.Errorf("update failed (%v); %s is back on %s", err, app.Name, rec.Tag)
+	}
+
+	e.step(st, "Recording the update", "")
+	rec.PreviousTag, rec.PreviousDigest = rec.Tag, prevDigest
+	rec.Tag, rec.Digest, rec.Updated = tag, digest, e.Now()
+	st.Detail = "backup in " + backup
+	return writeJSON(filepath.Join(e.RecordsDir, app.ID+".json"), rec, 0o644)
+}
+
+func (e *Env) healthURL(app catalogue.App, p catalogue.Plan) string {
+	if app.Check == nil {
+		return ""
+	}
+	for _, port := range app.Ports {
+		if port.Name == app.Check.Port {
+			scheme := "http"
+			if port.HTTPS {
+				scheme = "https"
+			}
+			return fmt.Sprintf("%s://127.0.0.1:%d%s", scheme, hostPortOf(p, port), app.Check.Path)
+		}
+	}
+	return ""
+}
+
+func (e *Env) copy(src, dst string) error {
+	if e.Copy != nil {
+		return e.Copy(src, dst)
+	}
+	return CopyTree(src, dst)
+}
+
+func (e *Env) record(id string) (Record, error) {
+	var r Record
+	b, err := os.ReadFile(filepath.Join(e.RecordsDir, id+".json"))
+	if err != nil {
+		return r, fmt.Errorf("no record of %s: %v", id, err)
+	}
+	return r, json.Unmarshal(b, &r)
 }
 
 func (e *Env) remove(ctx context.Context, st *Status, app catalogue.App) error {

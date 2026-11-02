@@ -24,7 +24,7 @@ func (f *fakeRuntime) Pull(_ context.Context, ref string, progress func(string))
 	return f.pull
 }
 func (f *fakeRuntime) Up(_ context.Context, p catalogue.Plan, _ string) error {
-	f.calls = append(f.calls, "up "+p.Name)
+	f.calls = append(f.calls, "up "+p.Name+" "+p.App.Tag)
 	return nil
 }
 func (f *fakeRuntime) Down(_ context.Context, id, _ string) error {
@@ -71,7 +71,7 @@ func TestInstallAndRemove(t *testing.T) {
 	if err := e.Run(context.Background(), navidrome(media)); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(rt.calls, ",") != "pull docker.io/deluan/navidrome:0.64.2@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52,up navidrome" {
+	if strings.Join(rt.calls, ",") != "pull docker.io/deluan/navidrome:0.64.2@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52,up navidrome 0.64.2" {
 		t.Errorf("calls = %v", rt.calls)
 	}
 	if fi, err := os.Stat(filepath.Join(e.Host.AppsDir, "navidrome", "data")); err != nil || !fi.IsDir() {
@@ -211,7 +211,7 @@ func TestRuntimes(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "systemd", "cirrusux-uptime-kuma.container")); err == nil {
 		t.Error("unit left behind")
 	}
-	want := "systemctl daemon-reload|systemctl start cirrusux-uptime-kuma.service|systemctl stop cirrusux-uptime-kuma.service|systemctl daemon-reload"
+	want := "systemctl daemon-reload|systemctl restart cirrusux-uptime-kuma.service|systemctl stop cirrusux-uptime-kuma.service|systemctl daemon-reload"
 	if strings.Join(ran, "|") != want {
 		t.Errorf("podman ran %v", ran)
 	}
@@ -228,5 +228,96 @@ func TestRuntimes(t *testing.T) {
 	file := filepath.Join(appDir, "compose.yml")
 	if len(ran) != 2 || ran[0] != "docker compose -p uptime-kuma -f "+file+" up -d" || !strings.HasSuffix(ran[1], " down") {
 		t.Errorf("docker ran %v", ran)
+	}
+}
+
+const newDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+
+// Done-when for Phase 6: an update backs up, moves, checks and records; a
+// failed one puts the old version and its settings back by itself.
+func TestUpdateAndRollback(t *testing.T) {
+	e, rt, media := testEnv(t)
+	ctx := context.Background()
+	if err := e.Run(ctx, navidrome(media)); err != nil {
+		t.Fatal(err)
+	}
+	data := filepath.Join(e.Host.AppsDir, "navidrome", "data")
+	os.WriteFile(filepath.Join(data, "navidrome.db"), []byte("v1 library"), 0o644)
+
+	up := Request{Job: "dddd1111", Action: "update", App: "navidrome", Tag: "0.65.0", Digest: newDigest}
+	rt.calls = nil
+	if err := e.Run(ctx, up); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if strings.Join(rt.calls, ",") != "pull docker.io/deluan/navidrome:0.65.0@"+newDigest+",up navidrome 0.65.0" {
+		t.Errorf("calls = %v", rt.calls)
+	}
+	rec := Records(e.RecordsDir)[0]
+	if rec.Tag != "0.65.0" || rec.Digest != newDigest || rec.PreviousTag != "0.64.2" || !strings.HasPrefix(rec.PreviousDigest, "sha256:38dc") || rec.Options.Media["music"] == "" {
+		t.Errorf("record = %+v", rec)
+	}
+	backups, _ := filepath.Glob(filepath.Join(e.ArchiveDir, "navidrome-before-0.64.2-*", "data", "navidrome.db"))
+	if len(backups) != 1 {
+		t.Fatal("settings not backed up before the update")
+	}
+	if err := e.Run(ctx, Request{Job: "dddd2222", Action: "update", App: "navidrome", Tag: "0.65.0", Digest: newDigest}); err == nil {
+		t.Error("updating to the version it already runs")
+	}
+
+	// The next version breaks its data and never answers: everything goes back.
+	e.Healthy = func(context.Context, string) error { return errors.New("502") }
+	e.HealthTimeout = 50 * time.Millisecond
+	e.Runtime = &breakingRuntime{fakeRuntime: rt, data: data}
+	rt.calls = nil
+	err := e.Run(ctx, Request{Job: "eeee1111", Action: "update", App: "navidrome", Tag: "0.66.0", Digest: newDigest[:70] + "2"})
+	if err == nil || !strings.Contains(err.Error(), "is back on 0.65.0") {
+		t.Fatalf("failed update: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(data, "navidrome.db")); string(b) != "v1 library" {
+		t.Errorf("data not restored: %q", b)
+	}
+	if rt.calls[len(rt.calls)-1] != "up navidrome 0.65.0" {
+		t.Errorf("old version not restarted: %v", rt.calls)
+	}
+	if rec := Records(e.RecordsDir)[0]; rec.Tag != "0.65.0" {
+		t.Errorf("record changed by a failed update: %+v", rec)
+	}
+	if s := status(t, e, "eeee1111"); s.State != "failed" {
+		t.Errorf("status = %+v", s)
+	}
+
+	// Rolling back is an update to the previous version.
+	e.Runtime, e.Healthy = rt, func(context.Context, string) error { return nil }
+	back := Request{Job: "ffff1111", Action: "update", App: "navidrome", Tag: rec.PreviousTag, Digest: rec.PreviousDigest}
+	if err := e.Run(ctx, back); err != nil {
+		t.Fatalf("roll back: %v", err)
+	}
+	if rec := Records(e.RecordsDir)[0]; rec.Tag != "0.64.2" || rec.PreviousTag != "0.65.0" {
+		t.Errorf("after rollback: %+v", rec)
+	}
+}
+
+// breakingRuntime is an upgrade that ruins the app's data on start.
+type breakingRuntime struct {
+	*fakeRuntime
+	data string
+}
+
+func (b *breakingRuntime) Up(ctx context.Context, p catalogue.Plan, dir string) error {
+	if p.App.Tag == "0.66.0" {
+		os.WriteFile(filepath.Join(b.data, "navidrome.db"), []byte("migrated by 0.66, broken"), 0o644)
+	}
+	return b.fakeRuntime.Up(ctx, p, dir)
+}
+
+func TestUpdateRequests(t *testing.T) {
+	for _, bad := range []string{
+		`{"job":"abcd1234","action":"update","app":"kavita","tag":"latest","digest":"` + newDigest + `"}`,
+		`{"job":"abcd1234","action":"update","app":"kavita","tag":"0.9.2"}`,
+		`{"job":"abcd1234","action":"install","app":"kavita","tag":"0.9.2","digest":"` + newDigest + `"}`,
+	} {
+		if _, err := ParseRequest([]byte(bad)); err == nil {
+			t.Errorf("accepted %s", bad)
+		}
 	}
 }

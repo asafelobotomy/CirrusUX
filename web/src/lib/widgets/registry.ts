@@ -45,7 +45,7 @@ export const WIDGETS: Record<string, WidgetMeta> = {
   temps: { title: 'Temperature', description: 'CPU temperature over 2 hours', component: TempsWidget, icon: I.Thermometer, size: [3, 2], min: [2, 2], live: true },
   assistant: { title: 'Ask the assistant', description: 'Quick question with suggestions', component: AssistantWidget, icon: I.Sparkles, size: [5, 2], min: [3, 2] },
   changelog: { title: 'Changelog', description: 'Recent actions with undo', component: ChangelogWidget, icon: I.History, size: [6, 3], min: [3, 2] },
-  updates: { title: 'Updates', description: 'Pending updates waiting for approval', component: UpdatesWidget, icon: I.RefreshCw, size: [4, 2], min: [3, 2] },
+  updates: { title: 'Updates', description: 'App updates found by the last check', component: UpdatesWidget, icon: I.RefreshCw, size: [4, 2], min: [3, 2], available: () => has('apps') },
   digest: { title: 'Daily digest', description: 'Morning summary built from cached data', component: DigestWidget, icon: I.Sunrise, size: [6, 3], min: [3, 2] },
   note: { title: 'Note', description: 'A short note of your own', component: NoteWidget, icon: I.FileText, size: [4, 2], min: [2, 2], config: { text: '' } },
 };

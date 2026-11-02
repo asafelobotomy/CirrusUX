@@ -118,7 +118,8 @@ func (p Podman) Up(ctx context.Context, plan catalogue.Plan, appDir string) erro
 	if err := p.systemctl(ctx, "daemon-reload"); err != nil {
 		return err
 	}
-	return p.systemctl(ctx, "start", p.service(plan.Name))
+	// restart: starts it if stopped, and moves a running app to the new unit.
+	return p.systemctl(ctx, "restart", p.service(plan.Name))
 }
 
 func (p Podman) Down(ctx context.Context, appID, _ string) error {
@@ -132,4 +133,12 @@ func (p Podman) Down(ctx context.Context, appID, _ string) error {
 		return err
 	}
 	return p.systemctl(ctx, "daemon-reload")
+}
+
+// CopyTree copies a folder, keeping owners, modes and times (cp -a).
+func CopyTree(src, dst string) error {
+	if out, err := exec.Command("cp", "-a", "--", src, dst).CombinedOutput(); err != nil {
+		return fmt.Errorf("cp: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
