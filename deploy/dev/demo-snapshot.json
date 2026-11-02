@@ -264,6 +264,40 @@
     "backup",
     "av",
     "security",
-    "egress"
+    "egress",
+    "apps"
+  ],
+  "appsHost": {
+    "runtime": "podman",
+    "appsDir": "/srv/cirrusux/apps",
+    "mediaRoots": [
+      "/srv/media"
+    ],
+    "tz": "Europe/London",
+    "uid": 990,
+    "gid": 990,
+    "groups": {
+      "render": 105,
+      "video": 44,
+      "dialout": 20
+    }
+  },
+  "apps": [
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "tag": "12.4.20261026-211555",
+      "runtime": "podman",
+      "mainPort": 8096,
+      "installed": "2026-11-01T20:40:00Z"
+    },
+    {
+      "id": "navidrome",
+      "name": "Navidrome",
+      "tag": "0.64.2",
+      "runtime": "podman",
+      "mainPort": 4533,
+      "installed": "2026-11-01T20:40:00Z"
+    }
   ]
 }

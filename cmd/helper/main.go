@@ -92,6 +92,9 @@ func main() {
 	case helperapi.CmdBackupRun:
 		need(helperapi.ModBackup)
 		out, err = run(ctx, "systemctl", "start", "--no-block", c.BackupUnit)
+	case helperapi.CmdAppsInfo:
+		need(helperapi.ModApps)
+		out, err = appsInfo(c)
 	case helperapi.CmdAppJob:
 		need(helperapi.ModApps)
 		out, err = appJob(ctx, c)

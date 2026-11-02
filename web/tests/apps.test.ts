@@ -29,3 +29,12 @@ test('tiles come from containers that publish a port', () => {
   assert.equal(tiles[2].group, 'Apps');
   assert.match(tiles[2].color, /^#[0-9a-f]{6}$/);
 });
+
+test("the app store's records make tiles without guessing from names", () => {
+  const tiles = tilesFor(
+    [{ name: 'home-assistant', port: 8123 }, { name: 'whoami', port: 8000 }],
+    [{ id: 'home-assistant', name: 'Home Assistant', mainPort: 18123, https: false }],
+    [{ id: 'home-assistant', icon: 'House', color: '#18bcf2', group: 'Home' }],
+  );
+  assert.deepEqual(tiles.map((t) => [t.name, t.port, t.icon]), [['Home Assistant', 18123, 'House'], ['Whoami', 8000, 'Package']]);
+});

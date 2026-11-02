@@ -28,6 +28,18 @@ gets a minor version.
     wakes a sleeping server; `BACKUP_KEEP` retention (0 keeps all).
   - security: fail2ban's `sshd` jail on the journal, a weekly ClamAV scan
     that updates its signatures just before it runs (no daemon).
+- The App store page (Phase 5c): browse and search the catalogue; each
+  app's page shows exactly what it can reach (ports, its own folders, the
+  media folders you choose and whether it can write there, devices, its
+  memory needs) with your choices; the confirmation shows the exact file
+  the server will write, rendered by the gateway with the server's own
+  settings; installs and removals show live progress. App tiles come from
+  the app store's records. Demo mode has the full catalogue and simulated
+  jobs.
+- `cirrusux-helper apps-info` (read-only, in sudoers) and
+  `POST /api/apps/preview`.
+- The dev server's proxy now passes the gateway's same-origin check, so
+  actions work through `npm run dev`.
 - App-store installs and removals as background jobs (Phase 5b). The
   gateway checks the app and the options' shape; the agent writes the
   request as a file in its own folder (built from parsed parts, so options

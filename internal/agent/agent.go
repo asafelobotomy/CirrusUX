@@ -12,6 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
+	"sync/atomic"
 	"time"
 
 	"cirrusux/internal/snapshot"
@@ -33,6 +35,9 @@ type Agent struct {
 	client    *http.Client
 	poll      *http.Client  // long poll for commands: longer timeout
 	pushNow   chan struct{} // an action changed state: report it now
+	// jobsRunning: the last report had an app-store job running, so the
+	// next comes sooner and the panel can show its progress.
+	jobsRunning atomic.Bool
 }
 
 func New(cfg Config, c *Collector) *Agent {
@@ -82,6 +87,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		if !time.Now().Before(nextPush) {
 			ok := a.cycle(ctx)
 			switch {
+			case ok && a.jobsRunning.Load():
+				nextPush, retryUntil = time.Now().Add(10*time.Second), time.Time{}
 			case ok:
 				nextPush, retryUntil = time.Now().Add(a.cfg.Interval), time.Time{}
 			case time.Now().Before(retryUntil):
@@ -105,6 +112,7 @@ func (a *Agent) cycle(ctx context.Context) bool {
 	for _, e := range s.Errors {
 		slog.Warn("collect", "problem", e)
 	}
+	a.jobsRunning.Store(slices.ContainsFunc(s.Jobs, func(j snapshot.Job) bool { return j.State == "running" }))
 	if err := a.push(ctx, s); err != nil {
 		slog.Warn("push failed", "err", err)
 		return false

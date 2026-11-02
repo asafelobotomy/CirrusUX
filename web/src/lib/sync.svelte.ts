@@ -5,6 +5,7 @@ import { live } from './state/live.svelte';
 import { power, type PowerState } from './state/power.svelte';
 import { settings } from './state/settings.svelte';
 import { boards, migrateBoards } from './state/layout.svelte';
+import { runningJob, store, type AppsHost } from './state/store.svelte';
 import { toast } from './state/ui.svelte';
 import { fmtTime, useRealClock } from './time.svelte';
 import { setPersistence } from './demo/store';
@@ -30,6 +31,9 @@ interface Snap {
   features?: string[];
   timeline: { from: string; to?: string; state: 'awake' | 'asleep'; reason?: string }[];
   errors?: string[];
+  apps?: { id: string; name: string; tag: string; runtime: string; mainPort: number; https?: boolean; installed: string }[];
+  jobs?: { id: string; action: 'install' | 'remove'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
+  appsHost?: AppsHost;
 }
 
 interface StateResp {
@@ -93,6 +97,9 @@ function apply(st: StateResp): void {
   live.problems = s.errors ?? [];
   live.agentVersion = s.agentVersion ?? '';
   mode.features = s.features ?? [];
+  store.installed = (s.apps ?? []).map((a) => ({ ...a, installed: new Date(a.installed) }));
+  store.jobs = (s.jobs ?? []).map((j) => ({ ...j, started: new Date(j.started), finished: d(j.finished) }));
+  store.host = s.appsHost ?? null;
 }
 
 export async function refresh(): Promise<void> {
@@ -122,7 +129,7 @@ function schedule(): void {
   timer = setTimeout(async () => {
     await refresh();
     schedule();
-  }, power.state === 'waking' ? 2000 : 30_000);
+  }, power.state === 'waking' || runningJob() ? 2000 : 30_000);
 }
 
 export function refreshSoon(): void {

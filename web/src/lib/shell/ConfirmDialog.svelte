@@ -39,6 +39,12 @@
         <code>{c.undo}</code>
       </div>
     {/if}
+    {#if c.preview}
+      <details class="preview" open>
+        <summary><span class="lbl">Writes</span> <code>{c.preview.file}</code></summary>
+        <pre>{c.preview.content}</pre>
+      </details>
+    {/if}
     <p class="faint note">Logged to CHANGELOG with the time, who and the undo command.</p>
 
     {#if c.typed}
@@ -68,6 +74,9 @@
   .lbl { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 600; }
   code { word-break: break-all; }
   .note { font-size: 0.8rem; margin-top: var(--space-2); }
+  .preview { margin-top: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+  .preview summary { padding: var(--space-2) var(--space-3); cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .preview pre { margin: 0; padding: var(--space-3); border-top: 1px solid var(--border); max-height: 240px; overflow: auto; font-size: 0.76rem; line-height: 1.45; white-space: pre; }
   .typed { display: flex; flex-direction: column; gap: 6px; margin-top: var(--space-4); font-size: 0.9rem; }
   .typed input {
     height: 36px; padding: 0 10px; border-radius: var(--radius-sm);

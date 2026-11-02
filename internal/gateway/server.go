@@ -69,6 +69,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("PUT /api/wallpaper", s.putWallpaper)
 	api.HandleFunc("POST /api/assistant", s.askAssistant)
 	api.HandleFunc("GET /api/catalogue", s.getCatalogue)
+	api.HandleFunc("POST /api/apps/preview", s.previewApp)
 	mux.Handle("/api/", s.auth(api))
 
 	mux.Handle("/", s.auth(http.HandlerFunc(s.static)))

@@ -1,0 +1,54 @@
+// The app store's catalogue as the gateway sends it (internal/catalogue).
+
+export interface CatalogueApp {
+  id: string;
+  name: string;
+  description: string;
+  website: string;
+  icon: string;
+  color: string;
+  group: string;
+  notes?: string;
+  image: string;
+  tag: string;
+  digest: string;
+  ports: { name: string; container: number; host: number; protocol?: string; https?: boolean; main?: boolean }[];
+  volumes: { name: string; path: string; kind: 'config' | 'cache' | 'data' | 'media'; writable?: boolean; label?: string }[];
+  devices?: { path: string; optional?: boolean; why: string; hostGroups?: string[] }[];
+  env?: { name: string; value?: string; choices?: string[]; default?: string; label?: string }[];
+  runAsUser?: boolean;
+  check?: { port: string; path: string };
+  minMemoryMB?: number;
+}
+
+/** The owner's choices on an app's page (catalogue.Options). */
+export interface AppOptions {
+  ports?: Record<string, number>;
+  media?: Record<string, string>;
+  env?: Record<string, string>;
+  devices?: Record<string, boolean>;
+}
+
+/** The options a page starts with: suggested ports, defaults, and a folder
+ *  for each media volume under the first media root. */
+export function defaultOptions(app: CatalogueApp, mediaRoot = '/srv/media'): AppOptions {
+  const o: AppOptions = { ports: {}, media: {}, env: {}, devices: {} };
+  for (const p of app.ports) o.ports![p.name] = p.host;
+  for (const v of app.volumes) if (v.kind === 'media') o.media![v.name] = `${mediaRoot.replace(/\/$/, '')}/${v.name}`;
+  for (const e of app.env ?? []) if (e.choices) o.env![e.name] = e.default ?? e.choices[0];
+  for (const d of app.devices ?? []) if (d.optional) o.devices![d.path] = false;
+  return o;
+}
+
+/** Only what the server needs: unchanged defaults are left out. */
+export function cleanOptions(app: CatalogueApp, o: AppOptions): AppOptions {
+  const out: AppOptions = {};
+  const ports = Object.fromEntries(Object.entries(o.ports ?? {}).filter(([k, v]) => app.ports.find((p) => p.name === k)?.host !== v));
+  if (Object.keys(ports).length) out.ports = ports;
+  if (Object.keys(o.media ?? {}).length) out.media = o.media;
+  const env = Object.fromEntries(Object.entries(o.env ?? {}).filter(([k, v]) => app.env?.find((e) => e.name === k)?.default !== v));
+  if (Object.keys(env).length) out.env = env;
+  const devices = Object.fromEntries(Object.entries(o.devices ?? {}).filter(([, on]) => on));
+  if (Object.keys(devices).length) out.devices = devices;
+  return out;
+}

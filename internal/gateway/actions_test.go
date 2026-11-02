@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cirrusux/internal/assistant"
+	"cirrusux/internal/helperapi"
 	"cirrusux/internal/snapshot"
 )
 
@@ -211,5 +212,36 @@ func TestAppActions(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &apps)
 	if w.Code != http.StatusOK || len(apps) < 9 || apps[0].Digest == "" {
 		t.Errorf("catalogue: %d %d", w.Code, len(apps))
+	}
+}
+
+func TestAppPreview(t *testing.T) {
+	s, h := newTestServer(t)
+	post := func(body string) map[string]any {
+		w := do(h, "POST", "/api/apps/preview", body, actor)
+		out := map[string]any{}
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		out["code"] = float64(w.Code)
+		return out
+	}
+	if got := post(`{"app":"kavita"}`); got["code"] != float64(http.StatusConflict) {
+		t.Errorf("before the server reports its settings: %v", got)
+	}
+	snap := awakeSnap()
+	snap.Containers[0].Ports = []int{5000}
+	snap.AppsHost = &helperapi.AppsInfo{Runtime: "podman", AppsDir: "/srv/cirrusux/apps", MediaRoots: []string{"/srv/media"}, TZ: "UTC", UID: 990, GID: 990}
+	_ = s.store.SaveSnapshot(snap)
+	got := post(`{"app":"kavita","options":{"media":{"books":"/srv/media/books"}}}`)
+	if got["file"] != "/etc/containers/systemd/cirrusux-kavita.container" || !strings.Contains(got["content"].(string), "Volume=/srv/media/books:/books:ro") {
+		t.Errorf("preview = %v", got)
+	}
+	if w, _ := got["warnings"].([]any); len(w) != 1 || !strings.Contains(w[0].(string), "5000 is already used by kavita") {
+		t.Errorf("warnings = %v", got["warnings"])
+	}
+	if got := post(`{"app":"kavita","options":{"media":{"books":"/etc"}}}`); !strings.Contains(got["error"].(string), "isn't inside the media folders") {
+		t.Errorf("bad folder: %v", got)
+	}
+	if got := post(`{"app":"kavita","options":{},"extra":1}`); got["code"] != float64(http.StatusBadRequest) {
+		t.Errorf("unknown field: %v", got)
 	}
 }

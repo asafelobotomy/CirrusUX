@@ -4,7 +4,7 @@ import { now } from '../time.svelte';
 import { mode } from '../api.svelte';
 
 export type Route =
-  | 'home' | 'services' | 'backups' | 'storage' | 'security'
+  | 'home' | 'services' | 'apps' | 'backups' | 'storage' | 'security'
   | 'updates' | 'media' | 'logs' | 'changelog'
   | 'settings' | 'theme-editor' | 'gallery';
 
@@ -52,6 +52,8 @@ export interface Confirm {
   /** When set, the user must type this word to confirm. */
   typed?: string;
   source?: 'assistant';
+  /** A file the action writes, shown in full before confirming. */
+  preview?: { file: string; content: string };
   run: () => void;
   changelog: string;
 }

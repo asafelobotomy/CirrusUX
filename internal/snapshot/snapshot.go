@@ -3,7 +3,11 @@
 // caches the latest so the UI and the assistant can answer while it sleeps.
 package snapshot
 
-import "time"
+import (
+	"time"
+
+	"cirrusux/internal/helperapi"
+)
 
 type Snapshot struct {
 	Host string `json:"host"`
@@ -25,6 +29,8 @@ type Snapshot struct {
 	// Apps installed by the app store, and its recent jobs (apps module).
 	Apps []App `json:"apps,omitempty"`
 	Jobs []Job `json:"jobs,omitempty"`
+	// AppsHost is what installs use here, for the panel's previews.
+	AppsHost *helperapi.AppsInfo `json:"appsHost,omitempty"`
 	// Problems collecting individual sections; the rest of the snapshot is
 	// still valid.
 	Errors []string `json:"errors,omitempty"`

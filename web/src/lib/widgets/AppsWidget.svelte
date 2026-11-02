@@ -1,7 +1,9 @@
 <script lang="ts">
   import * as Icons from '../icons';
   import StatusDot from '../components/StatusDot.svelte';
+  import { onMount } from 'svelte';
   import { tilesFor, type AppTile } from '../apps';
+  import { loadCatalogue, store } from '../state/store.svelte';
   import { live } from '../state/live.svelte';
   import { power } from '../state/power.svelte';
   import { confirmWake } from '../state/actions';
@@ -9,7 +11,10 @@
   import { mode } from '../api.svelte';
 
   let { config }: { config?: Record<string, string> } = $props();
-  const tiles = $derived(tilesFor(live.containers));
+  const tiles = $derived(tilesFor(live.containers, store.installed, store.catalogue));
+  onMount(() => {
+    if (store.installed.length) void loadCatalogue();
+  });
   const shown = $derived(config?.group ? tiles.filter((a) => a.group === config.group) : tiles);
 
   function status(app: AppTile) {

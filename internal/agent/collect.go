@@ -145,6 +145,12 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 	}
 	if has(helperapi.ModApps) {
 		s.Apps, s.Jobs = appsAndJobs(now)
+		var info helperapi.AppsInfo
+		if err := c.helper(ctx, helperapi.CmdAppsInfo, &info); err != nil {
+			errf("apps info: %v", err)
+		} else {
+			s.AppsHost = &info
+		}
 	}
 	if has(helperapi.ModAV) {
 		var av helperapi.Lines

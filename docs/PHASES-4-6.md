@@ -121,13 +121,20 @@ firewalled, backed-up server that sleeps and wakes for its timers, by
 - Tested for real: `go test -tags live ./internal/appjob` installs and
   removes Syncthing with rootless Podman on the machine running it.
 
-### 5c. The store in the UI
+### 5c. The store in the UI — done
 
 - An App store page: browse by group, search, an app page showing exactly
   what the app can reach (folders, devices, ports), options, a confirmation
   with the rendered file, and live progress.
 - Installed apps get their tile and container row from the app store's own
   records, not the container name.
+- The preview comes from the gateway (`POST /api/apps/preview`), made with
+  the facts the server reports (`cirrusux-helper apps-info`): the same code
+  and inputs the job uses. It also warns about ports another container
+  already publishes.
+- While a job runs the agent reports every ~15 s and the page polls every
+  2 s, so progress shows live.
+- Demo mode reads the same catalogue files at build time and simulates jobs.
 
 **Done when:** an app installs, updates and is removed (archived) through
 the panel on Docker and on Podman, and its tile appears without any naming

@@ -8,6 +8,7 @@ export interface NavItem { route: Route; label: string; icon: Component; phase?:
 export const MAIN_NAV: NavItem[] = [
   { route: 'home', label: 'Home', icon: I.House },
   { route: 'services', label: 'Services', icon: I.Package },
+  { route: 'apps', label: 'App store', icon: I.Store, available: () => has('apps') },
   { route: 'backups', label: 'Backups', icon: I.Archive, available: () => has('backup') },
   { route: 'storage', label: 'Storage', icon: I.HardDrive, phase: 'Phase 3' },
   { route: 'security', label: 'Security', icon: I.ShieldCheck, available: () => has('security') || has('av') || has('egress') },

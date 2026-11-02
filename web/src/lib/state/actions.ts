@@ -9,6 +9,8 @@ import { now } from '../time.svelte';
 import { api, mode, sleeps } from '../api.svelte';
 import { loadChangelog, refreshSoon } from '../sync.svelte';
 import { toast } from './ui.svelte';
+import { cleanOptions, type AppOptions, type CatalogueApp } from '../catalogue';
+import { demoJob, findApp } from './store.svelte';
 
 type Opts = { source?: 'assistant' };
 
@@ -160,6 +162,43 @@ export function confirmBackup(o: Opts = {}): void {
   });
 }
 
+// ---- the app store (PHASES-4-6 §5c) ----
+
+/** Installs an app: the confirmation shows the exact file the server writes. */
+export function confirmInstall(app: CatalogueApp, options: AppOptions, preview: { file: string; content: string } | null): void {
+  if (offline()) return;
+  ask({
+    title: `Install ${app.name}?`,
+    body: `Downloads ${app.image}:${app.tag} (pinned to its digest), writes the file below, starts it and waits until it answers.${d3()}`,
+    command: `cirrusux-helper app-job (install ${app.id})`,
+    undo: `Remove ${app.name}; its folder is archived`,
+    confirmLabel: 'Install',
+    changelog: `Started installing ${app.name}`,
+    preview: preview ?? undefined,
+    run: () => {
+      if (!mode.live) return demoJob('install', app);
+      void sendAction({ action: 'app_install', args: { app: app.id, options: JSON.stringify(cleanOptions(app, options)) } }, `Started installing ${app.name}`).then(() => refreshSoon());
+    },
+  });
+}
+
+/** Removes an app: stopped, and its folder moved to the archive. */
+export function confirmRemove(app: CatalogueApp): void {
+  if (offline()) return;
+  ask({
+    title: `Remove ${app.name}?`,
+    body: `Stops ${app.name} and moves its folder to the archive. Nothing is deleted: archive review is where that happens, in two steps.${d3()}`,
+    command: `cirrusux-helper app-job (remove ${app.id})`,
+    confirmLabel: 'Remove',
+    danger: true,
+    changelog: `Started removing ${app.name} (its folder is archived)`,
+    run: () => {
+      if (!mode.live) return demoJob('remove', app);
+      void sendAction({ action: 'app_remove', args: { app: app.id } }, `Started removing ${app.name}`).then(() => refreshSoon());
+    },
+  });
+}
+
 /** Runs an action given by name, e.g. from an assistant proposal or an Undo. */
 export function confirmAction(req: ActionReq, o: Opts = {}): void {
   const a = req.args ?? {};
@@ -176,6 +215,11 @@ export function confirmAction(req: ActionReq, o: Opts = {}): void {
       return confirmContainer(a.name, req.action.slice('container_'.length) as 'start' | 'stop' | 'restart', o);
     case 'backup_run':
       return confirmBackup(o);
+    case 'app_remove': {
+      const app = findApp(a.app);
+      if (app) return confirmRemove(app);
+      return;
+    }
   }
 }
 

@@ -1,7 +1,7 @@
-// The app launcher's tiles (PLAN §4.3): one per container that publishes a
-// port, named and coloured from a small catalogue of well-known apps.
-// Until the app store (ROADMAP Phase 5) keeps its own records, the
-// containers the agent reports are the source.
+// The app launcher's tiles (PLAN §4.3). Apps the app store installed come
+// from its own records: name, port, scheme, icon and colour, no guessing.
+// Any other container that publishes a port gets a tile too, named and
+// coloured from a small list of well-known apps.
 
 export interface AppTile {
   /** The container's name. */
@@ -56,10 +56,23 @@ function hash(s: string): number {
   return h;
 }
 
-/** Tiles for the containers that publish a port, sorted by name. */
-export function tilesFor(containers: { name: string; port: number | null }[]): AppTile[] {
-  return containers
-    .filter((c) => c.port)
+/** Tiles for installed apps and other containers that publish a port, by name. */
+export function tilesFor(
+  containers: { name: string; port: number | null }[],
+  installed: { id: string; name: string; mainPort: number; https?: boolean }[] = [],
+  catalogue: { id: string; icon: string; color: string; group: string }[] = [],
+): AppTile[] {
+  const fromStore: AppTile[] = installed.map((a) => {
+    const c = catalogue.find((x) => x.id === a.id);
+    const k = KNOWN[a.id];
+    return {
+      id: a.id, name: a.name, port: a.mainPort, https: !!a.https,
+      icon: c?.icon ?? k?.icon ?? 'Package', color: c?.color ?? k?.color ?? PALETTE[hash(a.id) % PALETTE.length],
+      group: c?.group ?? k?.group ?? 'Apps',
+    };
+  });
+  const others = containers
+    .filter((c) => c.port && !installed.some((a) => a.id === c.name))
     .map((c) => {
       const k = KNOWN[baseName(c.name)];
       return {
@@ -71,6 +84,6 @@ export function tilesFor(containers: { name: string; port: number | null }[]): A
         color: k?.color ?? PALETTE[hash(c.name) % PALETTE.length],
         group: k?.group ?? 'Apps',
       };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    });
+  return [...fromStore, ...others].sort((a, b) => a.name.localeCompare(b.name));
 }

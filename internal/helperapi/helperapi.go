@@ -5,7 +5,8 @@ package helperapi
 
 // Read-only subcommands (Phase 1).
 const (
-	CmdFeatures       = "features" // which modules this machine has
+	CmdFeatures       = "features"  // which modules this machine has
+	CmdAppsInfo       = "apps-info" // the app store's settings, for previews
 	CmdIdleStatus     = "idle-status"
 	CmdIdleLog        = "idle-log"
 	CmdBackupList     = "backup-list"
@@ -30,7 +31,7 @@ const (
 )
 
 var Commands = []string{
-	CmdFeatures, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
+	CmdFeatures, CmdAppsInfo, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
 }
 
@@ -63,6 +64,19 @@ const (
 // Features is what `features` prints.
 type Features struct {
 	Modules []string `json:"modules"`
+}
+
+// AppsInfo is what an install will use on this server: the same facts the
+// helper's jobs resolve apps with, so the panel's preview matches.
+type AppsInfo struct {
+	Runtime    string         `json:"runtime"`
+	AppsDir    string         `json:"appsDir"`
+	MediaRoots []string       `json:"mediaRoots"`
+	Bind       string         `json:"bind,omitempty"`
+	TZ         string         `json:"tz"`
+	UID        int            `json:"uid"`
+	GID        int            `json:"gid"`
+	Groups     map[string]int `json:"groups"`
 }
 
 // BackupLast is the backup unit's recent journal.

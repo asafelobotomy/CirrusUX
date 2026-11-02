@@ -6,6 +6,7 @@ Defaults:cirrusux !lecture, !requiretty, env_reset
 
 # Phase 1: reads.
 Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper features, \
+                         /usr/local/sbin/cirrusux-helper apps-info, \
                          /usr/local/sbin/cirrusux-helper idle-status, \
                          /usr/local/sbin/cirrusux-helper idle-log, \
                          /usr/local/sbin/cirrusux-helper backup-list, \
