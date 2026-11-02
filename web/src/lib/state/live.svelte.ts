@@ -7,9 +7,10 @@ export type Health = 'healthy' | 'running' | 'starting' | 'unhealthy' | 'exited'
 export interface BackupRun { start: Date; end: Date; ok: boolean; sizeGb: number; running: boolean; summary?: string }
 export interface DiskInfo { totalGb: number; usedGb: number; linkMbps: number }
 export interface SecurityInfo {
-  banned: number;
-  lockdown: boolean;
-  panelDrop: boolean;
+  /** Addresses banned by fail2ban; null when no jail is set up. */
+  banned: number | null;
+  /** Configured firewall rule checks. */
+  firewall: { chain: string; ok: boolean }[];
   clamav: { at: Date; files: number; infected: number } | null;
 }
 
@@ -19,7 +20,7 @@ export const live = $state({
   lastBackupRun: { ...data.lastBackupRun, running: false } as BackupRun | null,
   backups: data.backups.map((b) => ({ ...b })),
   nextWakes: [
-    { at: data.nextBackup, unit: 'cloud64-backup.timer' },
+    { at: data.nextBackup, unit: 'system-backup.timer' },
     { at: data.nextAvScan, unit: 'clamav-weekly-scan.timer' },
   ],
   disk: { ...data.disk } as DiskInfo | null,
@@ -28,8 +29,7 @@ export const live = $state({
   timeline: data.timeline.map((s) => ({ ...s })),
   security: {
     banned: data.security.fail2ban.banned,
-    lockdown: data.security.lockdown,
-    panelDrop: data.security.panelDrop,
+    firewall: data.security.firewall.map((f) => ({ ...f })),
     clamav: { ...data.security.clamav },
   } as SecurityInfo | null,
   updates: data.updates.map((u) => ({ ...u })),
@@ -39,7 +39,3 @@ export const live = $state({
   /** Version of the agent that sent the last snapshot. */
   agentVersion: '',
 });
-
-export function nextWake(unitPrefix: string): Date | null {
-  return live.nextWakes.find((w) => w.unit.startsWith(unitPrefix))?.at ?? null;
-}

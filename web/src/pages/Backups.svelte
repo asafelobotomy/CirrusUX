@@ -4,10 +4,10 @@
 </script>
 
 <div class="stack">
-  <Card title="System backups" subtitle="/opt/1panel, /etc, /root, /home and app data · media is not backed up">
+  <Card title="System backups" subtitle="Archives the backup unit wrote, newest first">
     <BackupsWidget full />
   </Card>
-  <Card title="Restore" subtitle="Restoring happens off the server: the private key never goes on cloud64.">
+  <Card title="Restore" subtitle="Restoring happens off the server: the private key never goes on it.">
     <p class="muted">On a machine that holds the age identity:</p>
     <pre><code>age -d -i &lt;identity-file&gt; FILE.tar.zst.age | tar --zstd -xf - -C &lt;target&gt;</code></pre>
   </Card>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mode } from '../api.svelte';
   import { ui } from '../state/ui.svelte';
   import { House, Package, Search, Settings, Sparkles } from '../icons';
 </script>
@@ -6,7 +7,7 @@
 <nav class="bb" aria-label="Main">
   <a href="#/home" class:on={ui.route === 'home'}><House size={21} /><span>Home</span></a>
   <a href="#/services" class:on={ui.route === 'services'}><Package size={21} /><span>Services</span></a>
-  <button class="grok" onclick={() => (ui.grokOpen = true)} aria-label="Ask Grok"><Sparkles size={22} /></button>
+  <button class="assistant" onclick={() => (ui.assistantOpen = true)} aria-label="Ask {mode.assistant.name}"><Sparkles size={22} /></button>
   <button onclick={() => (ui.paletteOpen = true)}><Search size={21} /><span>Search</span></button>
   <a href="#/settings" class:on={ui.route === 'settings' || ui.route === 'theme-editor'}><Settings size={21} /><span>Settings</span></a>
 </nav>
@@ -26,7 +27,7 @@
   }
   a:hover { text-decoration: none; }
   .on { color: var(--accent); }
-  .grok {
+  .assistant {
     justify-self: center; width: 52px; height: 52px; border-radius: 18px; margin-top: -22px;
     background: var(--accent); color: var(--on-accent); justify-content: center;
     box-shadow: 0 10px 24px -8px var(--accent), 0 0 0 4px var(--bg);

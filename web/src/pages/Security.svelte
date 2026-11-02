@@ -5,7 +5,7 @@
   import { live } from '../lib/state/live.svelte';
   import { power } from '../lib/state/power.svelte';
   import { sendAction } from '../lib/state/actions';
-  import { mode } from '../lib/api.svelte';
+  import { has, mode } from '../lib/api.svelte';
   import { security as sample } from '../lib/demo/data';
   import { fmtAgo, fmtDayTime } from '../lib/time.svelte';
   import { Lock, ShieldCheck, Activity, RefreshCw } from '../lib/icons';
@@ -22,7 +22,7 @@
     running = true;
     const c = await sendAction({ action: 'egress_report' }, 'Egress report', true);
     running = false;
-    report = c?.state === 'done' ? (c.output ?? []) : [`Couldn't get the report: ${c?.error ?? 'no answer from cloud64'}`];
+    report = c?.state === 'done' ? (c.output ?? []) : [`Couldn't get the report: ${c?.error ?? `no answer from ${mode.server}`}`];
   }
 </script>
 
@@ -33,9 +33,9 @@
         <div class="stat">
           <span class="ic"><ShieldCheck size={20} /></span>
           <div>
-            <h3>ClamAV</h3>
+            <h3>Virus scan</h3>
             {#if sec.clamav}
-              <p class="muted">Weekly scan {fmtAgo(sec.clamav.at)} · {sec.clamav.files.toLocaleString('en-GB')} files</p>
+              <p class="muted">ClamAV, {fmtAgo(sec.clamav.at)} · {sec.clamav.files.toLocaleString('en-GB')} files</p>
               <Badge tone={sec.clamav.infected ? 'bad' : 'ok'}>{sec.clamav.infected} infected</Badge>
             {:else}
               <p class="muted">No scan summary found.</p>
@@ -43,32 +43,39 @@
           </div>
         </div>
       </Card>
-      <Card>
-        <div class="stat">
-          <span class="ic"><Lock size={20} /></span>
-          <div>
-            <h3>Firewall lockdown</h3>
-            <p class="muted">Published ports reachable from LAN and tailnet only; 1Panel's final drop rule</p>
-            <Badge tone={sec.lockdown && sec.panelDrop ? 'ok' : 'bad'}>{sec.lockdown && sec.panelDrop ? 'intact' : sec.lockdown ? '1Panel drop rule missing' : 'lockdown chain missing'}</Badge>
+      {#if sec.firewall.length}
+        <Card>
+          <div class="stat">
+            <span class="ic"><Lock size={20} /></span>
+            <div>
+              <h3>Firewall rules</h3>
+              <ul class="checks">
+                {#each sec.firewall as f (f.chain)}
+                  <li><code>{f.chain}</code><Badge tone={f.ok ? 'ok' : 'bad'}>{f.ok ? 'intact' : 'missing'}</Badge></li>
+                {/each}
+              </ul>
+            </div>
           </div>
-        </div>
-      </Card>
-      <Card>
-        <div class="stat">
-          <span class="ic"><Activity size={20} /></span>
-          <div>
-            <h3>fail2ban</h3>
-            <p class="muted">SSH jail</p>
-            <Badge tone={sec.banned ? 'warn' : 'neutral'}>{sec.banned} banned now</Badge>
+        </Card>
+      {/if}
+      {#if sec.banned !== null}
+        <Card>
+          <div class="stat">
+            <span class="ic"><Activity size={20} /></span>
+            <div>
+              <h3>fail2ban</h3>
+              <Badge tone={sec.banned ? 'warn' : 'neutral'}>{sec.banned} banned now</Badge>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      {/if}
     </div>
   {:else}
-    <Card><p class="muted">No security data from cloud64 yet.</p></Card>
+    <Card><p class="muted">No security data from {mode.server} yet.</p></Card>
   {/if}
 
-  <Card title="Outbound traffic" subtitle="Where cloud64 connects to, from the log-only egress firewall. Runs on demand: it reads 14 days of logs.">
+  {#if has('egress')}
+  <Card title="Outbound traffic" subtitle={`Where ${mode.server} connects to, from the egress report. Runs on demand: it can take a while.`}>
     {#snippet actions()}
       <Button size="sm" disabled={running || (mode.live && power.state !== 'awake')} onclick={runReport}>
         {#snippet icon()}<RefreshCw />{/snippet}{running ? 'Reading logs…' : report ? 'Run again' : 'Run report'}
@@ -77,13 +84,14 @@
     {#if report}
       <pre>{report.join('\n') || '(empty report)'}</pre>
     {:else if mode.live && power.state !== 'awake'}
-      <p class="muted">cloud64 is asleep. Wake it to run the report.</p>
+      <p class="muted">{mode.server} is asleep. Wake it to run the report.</p>
     {:else}
       <p class="muted">Not run yet.</p>
     {/if}
   </Card>
+  {/if}
 
-  <p class="faint note">Reads only. Firewall rules stay in 1Panel; nothing here changes them. Last data {fmtDayTime(power.lastSnapshot)}.</p>
+  <p class="faint note">Reads only: nothing here changes firewall rules. Last data {fmtDayTime(power.lastSnapshot)}.</p>
 </div>
 
 <style>
@@ -95,4 +103,6 @@
   .ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); flex: none; }
   pre { margin: 0; padding: var(--space-3); border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); overflow-x: auto; font-size: 0.82rem; max-height: 420px; }
   .note { font-size: 0.8rem; }
+  .checks { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .checks li { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 </style>

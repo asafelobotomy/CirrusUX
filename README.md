@@ -1,17 +1,21 @@
 # CirrusUX
 
-A web panel for the cloud64 home server: power state and wake, services,
-backups and a Grok assistant, designed around a server that sleeps.
+A self-hosting web panel: power state and wake, services, backups, security
+and an assistant. It runs on the server itself, or beside a server that
+sleeps to save power, answering from the last report while it does.
 
-- `docs/PLAN.md` — the plan and design spec (Phases 0–2)
-- `docs/ROADMAP.md` — what comes next: any server, host modules, an app store, a public release
-- `docs/INSTALL.md` — installing Phases 1–2 on cloud64 and cloud-box
+- `docs/INSTALL.md` — installing, in either setup
+- `docs/CONFIG.md` — every setting and module
+- `docs/ROADMAP.md` — what comes next: host modules, an app store, a public release
+- `docs/PLAN.md` — the original plan and design spec (Phases 0–2)
 - `web/` — the UI (Svelte 5); runs on sample data when no gateway answers
-- `cmd/gateway` — on cloud-box: serves the UI, caches snapshots, wakes cloud64, Grok
-- `cmd/agent` — on cloud64: collects a snapshot and pushes it (no listening port)
-- `cmd/helper` — on cloud64, root via sudo: fixed read subcommands plus a few fixed actions
-- `cmd/dockerfilter` — on cloud64, root: Docker API on a unix socket, reads plus start/stop/restart only
-- `deploy/` — systemd units, sudoers rules, example env files, demo snapshot
+- `cmd/gateway` — serves the UI, caches reports, wakes a sleeping server, runs the assistant
+- `cmd/agent` — on the server: collects a snapshot and pushes it (no listening port)
+- `cmd/helper` — on the server, root via sudo: fixed reads plus a few fixed actions, paths from its own config
+- `cmd/dockerfilter` — on the server, root: Docker API on a unix socket, reads plus start/stop/restart only
+- `deploy/server`, `deploy/gateway` — systemd units, sudoers rules, example config
+- `deploy/profiles/cloud64` — the owner's own setup (private; leaves before the repo goes public)
+- `deploy/dev` — the demo snapshot for local runs
 - `scripts/bump-version.sh` — used by `make bump`
 - `scripts/make-icons.sh` — renders the app icons in `web/public` from `web/icons/*.svg`
 
@@ -22,7 +26,7 @@ make test                  # gofmt, go vet, go test, svelte-check, UI unit tests
 cd web && npm run dev      # UI on :5174, demo data unless a gateway runs
 ```
 
-Run the whole thing locally without cloud64 or Tailscale, in two terminals:
+Run the whole thing locally without a server or Tailscale, in two terminals:
 
 ```bash
 make web                   # build the UI the gateway embeds
@@ -30,8 +34,10 @@ make dev-gateway           # http://127.0.0.1:8064, dev mode, data in .dev-data/
 make dev-agent             # pushes deploy/dev/demo-snapshot.json every minute
 ```
 
-`npm run dev` proxies `/api` to that gateway, so the dev server then shows
-live mode too. Stop the agent for ~7 minutes to see the asleep state.
+`make dev-gateway SETUP=single` runs the single setup instead of the split
+one. `npm run dev` proxies `/api` to that gateway, so the dev server then
+shows live mode too. In the split setup, stop the agent for ~7 minutes to see
+the asleep state.
 
 Go code uses only the standard library.
 

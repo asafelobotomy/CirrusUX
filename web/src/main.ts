@@ -6,7 +6,7 @@ import App from './App.svelte';
 import { detectGateway } from './lib/api.svelte';
 import { startLive } from './lib/sync.svelte';
 
-// With a gateway the panel shows cloud64's real state; without one it runs
+// With a gateway the panel shows the server's real state; without one it runs
 // the design prototype on sample data.
 if (await detectGateway()) await startLive();
 

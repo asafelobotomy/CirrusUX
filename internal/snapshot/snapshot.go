@@ -1,6 +1,6 @@
-// Package snapshot defines what the agent on cloud64 reports to the gateway.
-// The agent pushes one every few minutes while cloud64 is awake; the gateway
-// caches the latest so the UI and Grok can answer while it sleeps.
+// Package snapshot defines what the agent reports to the gateway. The agent
+// pushes one every few minutes while the server is awake; the gateway
+// caches the latest so the UI and the assistant can answer while it sleeps.
 package snapshot
 
 import "time"
@@ -8,13 +8,16 @@ import "time"
 type Snapshot struct {
 	Host string `json:"host"`
 	// Version of the agent that took it, to spot a mismatch with the gateway.
-	AgentVersion string      `json:"agentVersion,omitempty"`
-	TakenAt      time.Time   `json:"takenAt"`
-	BootAt       time.Time   `json:"bootAt"`
-	Power        Power       `json:"power"`
-	Containers   []Container `json:"containers"`
-	Backups      Backups     `json:"backups"`
-	Disk         *Disk       `json:"disk,omitempty"`
+	AgentVersion string    `json:"agentVersion,omitempty"`
+	TakenAt      time.Time `json:"takenAt"`
+	// Modules the server has (helperapi.Mod*): sleep, backup, security…
+	// The UI shows only what a server has.
+	Features   []string    `json:"features"`
+	BootAt     time.Time   `json:"bootAt"`
+	Power      Power       `json:"power"`
+	Containers []Container `json:"containers"`
+	Backups    Backups     `json:"backups"`
+	Disk       *Disk       `json:"disk,omitempty"`
 	// CPU temperature samples in °C, oldest first, one per sample interval.
 	Temps    []float64 `json:"temps"`
 	Security *Security `json:"security,omitempty"`
@@ -83,10 +86,28 @@ type Disk struct {
 }
 
 type Security struct {
-	ClamAV    *ClamAV `json:"clamav,omitempty"`
-	Banned    int     `json:"banned"`
-	Lockdown  bool    `json:"lockdown"`
-	PanelDrop bool    `json:"panelDrop"`
+	ClamAV *ClamAV `json:"clamav,omitempty"`
+	// Addresses banned by the fail2ban jail; nil without one.
+	Banned   *int            `json:"banned,omitempty"`
+	Firewall []FirewallCheck `json:"firewall"`
+}
+
+// FirewallCheck is one configured rule check: OK when the chain holds the
+// expected rule.
+type FirewallCheck struct {
+	Chain string `json:"chain"`
+	OK    bool   `json:"ok"`
+}
+
+// FirewallFailing names the checks that failed.
+func (s *Security) FirewallFailing() []string {
+	var bad []string
+	for _, c := range s.Firewall {
+		if !c.OK {
+			bad = append(bad, c.Chain)
+		}
+	}
+	return bad
 }
 
 type ClamAV struct {

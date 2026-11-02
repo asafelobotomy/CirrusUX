@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mode } from '../lib/api.svelte';
   import Card from '../lib/components/Card.svelte';
   import Badge from '../lib/components/Badge.svelte';
   import ContainersWidget from '../lib/widgets/ContainersWidget.svelte';
@@ -22,7 +23,7 @@
       {#if unpinned}<Badge tone="warn">pin a version</Badge>{/if}
     </div>
   </div>
-  <Card title="Apps" subtitle="Opens on cloud64's MagicDNS name, at home and away.">
+  <Card title="Apps" subtitle={`Opens on ${mode.serverHost}.`}>
     <div class="apps"><AppsWidget /></div>
   </Card>
   <Card title="Containers" subtitle={power.state === 'awake' ? 'Live from the agent' : `As of ${fmtTime(power.lastSnapshot)} · actions need the server awake`}>

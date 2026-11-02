@@ -1,5 +1,5 @@
 // Package redact masks anything identifying or secret in text before it is
-// sent to xAI (PLAN §3.6, decision D2: summaries only, IPs/MACs/paths masked).
+// sent to the assistant's API (PLAN §3.6, decision D2: summaries only, IPs/MACs/paths masked).
 package redact
 
 import "regexp"

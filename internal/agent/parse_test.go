@@ -8,6 +8,9 @@ import (
 
 var now = time.Date(2026, 11, 1, 20, 40, 0, 0, time.UTC)
 
+// The recorded logs come from a machine on UK time.
+func init() { logZone, _ = time.LoadLocation("Europe/London") }
+
 func TestSplitTS(t *testing.T) {
 	cases := map[string]string{
 		"2026-11-01T18:08:00+00:00 SUSPEND: idle 1800s":         "2026-11-01T18:08:00Z",
@@ -61,14 +64,14 @@ func TestTimeline(t *testing.T) {
 func TestReasonsFromMsg(t *testing.T) {
 	cases := map[string][]string{
 		"ACTIVE: 1 remote login session(s) host conns: 22<-100.64.0.2 ":               {"1 remote login session(s)", "SSH from 100.64.0.2"},
-		"ACTIVE: host conns: 22457<-192.0.2.133 443<-192.0.2.40":                      {"1Panel from 192.0.2.133", "OpenResty from 192.0.2.40"},
+		"ACTIVE: host conns: 22457<-192.0.2.133 443<-192.0.2.40":                      {"Admin panel from 192.0.2.133", "HTTPS from 192.0.2.40"},
 		"ACTIVE: playback by ignored client 192.0.2.23 (11 MB sent since last check)": {"playback by ignored client 192.0.2.23 (11 MB sent since last check)"},
 		"ACTIVE: stay-awake flag":             {"stay-awake flag"},
 		"IDLE: nothing active, timer started": nil,
 		"":                                    nil,
 	}
 	for in, want := range cases {
-		got := reasonsFromMsg(in)
+		got := reasonsFromMsg(in, map[string]string{"22457": "Admin panel"})
 		if strings.Join(got, "|") != strings.Join(want, "|") {
 			t.Errorf("reasonsFromMsg(%q) = %q, want %q", in, got, want)
 		}
@@ -179,7 +182,7 @@ func TestParseBackupJournal(t *testing.T) {
 		"2026-11-01T03:31:33+0000 cloud64 systemd[1]: cloud64-backup.service: Deactivated successfully.",
 		"2026-11-01T03:31:33+0000 cloud64 systemd[1]: Finished cloud64-backup.service - Nightly backup.",
 	}
-	r := parseBackupJournal(lines, now)
+	r := parseBackupJournal(lines, "cloud64-backup.service", now)
 	if r == nil || !r.OK || !r.Start.Equal(mustTime("2026-11-01T03:30:53Z")) || !r.End.Equal(mustTime("2026-11-01T03:31:33Z")) {
 		t.Fatalf("got %+v", r)
 	}
@@ -187,7 +190,7 @@ func TestParseBackupJournal(t *testing.T) {
 		t.Errorf("summary %q", r.Summary)
 	}
 	failed := append(lines[:3:3], "2026-11-01T03:31:00+0000 cloud64 systemd[1]: cloud64-backup.service: Failed with result 'exit-code'.")
-	if r := parseBackupJournal(failed, now); r == nil || r.OK {
+	if r := parseBackupJournal(failed, "cloud64-backup.service", now); r == nil || r.OK {
 		t.Errorf("failed run = %+v", r)
 	}
 }

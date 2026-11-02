@@ -1,5 +1,5 @@
 {
-  "host": "cloud64",
+  "host": "homeserver",
   "takenAt": "2026-11-01T20:40:00Z",
   "bootAt": "2026-10-30T09:00:00Z",
   "power": {
@@ -11,7 +11,7 @@
     "nextWakes": [
       {
         "at": "2026-11-02T03:30:00Z",
-        "unit": "cloud64-backup.timer"
+        "unit": "system-backup.timer"
       },
       {
         "at": "2026-11-08T04:30:00Z",
@@ -21,7 +21,7 @@
   },
   "containers": [
     {
-      "name": "1Panel-jellyfin-a1B2",
+      "name": "jellyfin",
       "image": "jellyfin/jellyfin",
       "tag": "10.11.11",
       "state": "running",
@@ -33,7 +33,7 @@
       "upSince": "2026-11-01T20:20:00Z"
     },
     {
-      "name": "1Panel-navidrome-c3D4",
+      "name": "navidrome",
       "image": "deluan/navidrome",
       "tag": "0.64.2",
       "state": "running",
@@ -45,7 +45,7 @@
       "upSince": "2026-11-01T20:20:00Z"
     },
     {
-      "name": "1Panel-audiobookshelf-e5F6",
+      "name": "audiobookshelf",
       "image": "advplyr/audiobookshelf",
       "tag": "2.37.2",
       "state": "running",
@@ -93,16 +93,6 @@
       "upSince": "2026-11-01T20:20:00Z"
     },
     {
-      "name": "1Panel-openresty-g7H8",
-      "image": "1panel/openresty",
-      "tag": "1.31.8.1-2-1-noble",
-      "state": "running",
-      "health": "running",
-      "status": "Up 20 minutes",
-      "ports": [],
-      "upSince": "2026-11-01T20:20:00Z"
-    },
-    {
       "name": "nginx_server",
       "image": "nginx",
       "tag": "latest",
@@ -115,19 +105,19 @@
   "backups": {
     "files": [
       {
-        "name": "cloud64-system-2026-11-01_0330.tar.zst.age",
+        "name": "homeserver-system-2026-11-01_0330.tar.zst.age",
         "at": "2026-11-01T03:31:00Z",
         "bytes": 2100000000,
         "encrypted": true
       },
       {
-        "name": "cloud64-system-2026-10-31_0331.tar.zst.age",
+        "name": "homeserver-system-2026-10-31_0331.tar.zst.age",
         "at": "2026-10-31T03:32:00Z",
         "bytes": 2100000000,
         "encrypted": true
       },
       {
-        "name": "cloud64-system-2026-10-30_0935.tar.zst",
+        "name": "homeserver-system-2026-10-30_0935.tar.zst",
         "at": "2026-10-30T09:36:00Z",
         "bytes": 2300000000,
         "encrypted": false
@@ -174,13 +164,21 @@
   ],
   "security": {
     "banned": 0,
-    "lockdown": true,
-    "panelDrop": true,
     "clamav": {
       "at": "2026-11-01T05:11:40Z",
       "files": 24098,
       "infected": 0
-    }
+    },
+    "firewall": [
+      {
+        "chain": "DOCKER-USER",
+        "ok": true
+      },
+      {
+        "chain": "INPUT-LAN-ONLY",
+        "ok": true
+      }
+    ]
   },
   "timeline": [
     {
@@ -259,5 +257,13 @@
       "state": "awake",
       "reason": "Woken (irq 122)"
     }
+  ],
+  "features": [
+    "sleep",
+    "stay-awake",
+    "backup",
+    "av",
+    "security",
+    "egress"
   ]
 }

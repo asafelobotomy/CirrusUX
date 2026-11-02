@@ -1,7 +1,7 @@
 {
   "name": "CirrusUX",
   "short_name": "CirrusUX",
-  "description": "Panel for the cloud64 home server: power, services, backups and Grok.",
+  "description": "A self-hosting panel: power, services, backups and an assistant.",
   "id": "/",
   "start_url": "/#/home",
   "scope": "/",

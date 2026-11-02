@@ -37,11 +37,15 @@ test: web-stub
 	$(GO) test ./...
 	cd web && npm run check && npm test
 
-# Local run without cloud64 or Tailscale: the gateway in dev mode and an
+# Local run without a server or Tailscale: the gateway in dev mode and an
 # agent pushing the recorded demo snapshot. Open http://127.0.0.1:8064
 # (run `make web` first for the real UI).
+# SETUP=single runs the single setup instead.
+SETUP ?= split
+
 dev-gateway: web-stub
-	CIRRUS_DEV=1 CIRRUS_DATA_DIR=.dev-data CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) $(GO) run -ldflags '$(STAMP)' ./cmd/gateway
+	CIRRUS_DEV=1 CIRRUS_DATA_DIR=.dev-data CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) CIRRUS_SETUP=$(SETUP) \
+	CIRRUS_SERVER_NAME=homeserver $(GO) run -ldflags '$(STAMP)' ./cmd/gateway
 
 dev-agent:
 	CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) $(GO) run -ldflags '$(STAMP)' ./cmd/agent -gateway http://127.0.0.1:8064/agent/snapshot -demo deploy/dev/demo-snapshot.json -interval 1m

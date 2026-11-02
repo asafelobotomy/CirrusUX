@@ -1,8 +1,8 @@
 package agent
 
-// Parsers for the text the cloud64 scripts and services write. Formats
-// checked against real output on 1 Nov 2026 (INSTALL.md §0); each parser
-// still skips lines it can't read rather than failing.
+// Parsers for the text the idle checker, backup unit and virus scanner
+// write. Formats checked against real output on 1 Nov 2026 (INSTALL.md §0);
+// each parser still skips lines it can't read rather than failing.
 
 import (
 	"regexp"
@@ -13,15 +13,9 @@ import (
 	"cirrusux/internal/snapshot"
 )
 
-var London = mustLoc("Europe/London")
-
-func mustLoc(name string) *time.Location {
-	l, err := time.LoadLocation(name)
-	if err != nil {
-		return time.UTC
-	}
-	return l
-}
+// logZone is the zone of log timestamps that carry no offset: the
+// machine's own, as the logs are written in local time.
+var logZone = time.Local
 
 var tsLayouts = []string{
 	time.RFC3339Nano,
@@ -46,19 +40,19 @@ func splitTS(line string, now time.Time) (time.Time, string, bool) {
 		if strings.ContainsAny(raw[10:], "Z+-") || strings.HasSuffix(raw, "Z") {
 			t, err = time.Parse(layout, raw)
 		} else {
-			t, err = time.ParseInLocation(layout, raw, London)
+			t, err = time.ParseInLocation(layout, raw, logZone)
 		}
 		if err != nil {
 			continue
 		}
 		if t.Year() == 0 {
-			t = time.Date(now.In(London).Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, London)
+			t = time.Date(now.In(logZone).Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, logZone)
 			if t.After(now.Add(24 * time.Hour)) {
 				t = t.AddDate(-1, 0, 0)
 			}
 		}
 		rest := strings.TrimSpace(line[len(m[0]):])
-		// cloud64-idle.log writes "2026-11-01 17:37:32 GMT ACTIVE: …"
+		// The idle log writes "2026-11-01 17:37:32 GMT ACTIVE: …"
 		for _, z := range []string{"GMT ", "BST ", "UTC "} {
 			rest = strings.TrimPrefix(rest, z)
 		}
@@ -114,7 +108,7 @@ func wakeReason(resume idleEvent, rtc time.Time) string {
 	return "Woken"
 }
 
-// sleptBefore returns how long cloud64 slept before the RESUMED event at i,
+// sleptBefore returns how long the server slept before the RESUMED event at i,
 // from the WAKE-DIAG line logged shortly after it ("slept ~933s").
 func sleptBefore(events []idleEvent, i int) time.Duration {
 	for _, e := range events[i+1:] {
@@ -133,8 +127,8 @@ func sleptBefore(events []idleEvent, i int) time.Duration {
 
 // timeline builds today's awake/asleep segments (UK day) from idle events.
 func timeline(events []idleEvent, now time.Time, bootAt time.Time) []snapshot.Segment {
-	l := now.In(London)
-	dayStart := time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, London)
+	l := now.In(logZone)
+	dayStart := time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, logZone)
 
 	state := "awake"
 	from := dayStart
@@ -158,7 +152,7 @@ func timeline(events []idleEvent, now time.Time, bootAt time.Time) []snapshot.Se
 			next = "asleep"
 			rtc = time.Time{}
 			if m := rtcSetRe.FindStringSubmatch(e.Detail); m != nil {
-				rtc, _ = time.ParseInLocation("2006-01-02 15:04:05", m[1], London)
+				rtc, _ = time.ParseInLocation("2006-01-02 15:04:05", m[1], logZone)
 			}
 		case "RESUMED":
 			next = "awake"
@@ -218,13 +212,15 @@ var (
 	// "1 remote login session(s) host conns: 22<-100.64.0.2".
 	reasonSplit = regexp.MustCompile(`(?:^|\s+)[a-z][a-z -]*:\s`)
 	hostConnRe  = regexp.MustCompile(`(\d+)<-(\S+)`)
-	portNames   = map[string]string{"22": "SSH", "21": "FTP", "443": "OpenResty", "8080": "OpenResty", "22457": "1Panel"}
+	// Names for the idle checker's port numbers; the agent's config can
+	// add more (CIRRUS_PORT_NAMES).
+	portNames = map[string]string{"21": "FTP", "22": "SSH", "80": "HTTP", "443": "HTTPS"}
 )
 
-// reasonsFromMsg turns the checker's verdict (/run/cloud64-idle/last-msg),
+// reasonsFromMsg turns the checker's verdict (its last-msg state file),
 // e.g. "ACTIVE: 1 remote login session(s) host conns: 22<-100.64.0.2", into
 // readable reasons. Any other verdict (IDLE: …) means none.
-func reasonsFromMsg(msg string) []string {
+func reasonsFromMsg(msg string, extra map[string]string) []string {
 	msg = strings.TrimSpace(msg)
 	rest, ok := strings.CutPrefix(msg, "ACTIVE:")
 	if !ok {
@@ -247,7 +243,10 @@ func reasonsFromMsg(msg string) []string {
 		}
 		if conns, ok := strings.CutPrefix(p, "host conns:"); ok {
 			for _, m := range hostConnRe.FindAllStringSubmatch(conns, -1) {
-				name := portNames[m[1]]
+				name := extra[m[1]]
+				if name == "" {
+					name = portNames[m[1]]
+				}
 				if name == "" {
 					name = "port " + m[1]
 				}
@@ -260,7 +259,7 @@ func reasonsFromMsg(msg string) []string {
 	return reasons
 }
 
-// parseEpoch reads a /run/cloud64-idle timestamp file (unix seconds).
+// parseEpoch reads one of the idle checker's timestamp files (unix seconds).
 func parseEpoch(s string) *time.Time {
 	n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	if err != nil || n <= 0 {
@@ -312,9 +311,10 @@ func parseStayAwake(content string) (until *time.Time, forever bool) {
 	return &t, false
 }
 
-// parseBackupJournal finds the last run of cloud64-backup.service in
+// parseBackupJournal finds the last run of the backup unit in
 // `journalctl -o short-iso` output.
-func parseBackupJournal(lines []string, now time.Time) *snapshot.BackupRun {
+func parseBackupJournal(lines []string, unit string, now time.Time) *snapshot.BackupRun {
+	base := strings.TrimSuffix(unit, ".service")
 	var run *snapshot.BackupRun
 	for _, line := range lines {
 		at, rest, ok := splitTS(line, now)
@@ -322,13 +322,13 @@ func parseBackupJournal(lines []string, now time.Time) *snapshot.BackupRun {
 			continue
 		}
 		switch {
-		case strings.Contains(rest, "Starting cloud64-backup"):
+		case strings.Contains(rest, "Starting "+base):
 			run = &snapshot.BackupRun{Start: at}
 		case run == nil:
 			continue
-		case strings.Contains(rest, "Failed with result") || strings.Contains(rest, "Failed to start cloud64-backup"):
+		case strings.Contains(rest, "Failed with result") || strings.Contains(rest, "Failed to start "+base):
 			run.End, run.OK = at, false
-		case strings.Contains(rest, "Finished cloud64-backup") || strings.Contains(rest, "Deactivated successfully"):
+		case strings.Contains(rest, "Finished "+base) || strings.Contains(rest, "Deactivated successfully"):
 			if run.End.IsZero() {
 				run.End, run.OK = at, true
 			}
@@ -365,7 +365,7 @@ func parseClamAV(lines []string) *snapshot.ClamAV {
 			cur.Infected, _ = strconv.Atoi(m[1])
 		}
 		if m := avEnd.FindStringSubmatch(line); m != nil {
-			if t, err := time.ParseInLocation("2006:01:02 15:04:05", m[1], London); err == nil {
+			if t, err := time.ParseInLocation("2006:01:02 15:04:05", m[1], logZone); err == nil {
 				cur.At = t
 				c := cur
 				res = &c

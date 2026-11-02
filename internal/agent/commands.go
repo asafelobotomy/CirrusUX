@@ -17,7 +17,7 @@ import (
 )
 
 // Phase 2: the agent asks the gateway for work over its own outbound
-// connection, so cloud64 still opens no port. Each command is checked again
+// connection, so the server still opens no port. Each command is checked again
 // here against the agent's own fixed list, whatever the gateway sent.
 
 type command struct {
@@ -175,9 +175,12 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 	return nil, fmt.Errorf("unknown action %q", c.Action)
 }
 
-// nudgeAwake gives an action at least 10 minutes before cloud64 may sleep
+// nudgeAwake gives an action at least 10 minutes before the server may sleep
 // (decision D3). A failure here doesn't stop the action.
 func (a *Agent) nudgeAwake(ctx context.Context) {
+	if !a.collector.has(helperapi.ModStayAwake) {
+		return // nothing sleeps here
+	}
 	var r helperapi.Result
 	if err := a.collector.helper(ctx, helperapi.CmdNudgeAwake, &r); err != nil {
 		slog.Warn("nudge awake", "err", err)

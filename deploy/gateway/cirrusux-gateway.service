@@ -1,4 +1,4 @@
-# /etc/systemd/system/cirrusux-gateway.service on cloud-box
+# /etc/systemd/system/cirrusux-gateway.service on the gateway machine (the server itself in the single setup)
 [Unit]
 Description=CirrusUX gateway
 After=network-online.target tailscaled.service

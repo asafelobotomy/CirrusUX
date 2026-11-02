@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mode } from '../api.svelte';
   import Meter from '../components/Meter.svelte';
   import Badge from '../components/Badge.svelte';
   import { live } from '../state/live.svelte';
@@ -20,7 +21,7 @@
         <Badge tone="warn">{#snippet icon()}<TriangleAlert />{/snippet}USB {disk.linkMbps <= 480 ? '2' : '3'} · {disk.linkMbps} Mb/s</Badge>
       {/if}
     </div>
-    <Meter value={disk.usedGb} max={disk.totalGb} label="Media disk used" tone={disk.usedGb / disk.totalGb > 0.85 ? 'warn' : 'accent'} />
+    <Meter value={disk.usedGb} max={disk.totalGb} label="Disk used" tone={disk.usedGb / disk.totalGb > 0.85 ? 'warn' : 'accent'} />
     {#if live.folders.length}
       <ul class="folders">
         {#each live.folders as f}
@@ -32,11 +33,11 @@
         {/each}
       </ul>
     {:else}
-      <p class="faint small">Sizes per folder arrive in Phase 3 (they're measured rarely: scanning 1.3 TB over USB keeps the server awake).</p>
+      <p class="faint small">Sizes per folder come later. They're measured rarely, as scanning a large disk takes a while.</p>
     {/if}
   </div>
 {:else}
-  <p class="muted">No disk data from cloud64 yet.</p>
+  <p class="muted">No disk data from {mode.server} yet.</p>
 {/if}
 
 <style>

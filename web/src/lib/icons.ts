@@ -4,6 +4,7 @@ export { default as Archive } from '@lucide/svelte/icons/archive';
 export { default as BookOpen } from '@lucide/svelte/icons/book-open';
 export { default as CalendarClock } from '@lucide/svelte/icons/calendar-clock';
 export { default as Check } from '@lucide/svelte/icons/check';
+export { default as Cloud } from '@lucide/svelte/icons/cloud';
 export { default as CircleCheck } from '@lucide/svelte/icons/circle-check';
 export { default as Clapperboard } from '@lucide/svelte/icons/clapperboard';
 export { default as Coffee } from '@lucide/svelte/icons/coffee';

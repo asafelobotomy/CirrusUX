@@ -92,7 +92,7 @@ code, kbd, .mono { font-family: var(--font-mono); font-size: 0.88em; }
 /* Scrollbars that follow the theme */
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 
-/* Night look while cloud64 sleeps: calmer colour, live values dimmed. */
+/* Night look while the server sleeps: calmer colour, live values dimmed. */
 :root[data-power='asleep'] .live,
 :root[data-power='unreachable'] .live {
   opacity: 0.62;

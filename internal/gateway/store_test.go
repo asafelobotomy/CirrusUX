@@ -128,8 +128,8 @@ func TestWallpaper(t *testing.T) {
 	}
 }
 
-// The digest sends nothing to xAI unless CIRRUS_DIGEST_GROK is set.
-func TestDigestGrokOptIn(t *testing.T) {
+// The digest sends nothing out unless CIRRUS_DIGEST_ASSISTANT is set.
+func TestDigestAssistantOptIn(t *testing.T) {
 	var calls atomic.Int32
 	xai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -141,8 +141,10 @@ func TestDigestGrokOptIn(t *testing.T) {
 	for _, optIn := range []bool{false, true} {
 		store, _ := OpenStore(t.TempDir())
 		_ = store.SaveSnapshot(awakeSnap())
-		cfg := Config{AgentToken: token, XAIKey: "k", XAIModel: "m", XAIBase: xai.URL, GrokDailyTokens: 1000, DigestGrok: optIn}
-		s := NewServer(cfg, store, NewPower("cloud64", nil, false), fstest.MapFS{})
+		cfg := testConfig()
+		cfg.Assistant = AssistantConfig{Provider: "xai", Name: "Grok", Key: "k", Model: "m", Base: xai.URL}
+		cfg.AssistantDailyTokens, cfg.DigestAssistant = 1000, optIn
+		s := NewServer(cfg, store, testPower(), fstest.MapFS{})
 		before := calls.Load()
 		d := s.makeDigest(context.Background(), time.Now())
 		called := calls.Load() > before
@@ -155,7 +157,8 @@ func TestDigestGrokOptIn(t *testing.T) {
 // A wake is logged when asked for, and again if the wake command fails.
 func TestWakeFailureLogged(t *testing.T) {
 	store, _ := OpenStore(t.TempDir())
-	s := NewServer(Config{AllowedUsers: []string{"owner@example.com"}, AgentToken: token}, store, NewPower("cloud64", []string{"false"}, false), fstest.MapFS{})
+	cfg := testConfig()
+	s := NewServer(cfg, store, NewPower(PowerOptions{Server: "atlas", Split: true, Wake: "command", WakeCmd: []string{"false"}}), fstest.MapFS{})
 	if w := do(s.Handler(), "POST", "/api/wake", "", actor); w.Code != http.StatusAccepted {
 		t.Fatalf("wake: %d %s", w.Code, w.Body)
 	}
@@ -164,7 +167,7 @@ func TestWakeFailureLogged(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	got := store.RecentAudit(5)
-	if len(got) != 2 || got[1].What != "Sent a wake to cloud64" || got[0].What != "Wake of cloud64 (failed)" || got[0].Result == "" || got[0].Who != "owner@example.com" {
+	if len(got) != 2 || got[1].What != "Sent a wake to atlas" || got[0].What != "Wake of atlas (failed)" || got[0].Result == "" || got[0].Who != "owner@example.com" {
 		t.Errorf("audit = %+v", got)
 	}
 }

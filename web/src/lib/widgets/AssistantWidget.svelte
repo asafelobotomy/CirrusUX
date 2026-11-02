@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { askGrok } from '../state/grok.svelte';
+  import { mode } from '../api.svelte';
+  import { askAssistant } from '../state/assistant.svelte';
   import { Send, Sparkles } from '../icons';
 
   let q = $state('');
@@ -7,7 +8,7 @@
 
   function submit(text: string) {
     if (!text.trim()) return;
-    askGrok(text.trim());
+    askAssistant(text.trim());
     q = '';
   }
 </script>
@@ -15,7 +16,7 @@
 <div class="g">
   <form onsubmit={(e) => { e.preventDefault(); submit(q); }}>
     <Sparkles size={16} />
-    <input bind:value={q} placeholder="Ask Grok about cloud64…" aria-label="Ask Grok" />
+    <input bind:value={q} placeholder="Ask {mode.assistant.name} about {mode.server}…" aria-label="Ask {mode.assistant.name}" />
     <button type="submit" aria-label="Send"><Send size={16} /></button>
   </form>
   <div class="chips">

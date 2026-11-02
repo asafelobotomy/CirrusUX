@@ -1,9 +1,11 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"os/exec"
 	"strings"
 	"sync"
@@ -12,55 +14,68 @@ import (
 	"cirrusux/internal/snapshot"
 )
 
-var london = mustLoc("Europe/London")
+// zone is the time zone every stamp the gateway writes uses (CIRRUS_TZ).
+// NewServer sets it once at start-up.
+var zone = time.UTC
 
-func mustLoc(name string) *time.Location {
-	l, err := time.LoadLocation(name)
-	if err != nil {
-		return time.UTC
-	}
-	return l
-}
-
-func ukStamp(t time.Time) string {
-	l := t.In(london)
+// stamp formats t as "2006-01-02 15:04 GMT" in the configured zone.
+func stamp(t time.Time) string {
+	l := t.In(zone)
 	return l.Format("2006-01-02 15:04 ") + zoneLabel(l)
 }
 
+// zoneLabel is the zone's abbreviation (GMT, BST, CET), or its offset when
+// the zone has none.
 func zoneLabel(t time.Time) string {
-	if name, _ := t.Zone(); name == "BST" {
-		return "BST"
-	}
-	return "GMT"
+	name, _ := t.Zone()
+	return name
 }
 
 const (
 	// A snapshot older than this means the agent is not reporting.
 	snapshotFresh = 7 * time.Minute
-	// Give up waiting for a wake after this long (cloud64-wake polls ~6 min).
+	// Give up waiting for a wake after this long (a wake command may poll ~6 min).
 	wakeTimeout = 7 * time.Minute
 	tsPoll      = 20 * time.Second
 )
 
-// Power tracks whether cloud64 is awake without ever contacting it:
+// Power tracks whether the server is awake without ever contacting it:
 // the local tailscaled's view of the peer plus the age of the last
-// snapshot (PLAN §3.1).
+// snapshot (PLAN §3.1). In the single setup the gateway runs on the server
+// itself, so there is no asleep: only awake, or not reporting.
 type Power struct {
-	peer    string
-	wakeCmd []string
-	useTS   bool
+	opt PowerOptions
 
 	mu       sync.Mutex
-	notice   string // a problem on cloud-box's side, shown in the UI
+	notice   string // a problem on the gateway's side, shown in the UI
 	tsKnown  bool
 	online   bool
 	lastSeen time.Time
 	waking   *wakeState
 }
 
+// PowerOptions come from the gateway's config.
+type PowerOptions struct {
+	Server, Gateway string // display names
+	Split           bool
+	Peer            string // Tailscale name of the server; "" skips Tailscale
+	Wake            string // wol, command or none
+	WakeMAC         net.HardwareAddr
+	WakeBroadcast   string
+	WakeCmd         []string
+	Dev             bool // pretend wakes work, skip Tailscale
+}
+
+func PowerFromConfig(c Config) PowerOptions {
+	return PowerOptions{
+		Server: c.ServerName, Gateway: c.GatewayName, Split: c.Split(), Peer: c.TailscalePeer,
+		Wake: c.Wake, WakeMAC: c.WakeMAC, WakeBroadcast: c.WakeBroadcast, WakeCmd: c.WakeCmd, Dev: c.Dev,
+	}
+}
+
 type wakeState struct {
 	started time.Time
-	step    int // 1 packet sent, 2 network up, 3 tailscale connected
+	step    int // 1 signal sent, 2 network up, 3 Tailscale connected
 	err     string
 }
 
@@ -71,17 +86,20 @@ type PowerView struct {
 	WakeErr  string     `json:"wakeError,omitempty"`
 	// What the state is based on, for the UI's "how do we know" hint.
 	Source string `json:"source"`
-	// Set when the gateway can't trust its own view, e.g. cloud-box lost
-	// its connection to Tailscale's coordination server.
+	// Set when the gateway can't trust its own view, e.g. it lost its
+	// connection to Tailscale's coordination server.
 	Notice string `json:"notice,omitempty"`
 }
 
-func NewPower(peer string, wakeCmd []string, useTailscale bool) *Power {
-	return &Power{peer: peer, wakeCmd: wakeCmd, useTS: useTailscale}
+func NewPower(opt PowerOptions) *Power {
+	return &Power{opt: opt}
 }
 
+// CanWake reports whether a wake method is set up.
+func (p *Power) CanWake() bool { return p.opt.Split && (p.opt.Wake != "none" || p.opt.Dev) }
+
 func (p *Power) Run(ctx context.Context) {
-	if !p.useTS {
+	if !p.opt.Split || p.opt.Dev || p.opt.Peer == "" {
 		return
 	}
 	t := time.NewTicker(tsPoll)
@@ -108,13 +126,13 @@ func (p *Power) pollTailscale(ctx context.Context) {
 		p.notice = "The gateway can't read Tailscale's status, so awake/asleep comes from the agent's last report only."
 		return
 	}
-	st := parseStatus(out, p.peer)
+	st := parseStatus(out, p.opt.Peer)
 	if !st.selfOK {
-		// cloud-box's tailscaled has dropped off the coordination server
-		// (seen on 1 Nov). Peer states are stale then: fall back to the
-		// snapshot's age rather than calling cloud64 asleep.
+		// The gateway's own tailscaled has dropped off the coordination
+		// server. Peer states are stale then: fall back to the snapshot's
+		// age rather than calling the server asleep.
 		p.tsKnown = false
-		p.notice = "cloud-box has lost its connection to Tailscale. Reports from cloud64 can't arrive until it reconnects."
+		p.notice = p.opt.Gateway + " has lost its connection to Tailscale. Reports from " + p.opt.Server + " can't arrive until it reconnects."
 		return
 	}
 	p.notice = ""
@@ -176,6 +194,12 @@ func (p *Power) View(now time.Time, snap *snapshot.Snapshot) PowerView {
 
 func (p *Power) view(now time.Time, snap *snapshot.Snapshot) PowerView {
 	fresh := snap != nil && now.Sub(snap.TakenAt) < snapshotFresh
+	if !p.opt.Split {
+		if fresh {
+			return PowerView{State: "awake", Since: &snap.Power.Since, Source: "agent"}
+		}
+		return PowerView{State: "unreachable", Source: "agent"}
+	}
 
 	if w := p.waking; w != nil {
 		reported := snap != nil && snap.TakenAt.After(w.started)
@@ -185,7 +209,7 @@ func (p *Power) view(now time.Time, snap *snapshot.Snapshot) PowerView {
 		case w.err != "" || now.Sub(w.started) > wakeTimeout:
 			msg := w.err
 			if msg == "" {
-				msg = "cloud64 did not report back within 7 minutes"
+				msg = p.opt.Server + " did not report back within 7 minutes"
 			}
 			p.waking = nil
 			return PowerView{State: "asleep", WakeErr: msg, Source: "wake"}
@@ -225,9 +249,9 @@ func nonZero(t time.Time) *time.Time {
 	return &t
 }
 
-// Wake runs the configured wake command (cloud64-wake on the admin box) in
-// the background. It reports false if a wake is already running. onFail, if
-// set, is called with the error when the command fails.
+// Wake sends the configured wake in the background: a magic packet, or
+// the wake command. It reports false if a wake is already running. onFail,
+// if set, is called with the error when the wake can't be sent.
 func (p *Power) Wake(onFail func(error)) bool {
 	p.mu.Lock()
 	if p.waking != nil {
@@ -238,7 +262,39 @@ func (p *Power) Wake(onFail func(error)) bool {
 	p.waking = w
 	p.mu.Unlock()
 
-	if len(p.wakeCmd) == 0 {
+	fail := func(err error) {
+		p.mu.Lock()
+		w.err = "The wake didn't go out (" + err.Error() + ")"
+		p.mu.Unlock()
+		if onFail != nil {
+			onFail(err)
+		}
+	}
+	switch {
+	case p.opt.Wake == "wol":
+		go func() {
+			if err := sendMagicPacket(p.opt.WakeMAC, p.opt.WakeBroadcast); err != nil {
+				slog.Warn("magic packet", "err", err)
+				fail(err)
+			}
+		}()
+	case p.opt.Wake == "command":
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), wakeTimeout)
+			defer cancel()
+			out, err := exec.CommandContext(ctx, p.opt.WakeCmd[0], p.opt.WakeCmd[1:]...).CombinedOutput()
+			if err != nil {
+				slog.Warn("wake command failed", "err", err, "output", strings.TrimSpace(string(out)))
+				fail(err)
+				return
+			}
+			p.mu.Lock()
+			if w.step < 2 {
+				w.step = 2
+			}
+			p.mu.Unlock()
+		}()
+	default:
 		// Development: pretend the packet went out.
 		go func() {
 			time.Sleep(2 * time.Second)
@@ -246,23 +302,28 @@ func (p *Power) Wake(onFail func(error)) bool {
 			w.step = 2
 			p.mu.Unlock()
 		}()
-		return true
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), wakeTimeout)
-		defer cancel()
-		out, err := exec.CommandContext(ctx, p.wakeCmd[0], p.wakeCmd[1:]...).CombinedOutput()
-		p.mu.Lock()
-		if err != nil {
-			slog.Warn("wake command failed", "err", err, "output", strings.TrimSpace(string(out)))
-			w.err = "The wake command failed (" + err.Error() + ")"
-		} else if w.step < 2 {
-			w.step = 2
-		}
-		p.mu.Unlock()
-		if err != nil && onFail != nil {
-			onFail(err)
-		}
-	}()
 	return true
+}
+
+// sendMagicPacket broadcasts a Wake-on-LAN packet: six 0xFF bytes, then the
+// MAC address 16 times. It goes out three times, as single UDP packets can
+// be lost. Go sets SO_BROADCAST on UDP sockets, so a broadcast address works.
+func sendMagicPacket(mac net.HardwareAddr, addr string) error {
+	pkt := bytes.Repeat([]byte{0xff}, 6)
+	for range 16 {
+		pkt = append(pkt, mac...)
+	}
+	conn, err := net.Dial("udp", addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	for range 3 {
+		if _, err := conn.Write(pkt); err != nil {
+			return err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil
 }

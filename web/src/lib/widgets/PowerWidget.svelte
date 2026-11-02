@@ -4,9 +4,10 @@
   import { confirmAllowSleep, confirmStayAwake, confirmWake } from '../state/actions';
   import { clock, fmtDayTime, fmtDuration, fmtTime, tzLabel } from '../time.svelte';
   import { live } from '../state/live.svelte';
+  import { has, mode, sleeps } from '../api.svelte';
   import { Check, Coffee, Loader, Moon, MoonStar, Power, Sun, TriangleAlert, Wifi, Zap } from '../icons';
 
-  const LABEL = { awake: 'Awake', asleep: 'Asleep', waking: 'Waking…', unreachable: 'No reports' };
+  const LABEL = $derived({ awake: sleeps() ? 'Awake' : 'Online', asleep: 'Asleep', waking: 'Waking…', unreachable: 'No reports' });
 
   const sinceMs = $derived(clock.now - power.since.getTime());
   const sleepsIn = $derived(sleepsInMs());
@@ -24,7 +25,7 @@
       {#if power.state === 'awake'}<Sun size={28} />{:else if power.state === 'asleep'}<MoonStar size={28} />{:else if power.state === 'unreachable'}<Wifi size={28} />{:else}<span class="spin"><Loader size={28} /></span>{/if}
     </div>
     <div class="head">
-      <span class="eyebrow">cloud64</span>
+      <span class="eyebrow">{mode.server}</span>
       <h2 class="state" aria-live="polite">
         {LABEL[power.state]}
       </h2>
@@ -61,6 +62,7 @@
         </div>
       {/if}
     </div>
+    {#if sleeps() && has('stay-awake')}
     <div class="actions">
       {#if holding}
         <Button variant="secondary" onclick={() => confirmAllowSleep()}>{#snippet icon()}<Moon />{/snippet}Allow sleep</Button>
@@ -73,16 +75,24 @@
         </div>
       {/if}
     </div>
+    {/if}
   {:else if power.state === 'asleep'}
     <div class="status">
       <p class="muted">Showing data from {fmtTime(power.lastSnapshot)}. Opening an app or a live view needs the server awake.</p>
     </div>
-    <div class="actions">
-      <Button variant="primary" size="lg" class="wake" onclick={() => confirmWake()}>{#snippet icon()}<Power />{/snippet}Wake cloud64</Button>
-    </div>
+    {#if mode.wake}
+      <div class="actions">
+        <Button variant="primary" size="lg" class="wake" onclick={() => confirmWake()}>{#snippet icon()}<Power />{/snippet}Wake {mode.server}</Button>
+      </div>
+    {:else}
+      <p class="faint small">No wake method is set up on the gateway (CIRRUS_WAKE).</p>
+    {/if}
   {:else if power.state === 'unreachable'}
     <div class="status">
-      <p class="muted">cloud64 is on the tailnet, but its agent hasn't reported since {fmtTime(power.lastSnapshot)}. Check <code>cirrusux-agent.service</code> on cloud64.</p>
+      <p class="muted">
+        {mode.setup === 'split' ? `${mode.server} is on the tailnet, but its agent` : 'The agent'} hasn't reported since {fmtTime(power.lastSnapshot)}.
+        Check <code>cirrusux-agent.service</code> on {mode.server}.
+      </p>
     </div>
   {:else}
     <ol class="steps">
@@ -95,7 +105,7 @@
     </ol>
   {/if}
 
-  {#if next}<p class="next faint small">Next scheduled wake: {next.unit.replace(/\.timer$/, '').replace('cloud64-', '').replace('-', ' ')}, {fmtDayTime(next.at)}</p>{/if}
+  {#if next && sleeps()}<p class="next faint small">Next scheduled wake: {next.unit.replace(/\.timer$/, '').replace(/-/g, ' ')}, {fmtDayTime(next.at)}</p>{/if}
 </div>
 
 <style>

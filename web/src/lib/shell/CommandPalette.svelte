@@ -1,14 +1,15 @@
 <script lang="ts">
+  import { mode } from '../api.svelte';
   import type { Component } from 'svelte';
   import * as I from '../icons';
-  import { ALL_NAV } from './nav';
+  import { ALL_NAV, shown } from './nav';
   import { go, ui } from '../state/ui.svelte';
   import { live } from '../state/live.svelte';
   import { power } from '../state/power.svelte';
   import { allThemes, settings } from '../state/settings.svelte';
   import { boards } from '../state/layout.svelte';
   import { confirmAllowSleep, confirmBackup, confirmContainer, confirmStayAwake, confirmWake } from '../state/actions';
-  import { askGrok } from '../state/grok.svelte';
+  import { askAssistant } from '../state/assistant.svelte';
 
   interface Cmd { id: string; label: string; group: string; icon: Component; hint?: string; run: () => void }
 
@@ -20,7 +21,7 @@
   const commands = $derived.by((): Cmd[] => {
     const awake = power.state === 'awake';
     const list: Cmd[] = [];
-    if (power.state === 'asleep') list.push({ id: 'wake', label: 'Wake cloud64', group: 'Power', icon: I.Power, run: () => confirmWake() });
+    if (power.state === 'asleep') list.push({ id: 'wake', label: `Wake ${mode.server}`, group: 'Power', icon: I.Power, run: () => confirmWake() });
     if (awake) {
       list.push(
         { id: 'stay30', label: 'Stay awake for 30 min', group: 'Power', icon: I.Coffee, run: () => confirmStayAwake(30) },
@@ -31,7 +32,7 @@
       for (const c of live.containers)
         list.push({ id: 'r-' + c.id, label: `${c.health === 'exited' ? 'Start' : 'Restart'} ${c.app}`, group: 'Containers', icon: c.health === 'exited' ? I.Play : I.RotateCcw, hint: c.tag, run: () => confirmContainer(c.id, c.health === 'exited' ? 'start' : 'restart') });
     }
-    for (const n of ALL_NAV) list.push({ id: 'go-' + n.route, label: n.label, group: 'Go to', icon: n.icon, run: () => go(n.route) });
+    for (const n of ALL_NAV.filter(shown)) list.push({ id: 'go-' + n.route, label: n.label, group: 'Go to', icon: n.icon, run: () => go(n.route) });
     for (const b of boards.list) list.push({ id: 'b-' + b.id, label: `${b.name} board`, group: 'Go to', icon: I.LayoutDashboard, run: () => { boards.active = b.id; go('home'); } });
     for (const t of allThemes()) list.push({ id: 't-' + t.id, label: `Theme: ${t.name}`, group: 'Appearance', icon: t.scheme === 'dark' ? I.Moon : I.Sun, run: () => { settings.followSystem = false; settings.themeId = t.id; } });
     list.push({ id: 'edit', label: 'Edit layout', group: 'Appearance', icon: I.Pencil, run: () => { go('home'); ui.editLayout = true; } });
@@ -41,7 +42,7 @@
   const filtered = $derived.by(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     const hits = commands.filter((c) => words.every((w) => `${c.label} ${c.group} ${c.hint ?? ''}`.toLowerCase().includes(w)));
-    if (q.trim()) hits.push({ id: 'grok', label: `Ask Grok: “${q.trim()}”`, group: 'Grok', icon: I.Sparkles, run: () => askGrok(q.trim()) });
+    if (q.trim()) hits.push({ id: 'assistant', label: `Ask ${mode.assistant.name}: “${q.trim()}”`, group: 'Assistant', icon: I.Sparkles, run: () => askAssistant(q.trim()) });
     return hits.slice(0, 40);
   });
 
@@ -80,7 +81,7 @@
       <I.Search size={18} />
       <input
         bind:this={input} bind:value={q} onkeydown={key}
-        placeholder="Search pages, containers, actions — or ask Grok"
+        placeholder="Search pages, containers, actions — or ask {mode.assistant.name}"
         role="combobox" aria-expanded="true" aria-controls="cmd-list" aria-activedescendant={filtered[sel] ? 'cmd-' + filtered[sel].id : undefined}
       />
       <kbd>Esc</kbd>
@@ -95,7 +96,7 @@
           {#if c.hint}<code class="faint">{c.hint}</code>{/if}
         </li>
       {:else}
-        <li class="empty muted">Type to search, or ask Grok anything.</li>
+        <li class="empty muted">Type to search, or ask {mode.assistant.name} anything.</li>
       {/each}
     </ul>
     <footer class="faint"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> run</span><span>Actions always ask before running</span></footer>

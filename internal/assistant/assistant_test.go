@@ -1,4 +1,4 @@
-package grok
+package assistant
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// A fake xAI endpoint: first asks for a tool, then answers. It records
+// A fake chat API: first asks for a tool, then answers. It records
 // every request body so the test can check nothing sensitive was sent.
 func TestAskToolLoopAndRedaction(t *testing.T) {
 	var bodies []string
@@ -48,7 +48,7 @@ func TestAskToolLoopAndRedaction(t *testing.T) {
 	all := strings.Join(bodies, "\n")
 	for _, leak := range []string{"hunter2", "192.0.2.23", "/mnt/media", "02:00:5e"} {
 		if strings.Contains(all, leak) {
-			t.Errorf("request to xAI contained %q", leak)
+			t.Errorf("request to the API contained %q", leak)
 		}
 	}
 }

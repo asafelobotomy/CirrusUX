@@ -1,4 +1,5 @@
-// UK time everywhere (brief §9 rule 8). Demo mode runs on a fake clock that
+// One time zone everywhere: the gateway's (CIRRUS_TZ), labelled with its
+// abbreviation (GMT/BST, CET/CEST). Demo mode runs on a fake clock that
 // starts at the sample data's time and then ticks in real time, so the data
 // and the countdowns agree; live mode switches to the real clock.
 
@@ -20,24 +21,52 @@ export function useRealClock(): void {
 
 export const now = () => new Date(clock.now);
 
-const TZ = 'Europe/London';
-const hm = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
-const dayHm = new Intl.DateTimeFormat('en-GB', {
-  timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-});
-const dayOnly = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: 'numeric', month: 'short' });
-const zone = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, timeZoneName: 'short' });
+import { mode } from './api.svelte';
 
-/** "GMT" or "BST" for the given moment. */
-export function tzLabel(d: Date = now()): string {
-  // Some ICU builds say "GMT+0" / "GMT+1" instead of GMT / BST.
-  const name = zone.formatToParts(d).find((p) => p.type === 'timeZoneName')?.value ?? '';
-  return name === 'GMT+1' || name === 'BST' ? 'BST' : 'GMT';
+// Formatters for the current zone, rebuilt when the gateway names another.
+let fmt = makeFormatters(mode.tz);
+
+function makeFormatters(timeZone: string) {
+  return {
+    tz: timeZone,
+    hm: new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit' }),
+    dayHm: new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+    dayOnly: new Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric', month: 'short' }),
+    zone: new Intl.DateTimeFormat('en-GB', { timeZone, timeZoneName: 'short' }),
+    ymd: new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }),
+    offset: new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' }),
+  };
 }
 
-export const fmtTime = (d: Date) => hm.format(d);
-export const fmtDayTime = (d: Date) => dayHm.format(d);
-export const fmtDay = (d: Date) => dayOnly.format(d);
+function f() {
+  if (fmt.tz !== mode.tz) {
+    try {
+      fmt = makeFormatters(mode.tz);
+    } catch {
+      fmt = makeFormatters('UTC'); // unknown zone name
+    }
+  }
+  return fmt;
+}
+
+/** The zone's short name for the given moment: "GMT", "BST", "CET"… */
+export function tzLabel(d: Date = now()): string {
+  const name = f().zone.formatToParts(d).find((p) => p.type === 'timeZoneName')?.value ?? '';
+  // Some ICU builds say "GMT+1" for UK summer time instead of BST.
+  if (mode.tz === 'Europe/London') return name === 'GMT+1' || name === 'BST' ? 'BST' : 'GMT';
+  return name;
+}
+
+/** The zone's offset from UTC at d, in ms. */
+function offsetMs(d: Date): number {
+  const name = f().offset.formatToParts(d).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+  const m = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) * 60_000 : 0;
+}
+
+export const fmtTime = (d: Date) => f().hm.format(d);
+export const fmtDayTime = (d: Date) => f().dayHm.format(d);
+export const fmtDay = (d: Date) => f().dayOnly.format(d);
 
 export function fmtAgo(d: Date, from: Date = now()): string {
   const s = Math.round((from.getTime() - d.getTime()) / 1000);
@@ -56,14 +85,12 @@ export function fmtDuration(ms: number): string {
   return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
 }
 
-const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
-
-/** Start of the UK day containing d. */
-export function ukMidnight(d: Date): Date {
-  const [y, m, day] = ymd.format(d).split('-').map(Number);
+/** Start of the local day containing d. */
+export function localMidnight(d: Date): Date {
+  const [y, m, day] = f().ymd.format(d).split('-').map(Number);
   const utc = Date.UTC(y, m - 1, day);
-  return new Date(utc - (tzLabel(new Date(utc + 12 * 3600_000)) === 'BST' ? 3600_000 : 0));
+  return new Date(utc - offsetMs(new Date(utc + 12 * 3600_000)));
 }
 
-/** Fixture helper: a UK wall-clock time on 1 Nov 2026 (GMT, so UTC = UK). */
+/** Fixture helper: a demo wall-clock time on 1 Nov 2026 (London is on GMT, so UTC = local). */
 export const at = (hhmm: string, day = '2026-11-01') => new Date(`${day}T${hhmm}:00Z`);

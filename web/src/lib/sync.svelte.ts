@@ -1,10 +1,10 @@
 // Live mode: keeps the UI in step with the gateway. Polls only the gateway
-// (on cloud-box), never cloud64, and only while the tab is visible.
+// (wherever it runs), never a sleeping server, and only while the tab is visible.
 import { api, ApiError, mode } from './api.svelte';
 import { live } from './state/live.svelte';
 import { power, type PowerState } from './state/power.svelte';
 import { settings } from './state/settings.svelte';
-import { boards } from './state/layout.svelte';
+import { boards, migrateBoards } from './state/layout.svelte';
 import { toast } from './state/ui.svelte';
 import { fmtTime, useRealClock } from './time.svelte';
 import { setPersistence } from './demo/store';
@@ -26,7 +26,8 @@ interface Snap {
   backups: { files: { name: string; at: string; bytes: number; encrypted: boolean }[]; lastRun?: { start: string; end: string; ok: boolean; summary: string } };
   disk?: { totalBytes: number; freeBytes: number; linkMbps: number };
   temps: number[];
-  security?: { banned: number; lockdown: boolean; panelDrop: boolean; clamav?: { at: string; files: number; infected: number } };
+  security?: { banned?: number; firewall: { chain: string; ok: boolean }[]; clamav?: { at: string; files: number; infected: number } };
+  features?: string[];
   timeline: { from: string; to?: string; state: 'awake' | 'asleep'; reason?: string }[];
   errors?: string[];
 }
@@ -61,7 +62,7 @@ function apply(st: StateResp): void {
   const taken = new Date(s.takenAt);
   power.lastSnapshot = taken;
   if (mode.offline) {
-    power.notice = `You're offline, so this is cloud64 as of ${fmtTime(taken)}, saved on this device. It may have changed since.`;
+    power.notice = `You're offline, so this is ${mode.server} as of ${fmtTime(taken)}, saved on this device. It may have changed since.`;
   }
   power.lastActivity = d(s.power.lastActivity) ?? new Date(s.power.since);
   power.reasons = s.power.reasons ?? [];
@@ -85,12 +86,13 @@ function apply(st: StateResp): void {
     : null;
   live.temps = s.temps ?? [];
   live.security = s.security
-    ? { banned: s.security.banned, lockdown: s.security.lockdown, panelDrop: s.security.panelDrop,
+    ? { banned: s.security.banned ?? null, firewall: s.security.firewall ?? [],
         clamav: s.security.clamav ? { ...s.security.clamav, at: new Date(s.security.clamav.at) } : null }
     : null;
   live.timeline = s.timeline.map((t) => ({ from: new Date(t.from), to: d(t.to), state: t.state, reason: t.reason }));
   live.problems = s.errors ?? [];
   live.agentVersion = s.agentVersion ?? '';
+  mode.features = s.features ?? [];
 }
 
 export async function refresh(): Promise<void> {
@@ -142,7 +144,7 @@ function applyUI(doc: UIDoc): void {
   uiVersion = doc.version;
   if (doc.data?.settings) Object.assign(settings, doc.data.settings);
   if (doc.data?.boards?.list) {
-    boards.list = doc.data.boards.list;
+    boards.list = migrateBoards(doc.data.boards.list);
     boards.active = doc.data.boards.active ?? boards.list[0]?.id;
   }
   lastSaved = JSON.stringify(currentUI());

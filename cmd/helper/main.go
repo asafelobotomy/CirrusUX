@@ -1,7 +1,8 @@
 // cirrusux-helper runs as root through one sudoers rule per command line.
-// Phase 1 subcommands only read; Phase 2 adds a few fixed actions (stay
-// awake, allow sleep, run backup). Nothing takes a path or free text from
-// the caller, and nothing prints secrets.
+// Most subcommands only read; a few are fixed actions (stay awake, allow
+// sleep, run backup). Nothing takes a path or free text from the caller:
+// paths come from root's own config file (config.go), and nothing prints
+// secrets.
 package main
 
 import (
@@ -23,16 +24,8 @@ import (
 )
 
 const (
-	idleRunDir    = "/run/cloud64-idle"
-	stayAwake     = "/run/stay-awake"
-	stayAwakeBin  = "/usr/local/bin/stay-awake"
-	allowSleepBin = "/usr/local/bin/allow-sleep"
-	egressReport  = "/usr/local/sbin/egress-report.sh"
-	idleLog       = "/var/log/cloud64-idle.log"
-	backupDir     = "/mnt/media/BackUp/cloud64-system"
-	avLog         = "/var/log/clamav/weekly-scan.log"
-	maxLines      = 400
-	maxStateLen   = 4096
+	maxLines    = 400
+	maxStateLen = 4096
 )
 
 func main() {
@@ -45,39 +38,63 @@ func main() {
 	} else if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}
+	c, err := loadConf(configPath)
+	if err != nil {
+		fail("%v", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutFor(os.Args[1]))
 	defer cancel()
 
 	var out any
-	var err error
-	switch os.Args[1] {
+	sub := os.Args[1]
+	need := func(mod string) {
+		if !slices.Contains(c.features().Modules, mod) {
+			fail("%s: the %s module isn't set up in %s", sub, mod, configPath)
+		}
+	}
+	switch sub {
+	case helperapi.CmdFeatures:
+		out = c.features()
 	case helperapi.CmdIdleStatus:
-		out, err = idleStatus()
+		need(helperapi.ModSleep)
+		out, err = idleStatus(c)
 	case helperapi.CmdIdleLog:
-		out, err = tailFile(idleLog, maxLines)
+		need(helperapi.ModSleep)
+		out, err = tailFile(c.IdleLog, maxLines)
 	case helperapi.CmdBackupList:
-		out, err = backupList(backupDir)
+		need(helperapi.ModBackup)
+		out, err = backupList(c.BackupDir, c.BackupPrefix)
 	case helperapi.CmdBackupLast:
-		out, err = command(ctx, "journalctl", "-u", "cloud64-backup.service", "-n", "60", "-o", "short-iso", "--no-pager")
+		need(helperapi.ModBackup)
+		var l helperapi.Lines
+		l, err = command(ctx, "journalctl", "-u", c.BackupUnit, "-n", "60", "-o", "short-iso", "--no-pager")
+		out = helperapi.BackupLast{Unit: c.BackupUnit, Lines: l.Lines}
 	case helperapi.CmdAVLast:
-		out, err = tailFile(avLog, 80)
+		need(helperapi.ModAV)
+		out, err = tailFile(c.AVLog, 80)
 	case helperapi.CmdSecurityStatus:
-		out = securityStatus(ctx)
+		need(helperapi.ModSecurity)
+		out = securityStatus(ctx, c)
 	case helperapi.CmdStayAwake:
+		need(helperapi.ModStayAwake)
 		if len(os.Args) != 3 {
 			fail("stay-awake needs one of %v", helperapi.StayAwakeArgs)
 		}
-		out, err = holdAwake(ctx, os.Args[2])
+		out, err = holdAwake(ctx, c, os.Args[2])
 	case helperapi.CmdAllowSleep:
-		out, err = run(ctx, allowSleepBin)
+		need(helperapi.ModStayAwake)
+		out, err = run(ctx, c.AllowSleepBin)
 	case helperapi.CmdNudgeAwake:
-		out, err = nudgeAwake(ctx)
+		need(helperapi.ModStayAwake)
+		out, err = nudgeAwake(ctx, c)
 	case helperapi.CmdBackupRun:
-		out, err = run(ctx, "systemctl", "start", "--no-block", "cloud64-backup.service")
+		need(helperapi.ModBackup)
+		out, err = run(ctx, "systemctl", "start", "--no-block", c.BackupUnit)
 	case helperapi.CmdEgressReport:
-		out, err = run(ctx, egressReport, "-n", "20")
+		need(helperapi.ModEgress)
+		out, err = run(ctx, c.EgressReport, "-n", "20")
 	default:
-		fail("unknown subcommand %q", os.Args[1])
+		fail("unknown subcommand %q", sub)
 	}
 	if err != nil {
 		fail("%s: %v", os.Args[1], err)
@@ -101,9 +118,12 @@ func fail(format string, a ...any) {
 	os.Exit(1)
 }
 
-func idleStatus() (helperapi.IdleStatus, error) {
+func idleStatus(c conf) (helperapi.IdleStatus, error) {
 	st := helperapi.IdleStatus{State: map[string]string{}}
-	entries, err := os.ReadDir(idleRunDir)
+	if c.IdleStateDir == "" {
+		return st, nil
+	}
+	entries, err := os.ReadDir(c.IdleStateDir)
 	if err != nil {
 		return st, err
 	}
@@ -111,15 +131,17 @@ func idleStatus() (helperapi.IdleStatus, error) {
 		if !e.Type().IsRegular() {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(idleRunDir, e.Name()))
+		b, err := os.ReadFile(filepath.Join(c.IdleStateDir, e.Name()))
 		if err != nil {
 			continue
 		}
 		st.State[e.Name()] = strings.TrimSpace(truncate(string(b), maxStateLen))
 	}
-	if b, err := os.ReadFile(stayAwake); err == nil {
-		s := strings.TrimSpace(string(b))
-		st.StayAwake = &s
+	if c.StayAwakeFile != "" {
+		if b, err := os.ReadFile(c.StayAwakeFile); err == nil {
+			s := strings.TrimSpace(string(b))
+			st.StayAwake = &s
+		}
 	}
 	return st, nil
 }
@@ -142,15 +164,18 @@ func tailFile(path string, n int) (helperapi.Lines, error) {
 	return helperapi.Lines{Lines: ring}, sc.Err()
 }
 
-func backupList(dir string) (helperapi.BackupList, error) {
+func backupList(dir, prefix string) (helperapi.BackupList, error) {
 	var l helperapi.BackupList
+	if dir == "" {
+		return l, nil
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return l, err
 	}
 	for _, e := range entries {
 		// Finished archives only; .partial files are in progress.
-		if !e.Type().IsRegular() || !strings.HasPrefix(e.Name(), "cloud64-system-") || strings.HasSuffix(e.Name(), ".partial") {
+		if !e.Type().IsRegular() || !strings.HasPrefix(e.Name(), prefix) || strings.HasSuffix(e.Name(), ".partial") {
 			continue
 		}
 		info, err := e.Info()
@@ -172,41 +197,41 @@ func command(ctx context.Context, name string, args ...string) (helperapi.Lines,
 
 var bannedRe = regexp.MustCompile(`Currently banned:\s*(\d+)`)
 
-func securityStatus(ctx context.Context) helperapi.SecurityStatus {
-	var s helperapi.SecurityStatus
-	if out, err := exec.CommandContext(ctx, "fail2ban-client", "status", "sshd").Output(); err == nil {
-		if m := bannedRe.FindSubmatch(out); m != nil {
-			s.Banned, _ = strconv.Atoi(string(m[1]))
+func securityStatus(ctx context.Context, c conf) helperapi.SecurityStatus {
+	s := helperapi.SecurityStatus{Firewall: []helperapi.FirewallCheck{}}
+	if c.Fail2banJail != "" {
+		s.Fail2ban = true
+		if out, err := exec.CommandContext(ctx, "fail2ban-client", "status", c.Fail2banJail).Output(); err == nil {
+			if m := bannedRe.FindSubmatch(out); m != nil {
+				s.Banned, _ = strconv.Atoi(string(m[1]))
+			}
+		} else {
+			s.Errors = append(s.Errors, "fail2ban: "+err.Error())
 		}
-	} else {
-		s.Errors = append(s.Errors, "fail2ban: "+err.Error())
 	}
-	if out, err := exec.CommandContext(ctx, "iptables", "-S", "DOCKER-USER").Output(); err == nil {
-		s.Lockdown = strings.Contains(string(out), "LOCKDOWN-PUBLISHED")
-	} else {
-		s.Errors = append(s.Errors, "DOCKER-USER: "+err.Error())
-	}
-	if out, err := exec.CommandContext(ctx, "iptables", "-S", "1PANEL_BASIC_AFTER").Output(); err == nil {
-		s.PanelDrop = strings.Contains(string(out), "DROP")
-	} else {
-		s.Errors = append(s.Errors, "1PANEL_BASIC_AFTER: "+err.Error())
+	for _, fc := range c.FirewallChecks {
+		out, err := exec.CommandContext(ctx, "iptables", "-S", fc.Chain).Output()
+		if err != nil {
+			s.Errors = append(s.Errors, fc.Chain+": "+err.Error())
+		}
+		s.Firewall = append(s.Firewall, helperapi.FirewallCheck{Chain: fc.Chain, OK: err == nil && strings.Contains(string(out), fc.Pattern)})
 	}
 	return s
 }
 
 // holdAwake runs the existing stay-awake script: minutes, or no argument
 // for "until allow-sleep".
-func holdAwake(ctx context.Context, arg string) (helperapi.Result, error) {
+func holdAwake(ctx context.Context, c conf, arg string) (helperapi.Result, error) {
 	if arg == "forever" {
-		return run(ctx, stayAwakeBin)
+		return run(ctx, c.StayAwakeBin)
 	}
-	return run(ctx, stayAwakeBin, arg)
+	return run(ctx, c.StayAwakeBin, arg)
 }
 
-// nudgeAwake keeps cloud64 up for at least 10 minutes after an action
+// nudgeAwake keeps the server up for at least 10 minutes after an action
 // (decision D3) without shortening a hold that is already longer.
-func nudgeAwake(ctx context.Context) (helperapi.Result, error) {
-	if b, err := os.ReadFile(stayAwake); err == nil {
+func nudgeAwake(ctx context.Context, c conf) (helperapi.Result, error) {
+	if b, err := os.ReadFile(c.StayAwakeFile); err == nil {
 		s := strings.TrimSpace(string(b))
 		if s == "" {
 			return helperapi.Result{Output: []string{"held until allow-sleep; unchanged"}}, nil
@@ -215,7 +240,7 @@ func nudgeAwake(ctx context.Context) (helperapi.Result, error) {
 			return helperapi.Result{Output: []string{"longer hold in place; unchanged"}}, nil
 		}
 	}
-	return run(ctx, stayAwakeBin, "10")
+	return run(ctx, c.StayAwakeBin, "10")
 }
 
 func run(ctx context.Context, name string, args ...string) (helperapi.Result, error) {

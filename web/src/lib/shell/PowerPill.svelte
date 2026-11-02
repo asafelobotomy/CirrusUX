@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mode, sleeps } from '../api.svelte';
   import StatusDot from '../components/StatusDot.svelte';
   import { power, sleepsInMs } from '../state/power.svelte';
   import { confirmWake } from '../state/actions';
@@ -8,12 +9,12 @@
   const s = $derived(sleepsInMs());
   const label = $derived(
     power.state === 'awake'
-      ? s === null ? 'Awake' : `Awake · sleeps in ${fmtDuration(s)}`
+      ? !sleeps() ? 'Online' : s === null ? 'Awake' : `Awake · sleeps in ${fmtDuration(s)}`
       : power.state === 'asleep' ? 'Asleep · Wake' : power.state === 'unreachable' ? 'No reports' : 'Waking…',
   );
 </script>
 
-<button class="pill {power.state}" onclick={() => (power.state === 'asleep' ? confirmWake() : go('home'))} aria-label="cloud64 is {label}">
+<button class="pill {power.state}" onclick={() => (power.state === 'asleep' ? confirmWake() : go('home'))} aria-label="{mode.server} is {label}">
   <StatusDot tone={power.state === 'awake' ? 'ok' : power.state === 'asleep' ? 'sleep' : power.state === 'unreachable' ? 'warn' : 'info'} pulse={power.state === 'waking'} />
   <span class="num">{label}</span>
 </button>

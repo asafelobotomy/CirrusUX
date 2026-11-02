@@ -1,11 +1,12 @@
-# /etc/sudoers.d/cirrusux on cloud64 (mode 440; check with `visudo -cf`).
+# /etc/sudoers.d/cirrusux on the server (mode 440; check with `visudo -cf`).
 # The agent may run only these helper command lines as root, exactly as
 # written: no other arguments are accepted.
 
 Defaults:cirrusux !lecture, !requiretty, env_reset
 
 # Phase 1: reads.
-Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper idle-status, \
+Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper features, \
+                         /usr/local/sbin/cirrusux-helper idle-status, \
                          /usr/local/sbin/cirrusux-helper idle-log, \
                          /usr/local/sbin/cirrusux-helper backup-list, \
                          /usr/local/sbin/cirrusux-helper backup-last, \

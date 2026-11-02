@@ -43,7 +43,7 @@
   <div class="d">
     {#if digest.summary}<p class="sum">{digest.summary}</p>{/if}
     <ul>{#each digest.lines as l}<li>{l}</li>{/each}</ul>
-    <p class="faint small">{digest.summary ? 'Written by Grok from' : 'Built from'} cached data · {fmtDayTime(new Date(digest.at))}</p>
+    <p class="faint small">{digest.summary ? `Written by ${mode.assistant.name} from` : 'Built from'} cached data · {fmtDayTime(new Date(digest.at))}</p>
   </div>
 {:else if failed}
   <p class="muted">Couldn't load the digest from the gateway.</p>

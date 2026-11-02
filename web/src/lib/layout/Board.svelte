@@ -1,6 +1,6 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
-  import { WIDGETS } from '../widgets/registry';
+  import { WIDGETS, usable } from '../widgets/registry';
   import { COLUMNS, moveWidget, removeWidget, type Item } from '../state/layout.svelte';
   import { power } from '../state/power.svelte';
   import { mode } from '../api.svelte';
@@ -74,7 +74,7 @@
   style="--cols: {cols}"
   onpointermove={onDragMove} onpointerup={endDrag} onpointercancel={endDrag}
 >
-  {#each items.filter((i) => WIDGETS[i.type]) as item (item.id)}
+  {#each items.filter((i) => usable(i.type)) as item (item.id)}
     {@const meta = WIDGETS[item.type]}
       {@const W = meta.component}
       {@const Icon = meta.icon}

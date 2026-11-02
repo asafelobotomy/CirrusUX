@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tzLabel } from '../lib/time.svelte';
   import Card from '../lib/components/Card.svelte';
   import Button from '../lib/components/Button.svelte';
   import Toggle from '../lib/components/Toggle.svelte';
@@ -111,7 +112,7 @@
   <Card title="Density and text">
     <div class="field"><span>Density</span><Segmented label="Density" bind:value={settings.density} options={[{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }]} /></div>
     <div class="field"><span>Text size</span><Segmented label="Text size" bind:value={settings.textScale} options={[{ value: 0.9, label: 'S' }, { value: 1, label: 'M' }, { value: 1.12, label: 'L' }, { value: 1.25, label: 'XL' }]} /></div>
-    <p class="faint small">Times are always UK time (Europe/London), labelled GMT or BST.</p>
+    <p class="faint small">Times are shown in {mode.tz}, labelled {tzLabel()}. The gateway sets the zone (CIRRUS_TZ).</p>
   </Card>
 
   <Card title="Wallpaper" subtitle="Cards turn glassy so it shows through, dimmed for readability.">
@@ -150,14 +151,14 @@
     <dl class="about">
       <dt>Web UI</dt><dd class="mono">{uiVersion}</dd>
       <dt>Gateway</dt><dd class="mono">{mode.live ? mode.version || 'unknown' : 'none (demo data)'}</dd>
-      <dt>Agent on cloud64</dt><dd class="mono">{mode.live ? live.agentVersion || 'no report yet' : 'none (demo data)'}</dd>
+      <dt>Agent on {mode.server}</dt><dd class="mono">{mode.live ? live.agentVersion || 'no report yet' : 'none (demo data)'}</dd>
     </dl>
     {#if mismatch}
-      <p class="adj"><TriangleAlert size={15} /> The parts run different versions. Install the same release on cloud64 and cloud-box.</p>
+      <p class="adj"><TriangleAlert size={15} /> The parts run different versions. Install the same release everywhere.</p>
     {/if}
   </Card>
 
-  <Card title="Grok" subtitle="What may be sent to xAI (decision D2 in the plan).">
+  <Card title={mode.assistant.name} subtitle="What may be sent to the assistant's API (decision D2 in the plan).">
     <ul class="pol">
       <li class="on"><Check size={15} /> Summaries only, with IPs, MACs and paths masked</li>
       <li><span class="b"></span> Raw log lines, only when you ask for one</li>

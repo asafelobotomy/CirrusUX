@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appName, apps } from '../src/lib/apps.ts';
+import { appName, tilesFor } from '../src/lib/apps.ts';
 
 test('container names map to app names', () => {
   const cases: Record<string, string> = {
     '1Panel-jellyfin-a1B2': 'Jellyfin',
-    '1Panel-navidrome-c3D4': 'Navidrome',
+    navidrome: 'Navidrome',
     kavita: 'Kavita',
     tinymediamanager: 'tinyMediaManager',
     'musicbrainz-picard-1': 'Picard',
@@ -14,7 +14,16 @@ test('container names map to app names', () => {
   for (const [container, app] of Object.entries(cases)) assert.equal(appName(container), app, container);
 });
 
-test('every containerised app tile matches a container name', () => {
-  const known = ['jellyfin', 'navidrome', 'audiobookshelf', 'kavita', 'tinymediamanager', 'musicbrainz-picard'].map(appName);
-  for (const a of apps.filter((x) => x.inContainer)) assert.ok(known.includes(a.name), a.name);
+test('tiles come from containers that publish a port', () => {
+  const tiles = tilesFor([
+    { name: 'jellyfin', port: 8096 },
+    { name: 'musicbrainz-picard-1', port: 5800 },
+    { name: 'nginx_server', port: null },
+    { name: 'whoami', port: 8000 },
+  ]);
+  assert.deepEqual(tiles.map((t) => t.name), ['Jellyfin', 'Picard', 'Whoami']);
+  assert.equal(tiles[1].https, true);
+  assert.equal(tiles[2].icon, 'Package');
+  assert.equal(tiles[2].group, 'Apps');
+  assert.match(tiles[2].color, /^#[0-9a-f]{6}$/);
 });

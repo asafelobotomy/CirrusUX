@@ -20,7 +20,7 @@
     ask({
       title: danger ? 'Delete the archive from 30 Oct?' : 'Restart Navidrome?',
       body: danger ? 'Permanently deletes 130 files (1.6 GB) listed in MANIFEST.tsv. This cannot be undone.' : 'Navidrome will be unavailable for a few seconds.',
-      command: danger ? 'cirrusux-helper archive-approve-delete 2026-10-30' : 'docker restart 1Panel-navidrome-c3D4',
+      command: danger ? 'cirrusux-helper archive-approve-delete 2026-10-30' : 'docker restart navidrome',
       danger, typed: danger ? 'delete' : undefined,
       confirmLabel: danger ? 'Delete permanently' : 'Restart',
       changelog: danger ? 'Deleted archive 2026-10-30 (gallery demo)' : 'Restarted Navidrome (gallery demo)',

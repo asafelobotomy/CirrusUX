@@ -56,7 +56,7 @@
       <button class="search" onclick={() => (ui.paletteOpen = true)}>
         <Search size={15} /><span>Search or run…</span><kbd>{#if mac}<Command size={11} />{:else}Ctrl{/if} K</kbd>
       </button>
-      <Button variant="ghost" aria-label="Ask Grok" onclick={() => (ui.grokOpen = !ui.grokOpen)}>{#snippet icon()}<Sparkles />{/snippet}</Button>
+      <Button variant="ghost" aria-label="Ask {mode.assistant.name}" onclick={() => (ui.assistantOpen = !ui.assistantOpen)}>{#snippet icon()}<Sparkles />{/snippet}</Button>
     {/if}
     <PowerPill />
   </div>

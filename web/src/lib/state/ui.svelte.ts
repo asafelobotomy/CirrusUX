@@ -16,11 +16,11 @@ function routeFromHash(): Route {
 export const ui = $state({
   route: routeFromHash(),
   paletteOpen: false,
-  grokOpen: false,
+  assistantOpen: false,
   editLayout: false,
   device: 'desktop' as Device,
   /** Layout used by the board: follows the board's own width, so opening
-   *  the Grok panel on a laptop switches to the tablet layout. */
+   *  the assistant panel on a laptop switches to the tablet layout. */
   boardDevice: 'desktop' as Device,
 });
 
@@ -51,7 +51,7 @@ export interface Confirm {
   danger?: boolean;
   /** When set, the user must type this word to confirm. */
   typed?: string;
-  source?: 'grok';
+  source?: 'assistant';
   run: () => void;
   changelog: string;
 }
@@ -69,7 +69,7 @@ export function runConfirmed(): void {
   c.run();
   // Live, the gateway writes the changelog and the action reports back.
   if (mode.live) return;
-  live.changelog.unshift({ at: now(), who: c.source === 'grok' ? 'you (proposed by Grok)' : 'you', what: c.changelog, undo: c.undo });
+  live.changelog.unshift({ at: now(), who: c.source === 'assistant' ? 'you (proposed by the assistant)' : 'you', what: c.changelog, undo: c.undo });
   toast(`${c.changelog}. Logged to CHANGELOG.`, 'ok');
 }
 

@@ -2,9 +2,9 @@
   import { live } from '../state/live.svelte';
   import { mode } from '../api.svelte';
   import { power } from '../state/power.svelte';
-  import { clock, fmtDuration, fmtTime, ukMidnight } from '../time.svelte';
+  import { clock, fmtDuration, fmtTime, localMidnight } from '../time.svelte';
 
-  const dayStart = $derived(ukMidnight(new Date(clock.now)).getTime());
+  const dayStart = $derived(localMidnight(new Date(clock.now)).getTime());
   const DAY = 86_400_000;
 
   const segs = $derived.by(() => {

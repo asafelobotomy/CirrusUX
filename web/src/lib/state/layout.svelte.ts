@@ -42,7 +42,7 @@ export function defaultBoards(): Board[] {
       ['containers', [5, 4], [8, 4], [4, 5]],
       ['storage', [4, 2], [4, 3], [4, 3]],
       ['temps', [3, 2], [4, 3], [4, 2]],
-      ['grok', [5, 2], [4, 2], [4, 2]],
+      ['assistant', [5, 2], [4, 2], [4, 2]],
       ['changelog', [7, 2], [8, 3], [4, 3]],
     ]),
     board('media', 'Media', [
@@ -63,9 +63,21 @@ export function defaultBoards(): Board[] {
   ];
 }
 
-export const boards = $state<{ list: Board[]; active: string }>(
-  load('boards', { list: defaultBoards(), active: 'home' }),
-);
+/** Widget types renamed between versions: old → new. */
+const RENAMED: Record<string, string> = { grok: 'assistant' };
+
+/** Brings saved boards up to date with renamed widgets, in place. */
+export function migrateBoards(list: Board[]): Board[] {
+  for (const b of list) {
+    for (const items of Object.values(b.layouts)) {
+      for (const it of items) it.type = RENAMED[it.type] ?? it.type;
+    }
+  }
+  return list;
+}
+
+const saved = load('boards', { list: defaultBoards(), active: 'home' });
+export const boards = $state<{ list: Board[]; active: string }>({ ...saved, list: migrateBoards(saved.list) });
 
 export function activeBoard(): Board {
   return boards.list.find((b) => b.id === boards.active) ?? boards.list[0];

@@ -7,7 +7,38 @@ gets a minor version.
 
 ## [Unreleased]
 
-Fixes from the full code review of 0.2.0, and a new roadmap.
+## [0.3.0] - 2026-11-02
+
+Fixes from the full code review of 0.2.0, a new roadmap, and its Phase 3:
+CirrusUX now works for any server, not just cloud64.
+
+### Changed (Phase 3: generalise the core)
+
+- Everything that named cloud64 or cloud-box now comes from config: server
+  and gateway names, the host apps open on, the time zone (shown with its
+  own abbreviation) and a description for the assistant. See docs/CONFIG.md.
+- Two setups: `single` (everything on a server that doesn't sleep) and
+  `split` (a sleeping server beside an always-on gateway, as before).
+  `CIRRUS_SETUP` defaults to `single`.
+- Wake methods: Wake-on-LAN sent by the gateway itself (`CIRRUS_WAKE=wol`)
+  or a command (`command`, as before).
+- Sign-in: Tailscale as before, or a trusted header from a reverse proxy
+  (`CIRRUS_AUTH=header`). The identity header is now only believed from
+  `CIRRUS_TRUSTED_PROXIES`.
+- Grok is now "the assistant", with presets for xAI, OpenAI, Anthropic and
+  Ollama (`ASSISTANT_*` settings replace `XAI_*`; the digest switch is now
+  `CIRRUS_DIGEST_ASSISTANT`). The API moved to `/api/assistant`; saved boards
+  with the old Grok widget carry over.
+- The root helper reads its paths from `/etc/cirrusux/helper.env` (root-owned)
+  instead of built-in cloud64 paths, and reports which modules the server
+  has: sleep, stay-awake, backup, virus scan, security, egress. The panel
+  hides pages and widgets for modules a server doesn't have.
+- Firewall checks are a configurable list instead of the two cloud64
+  chains; the backup unit, idle files and port names are configurable too.
+- App tiles come from the containers that publish a port, instead of a fixed
+  list.
+- `deploy/` is split into `server/`, `gateway/` and the owner's private
+  `profiles/cloud64/`; docs/INSTALL.md is now a general guide.
 
 ### Fixed
 

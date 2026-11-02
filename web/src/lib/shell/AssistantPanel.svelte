@@ -2,48 +2,54 @@
   import { fly, fade } from 'svelte/transition';
   import Button from '../components/Button.svelte';
   import Badge from '../components/Badge.svelte';
-  import { grok, askGrok } from '../state/grok.svelte';
+  import { chat, askAssistant } from '../state/assistant.svelte';
   import { ui } from '../state/ui.svelte';
+  import { has, mode, sleeps } from '../api.svelte';
   import { Database, Lock, Send, Sparkles, X, WandSparkles } from '../icons';
 
   let q = $state('');
   let scroller = $state<HTMLElement>();
-  const suggestions = ['Is cloud64 asleep?', 'Did last night’s backup work?', 'Why did it wake at 18:16?', 'Should I restart Jellyfin?'];
+  const suggestions = $derived([
+    sleeps() ? `Is ${mode.server} asleep?` : `Is everything on ${mode.server} running?`,
+    ...(has('backup') ? ['Did last night’s backup work?'] : []),
+    ...(sleeps() ? ['Why did it wake last?'] : []),
+    'Which containers need attention?',
+  ]);
 
   function submit(text = q) {
-    if (!text.trim() || grok.thinking) return;
-    askGrok(text.trim());
+    if (!text.trim() || chat.thinking) return;
+    askAssistant(text.trim());
     q = '';
   }
 
   $effect(() => {
-    grok.messages.length; grok.thinking;
+    chat.messages.length; chat.thinking;
     queueMicrotask(() => scroller?.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }));
   });
 </script>
 
-{#if ui.grokOpen}
-  <div class="scrim" transition:fade={{ duration: 150 }} onclick={() => (ui.grokOpen = false)} aria-hidden="true"></div>
-  <aside class="panel" transition:fly={{ x: 40, duration: 220 }} aria-label="Grok assistant">
+{#if ui.assistantOpen}
+  <div class="scrim" transition:fade={{ duration: 150 }} onclick={() => (ui.assistantOpen = false)} aria-hidden="true"></div>
+  <aside class="panel" transition:fly={{ x: 40, duration: 220 }} aria-label="{mode.assistant.name}, the assistant">
     <header>
-      <span class="title"><span class="mark"><Sparkles size={16} /></span>Grok</span>
-      <Button variant="ghost" size="sm" aria-label="Close Grok" onclick={() => (ui.grokOpen = false)}>{#snippet icon()}<X />{/snippet}</Button>
+      <span class="title"><span class="mark"><Sparkles size={16} /></span>{mode.assistant.name}</span>
+      <Button variant="ghost" size="sm" aria-label="Close {mode.assistant.name}" onclick={() => (ui.assistantOpen = false)}>{#snippet icon()}<X />{/snippet}</Button>
     </header>
 
     <div class="msgs" bind:this={scroller} aria-live="polite">
-      {#if !grok.messages.length}
+      {#if !chat.messages.length}
         <div class="intro">
           <span class="big"><Sparkles size={26} /></span>
-          <h2>Ask about cloud64</h2>
-          <p class="muted">Grok reads the panel's cached snapshot, so asking doesn't wake the server. It can suggest actions, but nothing runs until you confirm.</p>
+          <h2>Ask about {mode.server}</h2>
+          <p class="muted">{mode.assistant.name} reads the panel's cached snapshot{sleeps() ? ", so asking doesn't wake the server" : ''}. It can suggest actions, but nothing runs until you confirm.</p>
           <div class="sugg">
             {#each suggestions as s}<button onclick={() => submit(s)}>{s}</button>{/each}
           </div>
         </div>
       {/if}
-      {#each grok.messages as m}
+      {#each chat.messages as m}
         <div class="msg {m.role}">
-          {#if m.role === 'grok' && (m.tools?.length || m.cached)}
+          {#if m.role === 'assistant' && (m.tools?.length || m.cached)}
             <div class="meta">
               {#if m.cached}<Badge tone="sleep">{#snippet icon()}<Database />{/snippet}from cache · server not woken</Badge>{/if}
               {#each m.tools ?? [] as t}<code class="tool">{t}</code>{/each}
@@ -58,12 +64,12 @@
           {/if}
         </div>
       {/each}
-      {#if grok.thinking}<div class="msg grok typing" aria-label="Grok is thinking"><span></span><span></span><span></span></div>{/if}
+      {#if chat.thinking}<div class="msg assistant typing" aria-label="{mode.assistant.name} is thinking"><span></span><span></span><span></span></div>{/if}
     </div>
 
     <form onsubmit={(e) => { e.preventDefault(); submit(); }}>
-      <input bind:value={q} placeholder="Ask anything about the server…" aria-label="Message Grok" />
-      <Button variant="primary" aria-label="Send" type="submit" disabled={!q.trim() || grok.thinking}>{#snippet icon()}<Send />{/snippet}</Button>
+      <input bind:value={q} placeholder="Ask anything about the server…" aria-label="Message {mode.assistant.name}" />
+      <Button variant="primary" aria-label="Send" type="submit" disabled={!q.trim() || chat.thinking}>{#snippet icon()}<Send />{/snippet}</Button>
     </form>
     <p class="policy faint"><Lock size={12} /> Summaries only · IPs, MACs and paths masked · no secrets ever sent</p>
   </aside>
@@ -91,7 +97,7 @@
   .sugg button:hover { border-color: var(--accent-line); color: var(--text); }
   .msg { max-width: 92%; font-size: 0.93rem; line-height: 1.5; }
   .msg.user { align-self: flex-end; background: var(--accent); color: var(--on-accent); padding: 9px 13px; border-radius: 16px 16px 4px 16px; }
-  .msg.grok { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); padding: 11px 13px; border-radius: 16px 16px 16px 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); padding: 11px 13px; border-radius: 16px 16px 16px 4px; }
   .meta { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
   .tool { font-size: 0.72rem; padding: 1px 6px; border-radius: 5px; background: var(--surface-3); color: var(--text-muted); }
   .prop { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); flex-wrap: wrap; }

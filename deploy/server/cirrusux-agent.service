@@ -1,4 +1,4 @@
-# /etc/systemd/system/cirrusux-agent.service on cloud64
+# /etc/systemd/system/cirrusux-agent.service on the server
 [Unit]
 Description=CirrusUX agent (pushes snapshots to the gateway)
 After=network-online.target tailscaled.service

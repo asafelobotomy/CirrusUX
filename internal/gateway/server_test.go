@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -20,15 +21,31 @@ func newTestServer(t *testing.T) (*Server, http.Handler) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{AllowedUsers: []string{"owner@example.com"}, AgentToken: token}
+	cfg := testConfig()
 	web := fstest.MapFS{
 		"index.html":           {Data: []byte("<!doctype html>")},
 		"manifest.webmanifest": {Data: []byte(`{"name":"CirrusUX"}`)},
 		"sw.js":                {Data: []byte("self.addEventListener('fetch', () => {})")},
 		"assets/app-abc123.js": {Data: []byte("console.log(1)")},
 	}
-	s := NewServer(cfg, store, NewPower("cloud64", nil, false), web)
+	s := NewServer(cfg, store, testPower(), web)
 	return s, s.Handler()
+}
+
+// testConfig is a split setup named "atlas". httptest requests come from
+// 192.0.2.1, so that address stands in for the trusted front end.
+func testConfig() Config {
+	return Config{
+		AllowedUsers: []string{"owner@example.com"}, AgentToken: token,
+		ServerName: "atlas", ServerHost: "atlas", GatewayName: "gw", Setup: "split",
+		TZ: time.UTC, TZName: "UTC", Auth: "tailscale", AuthHeader: "Remote-User",
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}, Wake: "none",
+	}
+}
+
+// testPower pretends wakes work, like dev mode.
+func testPower() *Power {
+	return NewPower(PowerOptions{Server: "atlas", Gateway: "gw", Split: true, Dev: true})
 }
 
 func do(h http.Handler, method, target, body string, hdr map[string]string) *httptest.ResponseRecorder {
@@ -99,7 +116,7 @@ func TestCSRF(t *testing.T) {
 
 func TestAgentToken(t *testing.T) {
 	s, h := newTestServer(t)
-	body, _ := json.Marshal(snapshot.Snapshot{Host: "cloud64", TakenAt: time.Now()})
+	body, _ := json.Marshal(snapshot.Snapshot{Host: "atlas", TakenAt: time.Now()})
 	if w := do(h, "POST", "/agent/snapshot", string(body), map[string]string{"Authorization": "Bearer wrong"}); w.Code != http.StatusUnauthorized {
 		t.Errorf("bad token: %d", w.Code)
 	}
@@ -139,7 +156,7 @@ func TestPowerView(t *testing.T) {
 	fresh := &snapshot.Snapshot{TakenAt: now.Add(-2 * time.Minute), Power: snapshot.Power{Since: now.Add(-time.Hour)}}
 	stale := &snapshot.Snapshot{TakenAt: now.Add(-40 * time.Minute)}
 
-	p := NewPower("cloud64", nil, true)
+	p := NewPower(PowerOptions{Server: "atlas", Split: true, Peer: "atlas"})
 	if v := p.View(now, fresh); v.State != "awake" {
 		t.Errorf("no tailscale info, fresh snapshot: %s", v.State)
 	}
@@ -170,19 +187,19 @@ func TestPowerView(t *testing.T) {
 }
 
 func TestParseStatusSelfOffline(t *testing.T) {
-	up := []byte(`{"BackendState":"Running","Self":{"Online":true},"Peer":{"k":{"HostName":"cloud64","Online":false}}}`)
-	if st := parseStatus(up, "cloud64"); !st.selfOK || !st.found || st.online {
+	up := []byte(`{"BackendState":"Running","Self":{"Online":true},"Peer":{"k":{"HostName":"atlas","Online":false}}}`)
+	if st := parseStatus(up, "atlas"); !st.selfOK || !st.found || st.online {
 		t.Errorf("connected: %+v", st)
 	}
-	down := []byte(`{"BackendState":"Running","Self":{"Online":false},"Peer":{"k":{"HostName":"cloud64","Online":false}}}`)
-	if st := parseStatus(down, "cloud64"); st.selfOK {
-		t.Errorf("disconnected cloud-box should not be trusted: %+v", st)
+	down := []byte(`{"BackendState":"Running","Self":{"Online":false},"Peer":{"k":{"HostName":"atlas","Online":false}}}`)
+	if st := parseStatus(down, "atlas"); st.selfOK {
+		t.Errorf("a disconnected gateway should not be trusted: %+v", st)
 	}
 }
 
 func TestFindPeer(t *testing.T) {
-	js := []byte(`{"Peer":{"nodekey:a":{"HostName":"tablet","Online":true},"nodekey:b":{"HostName":"localhost","DNSName":"cloud64.tail1234.ts.net.","Online":false,"LastSeen":"2026-11-01T19:56:00Z"}}}`)
-	online, seen, found := findPeer(js, "cloud64")
+	js := []byte(`{"Peer":{"nodekey:a":{"HostName":"tablet","Online":true},"nodekey:b":{"HostName":"localhost","DNSName":"atlas.tail1234.ts.net.","Online":false,"LastSeen":"2026-11-01T19:56:00Z"}}}`)
+	online, seen, found := findPeer(js, "atlas")
 	if !found || online || seen.IsZero() {
 		t.Errorf("found=%v online=%v seen=%v", found, online, seen)
 	}

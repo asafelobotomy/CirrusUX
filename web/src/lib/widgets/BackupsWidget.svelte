@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '../components/Button.svelte';
   import Badge from '../components/Badge.svelte';
-  import { live, nextWake } from '../state/live.svelte';
+  import { live } from '../state/live.svelte';
   import { power } from '../state/power.svelte';
   import { confirmBackup } from '../state/actions';
   import { fmtAgo, fmtDay, fmtDayTime } from '../time.svelte';
@@ -9,7 +9,7 @@
 
   let { full = false }: { full?: boolean } = $props();
   const run = $derived(live.lastBackupRun);
-  const next = $derived(nextWake('cloud64-backup'));
+  const next = $derived(live.nextWakes.find((w) => /backup/i.test(w.unit))?.at ?? null);
 </script>
 
 <div class="b">
@@ -24,7 +24,7 @@
       </div>
     {:else}
       <span class="ic failed"><TriangleAlert size={22} /></span>
-      <div><strong>No backup run found</strong><p class="muted small">Nothing in the cloud64-backup journal yet.</p></div>
+      <div><strong>No backup run found</strong><p class="muted small">Nothing in the backup unit's journal yet.</p></div>
     {/if}
   </div>
   <div class="foot">

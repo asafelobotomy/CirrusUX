@@ -2,13 +2,13 @@
 // (sync.svelte.ts), simulated in demo mode.
 import { at, clock, now } from '../time.svelte';
 import { live } from './live.svelte';
-import { mode } from '../api.svelte';
+import { mode, sleeps } from '../api.svelte';
 
-/** unreachable: cloud64 is on the tailnet but its agent isn't reporting. */
+/** unreachable: the server isn't asleep, but its agent isn't reporting. */
 export type PowerState = 'awake' | 'waking' | 'asleep' | 'unreachable';
 
 export const WAKE_STEPS = [
-  'Magic packet sent through the router',
+  'Wake signal sent',
   'Network link up',
   'Tailscale connected',
   'Agent reporting',
@@ -17,7 +17,7 @@ export const WAKE_STEPS = [
 interface Power {
   state: PowerState;
   since: Date;
-  /** Last moment cloud64 saw activity; the idle timer counts from here. */
+  /** Last moment the server saw activity; the idle timer counts from here. */
   lastActivity: Date;
   /** Snapshot time shown on cached values while asleep. */
   lastSnapshot: Date;
@@ -27,7 +27,7 @@ interface Power {
   reasons: string[];
   /** State changes since the page loaded, for the timeline. */
   transitions: { at: Date; state: 'awake' | 'asleep'; reason?: string }[];
-  /** A problem on the gateway's side, e.g. cloud-box offline from Tailscale. */
+  /** A problem on the gateway's side, e.g. the gateway offline from Tailscale. */
   notice: string;
 }
 
@@ -46,7 +46,7 @@ export const power: Power = $state({
 /** Minutes until suspend, or null when something is holding it awake. */
 export function sleepsInMs(): number | null {
   // Offline the data is old, so a countdown would be a guess.
-  if (power.state !== 'awake' || power.reasons.length || mode.offline) return null;
+  if (!sleeps() || power.state !== 'awake' || power.reasons.length || mode.offline) return null;
   const t = clock.now;
   const stay = power.stayAwakeUntil;
   if (stay === 'forever') return null;

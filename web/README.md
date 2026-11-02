@@ -1,6 +1,6 @@
 # CirrusUX — web UI
 
-With a gateway answering on `/api` the UI shows cloud64's real state (live
+With a gateway answering on `/api` the UI shows the server's real state (live
 mode); without one it runs on sample data from the 1 Nov 2026 brief (demo
 mode, marked "Demo data"). See `../docs/PLAN.md` §4 for the design spec.
 
@@ -13,7 +13,7 @@ npm run build    # static files in dist/
 
 ## What to try
 
-- **Prototype** button (bottom centre, demo mode only): switch cloud64 between awake, asleep
+- **Prototype** button (bottom centre, demo mode only): switch the server between awake, asleep
   and the wake sequence; simulate streaming activity; reset all settings.
 - **Edit layout** on Home: drag the grip to reorder, the corner to resize,
   add widgets, add boards. Phone, tablet and desktop each keep a layout; the

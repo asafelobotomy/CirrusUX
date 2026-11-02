@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"cirrusux/internal/helperapi"
 )
 
 // fakeHelper writes a script that logs its arguments and prints an empty
@@ -60,7 +62,7 @@ func fakeDocker(t *testing.T) (socket string, posts func() []string) {
 func testAgent(t *testing.T) (*Agent, func() []string, func() []string) {
 	helper, calls := fakeHelper(t)
 	sock, posts := fakeDocker(t)
-	a := New(Config{Token: "t"}, &Collector{Helper: helper, DockerSocket: sock})
+	a := New(Config{Token: "t"}, &Collector{Helper: helper, DockerSocket: sock, features: []string{helperapi.ModStayAwake}})
 	return a, calls, posts
 }
 
@@ -224,5 +226,17 @@ func TestResultReportRetried(t *testing.T) {
 	a.report(context.Background(), result{ID: "c2", OK: true})
 	if n := tries.Load(); n != -100+int32(len(resultRetries))+1 {
 		t.Errorf("tries when the gateway never answers = %d", n+100)
+	}
+}
+
+// Without a sleep module there is nothing to keep awake.
+func TestNoNudgeWithoutSleep(t *testing.T) {
+	a, calls, _ := testAgent(t)
+	a.collector.features = nil
+	if res := a.run(context.Background(), command{Action: "container_restart", Args: map[string]string{"name": "kavita"}}); !res.OK {
+		t.Fatal(res.Error)
+	}
+	if len(calls()) != 0 {
+		t.Errorf("helper calls = %v", calls())
 	}
 }

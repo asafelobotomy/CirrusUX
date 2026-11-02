@@ -1,6 +1,6 @@
 <script lang="ts">
   import Logo from './Logo.svelte';
-  import { MAIN_NAV, SECONDARY_NAV } from './nav';
+  import { MAIN_NAV, SECONDARY_NAV, shown } from './nav';
   import { ui } from '../state/ui.svelte';
 
   let { collapsed = false }: { collapsed?: boolean } = $props();
@@ -9,7 +9,7 @@
 <nav class="side" class:collapsed aria-label="Main">
   <a class="brand" href="#/home" aria-label="CirrusUX home"><Logo compact={collapsed} /></a>
   <ul>
-    {#each MAIN_NAV as n}
+    {#each MAIN_NAV.filter(shown) as n}
       {@const Icon = n.icon}
       <li>
         <a href="#/{n.route}" class:on={ui.route === n.route} aria-current={ui.route === n.route ? 'page' : undefined} title={collapsed ? n.label : undefined}>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as Icons from '../icons';
   import StatusDot from '../components/StatusDot.svelte';
-  import { apps, type AppTile } from '../apps';
+  import { tilesFor, type AppTile } from '../apps';
   import { live } from '../state/live.svelte';
   import { power } from '../state/power.svelte';
   import { confirmWake } from '../state/actions';
@@ -9,12 +9,12 @@
   import { mode } from '../api.svelte';
 
   let { config }: { config?: Record<string, string> } = $props();
-  const shown = $derived(config?.group ? apps.filter((a) => a.group === config.group) : apps);
+  const tiles = $derived(tilesFor(live.containers));
+  const shown = $derived(config?.group ? tiles.filter((a) => a.group === config.group) : tiles);
 
   function status(app: AppTile) {
     if (power.state !== 'awake') return { tone: 'sleep' as const, word: 'asleep' };
-    if (!app.inContainer) return { tone: 'ok' as const, word: 'up' };
-    const c = live.containers.find((x) => x.app === app.name);
+    const c = live.containers.find((x) => x.name === app.id);
     if (!c || c.health === 'exited') return { tone: 'bad' as const, word: 'stopped' };
     if (c.health === 'starting') return { tone: 'warn' as const, word: 'starting' };
     return { tone: 'ok' as const, word: 'up' };
@@ -25,11 +25,10 @@
       e.preventDefault();
       return confirmWake();
     }
-    // Demo mode has no cloud64 to open. Live, the MagicDNS name works from
-    // anywhere on the tailnet, at home included.
+    // Demo mode has no server to open.
     if (!mode.live) {
       e.preventDefault();
-      toast(`Would open ${name} on cloud64 (demo)`, 'info');
+      toast(`Would open ${name} on ${mode.serverHost} (demo)`, 'info');
     }
   }
 </script>
@@ -40,7 +39,7 @@
     {@const s = status(a)}
     <li>
       <a
-        href="{a.https ? 'https' : 'http'}://cloud64:{a.port}/"
+        href="{a.https ? 'https' : 'http'}://{mode.serverHost}:{a.port}/"
         class="tile" style="--tile: {a.color}" onclick={(e) => open(e, a.name)} target="_blank" rel="noopener noreferrer"
         aria-label="{a.name}, {s.word}"
       >

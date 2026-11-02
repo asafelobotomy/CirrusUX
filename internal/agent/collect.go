@@ -9,9 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,8 +25,13 @@ import (
 // unix sockets and short commands. Nothing opens a TCP connection to a
 // port the idle check watches (PLAN §2).
 type Collector struct {
-	IdleConf     string // /etc/cloud64-idle.conf
-	MediaMount   string // /mnt/media
+	// IdleConf is the idle checker's config (IDLE_MIN, GRACE_MIN,
+	// WAKE_TIMERS), read without root. Optional.
+	IdleConf string
+	// PortNames label the idle checker's port numbers, e.g. 8080 → "Proxy".
+	PortNames map[string]string
+	// DiskMount is the file system the disk widget shows; "" skips it.
+	DiskMount    string
 	DockerSocket string // the filtered socket, /run/cirrusux/docker.sock
 	// Helper is the argv prefix for the root helper, e.g.
 	// ["sudo", "-n", "/usr/local/sbin/cirrusux-helper"]. Empty skips it.
@@ -32,6 +39,16 @@ type Collector struct {
 
 	temps   []float64
 	dockerC *http.Client // one client, so its connections are reused
+
+	mu       sync.Mutex
+	features []string // from the last collection, for the command loop
+}
+
+// has reports whether the last collection found the module.
+func (c *Collector) has(mod string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Contains(c.features, mod)
 }
 
 const maxTemps = 24
@@ -39,24 +56,116 @@ const maxTemps = 24
 func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 	now := time.Now()
 	host, _ := os.Hostname()
-	s := snapshot.Snapshot{Host: host, TakenAt: now, Containers: []snapshot.Container{}, Timeline: []snapshot.Segment{}, Backups: snapshot.Backups{Files: []snapshot.BackupFile{}}}
+	s := snapshot.Snapshot{Host: host, TakenAt: now, Features: []string{}, Containers: []snapshot.Container{}, Timeline: []snapshot.Segment{}, Backups: snapshot.Backups{Files: []snapshot.BackupFile{}}}
 	errf := func(format string, a ...any) { s.Errors = append(s.Errors, fmt.Sprintf(format, a...)) }
 
 	s.BootAt = bootTime()
+	s.Power = snapshot.Power{Since: s.BootAt, Reasons: []string{}, NextWakes: []snapshot.Wake{}}
 
-	conf := map[string]string{}
-	if b, err := os.ReadFile(c.IdleConf); err == nil {
-		conf = parseConf(string(b))
+	// Which modules the helper has set up; without a helper, none.
+	if len(c.Helper) > 0 {
+		var f helperapi.Features
+		if err := c.helper(ctx, helperapi.CmdFeatures, &f); err != nil {
+			errf("helper: %v", err)
+		} else {
+			s.Features = append(s.Features, f.Modules...)
+		}
+	}
+	c.mu.Lock()
+	c.features = s.Features
+	c.mu.Unlock()
+	has := func(mod string) bool { return slices.Contains(s.Features, mod) }
+
+	if has(helperapi.ModSleep) {
+		c.collectSleep(ctx, &s, errf)
+	}
+
+	if cs, err := c.containers(ctx); err != nil {
+		errf("containers: %v", err)
 	} else {
-		errf("idle config: %v", err)
+		s.Containers = cs
 	}
-	s.Power = snapshot.Power{
-		Since:     s.BootAt,
-		IdleMin:   confInt(conf, "IDLE_MIN", 30),
-		GraceMin:  confInt(conf, "GRACE_MIN", 15),
-		Reasons:   []string{},
-		NextWakes: nextWakes(ctx, strings.Fields(conf["WAKE_TIMERS"]), errf),
+
+	if has(helperapi.ModBackup) {
+		var bl helperapi.BackupList
+		if err := c.helper(ctx, helperapi.CmdBackupList, &bl); err != nil {
+			errf("backup list: %v", err)
+		}
+		for _, f := range bl.Files {
+			s.Backups.Files = append(s.Backups.Files, snapshot.BackupFile{
+				Name: f.Name, At: time.Unix(f.MTime, 0), Bytes: f.Bytes, Encrypted: strings.HasSuffix(f.Name, ".age"),
+			})
+		}
+		sort.Slice(s.Backups.Files, func(i, j int) bool { return s.Backups.Files[i].At.After(s.Backups.Files[j].At) })
+		var bj helperapi.BackupLast
+		if err := c.helper(ctx, helperapi.CmdBackupLast, &bj); err != nil {
+			errf("backup journal: %v", err)
+		}
+		s.Backups.LastRun = parseBackupJournal(bj.Lines, bj.Unit, now)
 	}
+
+	if c.DiskMount != "" {
+		if d, err := c.disk(); err != nil {
+			errf("disk: %v", err)
+		} else {
+			s.Disk = d
+		}
+	}
+
+	if t, err := cpuTemp(); err != nil {
+		errf("temperature: %v", err)
+	} else {
+		if len(c.temps) == maxTemps {
+			c.temps = c.temps[1:]
+		}
+		c.temps = append(c.temps, t)
+	}
+	s.Temps = append([]float64{}, c.temps...)
+
+	if has(helperapi.ModSecurity) || has(helperapi.ModAV) {
+		s.Security = &snapshot.Security{Firewall: []snapshot.FirewallCheck{}}
+	}
+	if has(helperapi.ModSecurity) {
+		var sec helperapi.SecurityStatus
+		if err := c.helper(ctx, helperapi.CmdSecurityStatus, &sec); err != nil {
+			errf("security: %v", err)
+		} else {
+			if sec.Fail2ban {
+				n := sec.Banned
+				s.Security.Banned = &n
+			}
+			for _, f := range sec.Firewall {
+				s.Security.Firewall = append(s.Security.Firewall, snapshot.FirewallCheck{Chain: f.Chain, OK: f.OK})
+			}
+			for _, e := range sec.Errors {
+				errf("security: %s", e)
+			}
+		}
+	}
+	if has(helperapi.ModAV) {
+		var av helperapi.Lines
+		if err := c.helper(ctx, helperapi.CmdAVLast, &av); err != nil {
+			errf("virus scan: %v", err)
+		}
+		s.Security.ClamAV = parseClamAV(av.Lines)
+	}
+	return s
+}
+
+// collectSleep reads the idle checker: its config, log and state files.
+func (c *Collector) collectSleep(ctx context.Context, s *snapshot.Snapshot, errf func(string, ...any)) {
+	now := s.TakenAt
+	conf := map[string]string{}
+	if c.IdleConf != "" {
+		if b, err := os.ReadFile(c.IdleConf); err == nil {
+			conf = parseConf(string(b))
+		} else {
+			errf("idle config: %v", err)
+		}
+	}
+	s.Power.IdleMin = confInt(conf, "IDLE_MIN", 30)
+	s.Power.GraceMin = confInt(conf, "GRACE_MIN", 15)
+	s.Power.NextWakes = nextWakes(ctx, strings.Fields(conf["WAKE_TIMERS"]), errf)
 
 	var idleLog helperapi.Lines
 	if err := c.helper(ctx, helperapi.CmdIdleLog, &idleLog); err != nil {
@@ -70,75 +179,21 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 	var idle helperapi.IdleStatus
 	if err := c.helper(ctx, helperapi.CmdIdleStatus, &idle); err != nil {
 		errf("idle status: %v", err)
-	} else {
-		// The checker's own state is more precise than its log.
-		if r := reasonsFromMsg(idle.State["last-msg"]); r != nil {
-			s.Power.Reasons = r
-		}
-		if t := parseEpoch(idle.State["last-active"]); t != nil && (s.Power.LastActivity == nil || t.After(*s.Power.LastActivity)) {
-			s.Power.LastActivity = t
-		}
-		if t := parseEpoch(idle.State["last-wake"]); t != nil && t.After(s.BootAt) && t.After(s.Power.Since) {
-			s.Power.Since = *t
-		}
-		if idle.StayAwake != nil {
-			s.Power.StayAwakeUntil, s.Power.StayAwakeForever = parseStayAwake(*idle.StayAwake)
-		}
+		return
 	}
-
-	if cs, err := c.containers(ctx); err != nil {
-		errf("containers: %v", err)
-	} else {
-		s.Containers = cs
+	// The checker's own state is more precise than its log.
+	if r := reasonsFromMsg(idle.State["last-msg"], c.PortNames); r != nil {
+		s.Power.Reasons = r
 	}
-
-	var bl helperapi.BackupList
-	if err := c.helper(ctx, helperapi.CmdBackupList, &bl); err != nil {
-		errf("backup list: %v", err)
+	if t := parseEpoch(idle.State["last-active"]); t != nil && (s.Power.LastActivity == nil || t.After(*s.Power.LastActivity)) {
+		s.Power.LastActivity = t
 	}
-	for _, f := range bl.Files {
-		s.Backups.Files = append(s.Backups.Files, snapshot.BackupFile{
-			Name: f.Name, At: time.Unix(f.MTime, 0), Bytes: f.Bytes, Encrypted: strings.HasSuffix(f.Name, ".age"),
-		})
+	if t := parseEpoch(idle.State["last-wake"]); t != nil && t.After(s.BootAt) && t.After(s.Power.Since) {
+		s.Power.Since = *t
 	}
-	sort.Slice(s.Backups.Files, func(i, j int) bool { return s.Backups.Files[i].At.After(s.Backups.Files[j].At) })
-	var bj helperapi.Lines
-	if err := c.helper(ctx, helperapi.CmdBackupLast, &bj); err != nil {
-		errf("backup journal: %v", err)
+	if idle.StayAwake != nil {
+		s.Power.StayAwakeUntil, s.Power.StayAwakeForever = parseStayAwake(*idle.StayAwake)
 	}
-	s.Backups.LastRun = parseBackupJournal(bj.Lines, now)
-
-	if d, err := c.disk(); err != nil {
-		errf("disk: %v", err)
-	} else {
-		s.Disk = d
-	}
-
-	if t, err := cpuTemp(); err != nil {
-		errf("temperature: %v", err)
-	} else {
-		if len(c.temps) == maxTemps {
-			c.temps = c.temps[1:]
-		}
-		c.temps = append(c.temps, t)
-	}
-	s.Temps = append([]float64{}, c.temps...)
-
-	var sec helperapi.SecurityStatus
-	if err := c.helper(ctx, helperapi.CmdSecurityStatus, &sec); err != nil {
-		errf("security: %v", err)
-	} else {
-		s.Security = &snapshot.Security{Banned: sec.Banned, Lockdown: sec.Lockdown, PanelDrop: sec.PanelDrop}
-		for _, e := range sec.Errors {
-			errf("security: %s", e)
-		}
-		var av helperapi.Lines
-		if err := c.helper(ctx, helperapi.CmdAVLast, &av); err != nil {
-			errf("clamav: %v", err)
-		}
-		s.Security.ClamAV = parseClamAV(av.Lines)
-	}
-	return s
 }
 
 func (c *Collector) helper(ctx context.Context, sub string, out any, args ...string) error {
@@ -312,14 +367,14 @@ func bootTime() time.Time {
 
 func (c *Collector) disk() (*snapshot.Disk, error) {
 	var st syscall.Statfs_t
-	if err := syscall.Statfs(c.MediaMount, &st); err != nil {
+	if err := syscall.Statfs(c.DiskMount, &st); err != nil {
 		return nil, err
 	}
 	d := &snapshot.Disk{
-		Mount:      c.MediaMount,
+		Mount:      c.DiskMount,
 		TotalBytes: st.Blocks * uint64(st.Bsize),
 		FreeBytes:  st.Bavail * uint64(st.Bsize),
-		LinkMbps:   usbSpeed(c.MediaMount),
+		LinkMbps:   usbSpeed(c.DiskMount),
 	}
 	return d, nil
 }

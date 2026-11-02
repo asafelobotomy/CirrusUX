@@ -3,7 +3,7 @@
   import TopBar from './lib/shell/TopBar.svelte';
   import BottomBar from './lib/shell/BottomBar.svelte';
   import CommandPalette from './lib/shell/CommandPalette.svelte';
-  import GrokPanel from './lib/shell/GrokPanel.svelte';
+  import AssistantPanel from './lib/shell/AssistantPanel.svelte';
   import ConfirmDialog from './lib/shell/ConfirmDialog.svelte';
   import Toasts from './lib/shell/Toasts.svelte';
   import Wallpaper from './lib/shell/Wallpaper.svelte';
@@ -49,7 +49,7 @@
 <Wallpaper />
 <a class="skip" href="#main">Skip to content</a>
 
-<div class="app" class:phone={ui.device === 'phone'} class:grok={ui.grokOpen}>
+<div class="app" class:phone={ui.device === 'phone'} class:assistant={ui.assistantOpen}>
   {#if ui.device !== 'phone'}<Sidebar collapsed={ui.device === 'tablet'} />{/if}
   <div class="col">
     <TopBar onAddWidget={() => (pickerOpen = true)} />
@@ -64,7 +64,7 @@
 </div>
 
 {#if ui.device === 'phone'}<BottomBar />{/if}
-<GrokPanel />
+<AssistantPanel />
 <CommandPalette />
 <ConfirmDialog />
 <WidgetPicker bind:open={pickerOpen} />
@@ -73,7 +73,7 @@
 
 <style>
   .app { display: flex; min-height: 100dvh; transition: padding-right var(--dur-2) var(--ease); }
-  @media (min-width: 1100px) { .app.grok { padding-right: 420px; } }
+  @media (min-width: 1100px) { .app.assistant { padding-right: 420px; } }
   .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   main { flex: 1; padding: var(--space-5) var(--space-6) var(--space-6); max-width: 1680px; width: 100%; margin: 0 auto; }
   .phone main { padding: var(--space-4) var(--space-4) calc(110px + env(safe-area-inset-bottom)); }

@@ -1,4 +1,5 @@
-// cirrusux-gateway runs on cloud-box. See docs/PLAN.md §3.1.
+// cirrusux-gateway serves the panel: on the server itself (single setup)
+// or on an always-on machine beside a server that sleeps (split setup).
 package main
 
 import (
@@ -39,7 +40,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	power := gateway.NewPower(cfg.TailscalePeer, cfg.WakeCmd, !cfg.Dev)
+	power := gateway.NewPower(gateway.PowerFromConfig(cfg))
 	go power.Run(ctx)
 
 	gw := gateway.NewServer(cfg, store, power, web.Dist())
@@ -62,7 +63,7 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 	}()
-	slog.Info("gateway listening", "version", version.String(), "addr", cfg.Listen, "dev", cfg.Dev, "grok", cfg.GrokEnabled())
+	slog.Info("gateway listening", "version", version.String(), "addr", cfg.Listen, "dev", cfg.Dev, "setup", cfg.Setup, "server", cfg.ServerName, "assistant", cfg.AssistantEnabled())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("serve", "err", err)
 		os.Exit(1)

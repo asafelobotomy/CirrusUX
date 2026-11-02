@@ -128,7 +128,7 @@ func (s *Store) Audit(e AuditEntry) error {
 	}
 	path := filepath.Join(s.dir, "audit.jsonl")
 	if st, err := os.Stat(path); err == nil && st.Size() >= auditRotate {
-		archive := filepath.Join(s.dir, "audit-"+time.Now().In(london).Format("20060102-150405")+".jsonl")
+		archive := filepath.Join(s.dir, "audit-"+time.Now().In(zone).Format("20060102-150405")+".jsonl")
 		if err := os.Rename(path, archive); err != nil {
 			return err
 		}
@@ -177,17 +177,17 @@ func loadAudit(path string) []AuditEntry {
 	return all
 }
 
-// GrokUsage adds tokens to today's count and reports the new total.
-func (s *Store) GrokUsage(add int) int {
+// AssistantUsage adds tokens to today's count and reports the new total.
+func (s *Store) AssistantUsage(add int) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var u struct {
 		Day    string `json:"day"`
 		Tokens int    `json:"tokens"`
 	}
-	path := filepath.Join(s.dir, "grok-usage.json")
+	path := filepath.Join(s.dir, "assistant-usage.json")
 	_ = readFileJSON(path, &u)
-	today := time.Now().In(london).Format("2006-01-02")
+	today := time.Now().In(zone).Format("2006-01-02")
 	if u.Day != today {
 		u.Day, u.Tokens = today, 0
 	}
@@ -210,7 +210,7 @@ func appendChangelog(path string, e AuditEntry) error {
 		return err
 	}
 	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	line := fmt.Sprintf("- %s — %s (CirrusUX): %s", ukStamp(e.At), e.Who, e.What)
+	line := fmt.Sprintf("- %s — %s (CirrusUX): %s", stamp(e.At), e.Who, e.What)
 	if e.Undo != "" {
 		line += fmt.Sprintf(" — undo: `%s`", e.Undo)
 	}

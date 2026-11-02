@@ -8,15 +8,16 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"cirrusux/internal/snapshot"
 )
 
-// Phase 2 actions. The gateway never connects to cloud64: the agent asks for
+// Phase 2 actions. The gateway never connects to the server: the agent asks for
 // work over its own outbound connection (a long poll on /agent/commands),
-// runs it, and reports back on /agent/results. cloud64 keeps no listening
+// runs it, and reports back on /agent/results. the server keeps no listening
 // port, and the idle check doesn't count outbound connections.
 
 // ActionReq names one action and its arguments, from a fixed list.
@@ -37,7 +38,7 @@ var stayLabels = map[string]string{"30": "for 30 min", "120": "for 2 h", "foreve
 
 var actionSpecs = map[string]actionSpec{
 	"stay_awake": {
-		label: func(a map[string]string) string { return "Kept cloud64 awake " + stayLabels[a["minutes"]] },
+		label: func(a map[string]string) string { return "Kept {server} awake " + stayLabels[a["minutes"]] },
 		check: func(a map[string]string, _ *snapshot.Snapshot) error {
 			if _, ok := stayLabels[a["minutes"]]; !ok {
 				return fmt.Errorf("minutes must be 30, 120 or forever")
@@ -47,7 +48,7 @@ var actionSpecs = map[string]actionSpec{
 		undo: func(map[string]string) *ActionReq { return &ActionReq{Action: "allow_sleep"} },
 	},
 	"allow_sleep": {
-		label: func(map[string]string) string { return "Allowed cloud64 to sleep" },
+		label: func(map[string]string) string { return "Allowed {server} to sleep" },
 	},
 	"container_start": {
 		label: func(a map[string]string) string { return "Started " + a["name"] },
@@ -76,7 +77,7 @@ var actionSpecs = map[string]actionSpec{
 	},
 }
 
-// checkContainer only accepts containers cloud64 last reported.
+// checkContainer only accepts containers the agent last reported.
 func checkContainer(a map[string]string, snap *snapshot.Snapshot) error {
 	if snap == nil || !slices.ContainsFunc(snap.Containers, func(c snapshot.Container) bool { return c.Name == a["name"] }) {
 		return fmt.Errorf("unknown container %q", a["name"])
@@ -108,7 +109,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 	return clean, spec, nil
 }
 
-// Command is an action on its way to cloud64.
+// Command is an action on its way to the agent.
 type Command struct {
 	ID string `json:"id"`
 	ActionReq
@@ -125,7 +126,7 @@ type Command struct {
 
 const (
 	pollWait    = 25 * time.Second
-	pendingMax  = 2 * time.Minute // agent never asked: cloud64 asleep or agent down
+	pendingMax  = 2 * time.Minute // agent never asked: server asleep or agent down
 	sentMax     = 4 * time.Minute // agent took it but didn't report (egress report: up to 3 min)
 	keepHistory = 50
 )
@@ -217,11 +218,16 @@ func (q *Queue) expire(now time.Time) {
 	for _, c := range q.cmds {
 		switch {
 		case c.State == "pending" && now.Sub(c.Created) > pendingMax:
-			c.State, c.Error = "failed", "cloud64 didn't pick it up (asleep, or the agent isn't running)"
+			c.State, c.Error = "failed", "the server didn't pick it up (asleep, or the agent isn't running)"
 		case c.State == "sent" && now.Sub(c.sent) > sentMax:
-			c.State, c.Error = "failed", "cloud64 took it but didn't report back"
+			c.State, c.Error = "failed", "the server took it but didn't report back"
 		}
 	}
+}
+
+// label is the action's audit text with the server's name filled in.
+func (s *Server) label(spec actionSpec, args map[string]string) string {
+	return strings.ReplaceAll(spec.label(args), "{server}", s.cfg.ServerName)
 }
 
 // ---- HTTP ----
@@ -239,10 +245,10 @@ func (s *Server) postAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v := s.power.View(time.Now(), snap); v.State != "awake" {
-		http.Error(w, "cloud64 isn't awake. Wake it first.", http.StatusConflict)
+		http.Error(w, s.cfg.ServerName+" isn't awake. Wake it first.", http.StatusConflict)
 		return
 	}
-	c := &Command{ActionReq: clean, Label: spec.label(clean.Args), Who: userOf(r), ReadOnly: spec.readOnly}
+	c := &Command{ActionReq: clean, Label: s.label(spec, clean.Args), Who: userOf(r), ReadOnly: spec.readOnly}
 	if spec.undo != nil {
 		c.Undo = spec.undo(clean.Args)
 	}
@@ -288,7 +294,7 @@ func (s *Server) agentResults(w http.ResponseWriter, r *http.Request) {
 	if !c.ReadOnly {
 		e := AuditEntry{Who: c.Who, What: c.Label, UndoAction: c.Undo}
 		if c.Undo != nil {
-			e.Undo = actionSpecs[c.Undo.Action].label(c.Undo.Args)
+			e.Undo = s.label(actionSpecs[c.Undo.Action], c.Undo.Args)
 		}
 		if c.State == "failed" {
 			e.What += " (failed)"

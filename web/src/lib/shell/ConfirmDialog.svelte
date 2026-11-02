@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mode } from '../api.svelte';
   import Dialog from '../components/Dialog.svelte';
   import Button from '../components/Button.svelte';
   import Badge from '../components/Badge.svelte';
@@ -22,8 +23,8 @@
 
 <Dialog bind:open label={c?.title ?? 'Confirm'}>
   {#if c}
-    {#if c.source === 'grok'}
-      <div class="from"><Badge tone="accent">{#snippet icon()}<Sparkles />{/snippet}Proposed by Grok</Badge></div>
+    {#if c.source === 'assistant'}
+      <div class="from"><Badge tone="accent">{#snippet icon()}<Sparkles />{/snippet}Proposed by {mode.assistant.name}</Badge></div>
     {/if}
     <h2>{c.title}</h2>
     <p class="muted body">{c.body}</p>

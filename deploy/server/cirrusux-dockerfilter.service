@@ -1,4 +1,4 @@
-# /etc/systemd/system/cirrusux-dockerfilter.service on cloud64
+# /etc/systemd/system/cirrusux-dockerfilter.service on the server
 [Unit]
 Description=Docker API filter for the CirrusUX agent (reads, start/stop/restart)
 Requires=cirrusux-dockerfilter.socket

@@ -41,11 +41,13 @@ generic sleep manager in Phase 4.
 
 ### Phase 3 — generalise the core
 
+**Status:** built and tested locally (Unreleased in CHANGELOG.md); not yet tried on a second machine. Settings are in docs/CONFIG.md.
+
 What is tied to cloud64 today, and what replaces it:
 
 | Tied to cloud64 now | Becomes |
 |---|---|
-| The names cloud64 and cloud-box in the UI, assistant prompt and units | A server name and settings from a config file (`/etc/cirrusux/cirrusux.toml` or the env files, decided in this phase) |
+| The names cloud64 and cloud-box in the UI, assistant prompt and units | A server name and settings from the env files (D12, docs/CONFIG.md) |
 | Two machines only: an always-on gateway and a server that sleeps | Two setups. **Single host:** gateway and agent on one machine that doesn't sleep (the common case). **Split:** a sleeping server and an always-on gateway, as now |
 | The owner's scripts at fixed paths in the helper | Helper modules with a defined interface (sleep, backups, security), so the paths come from the module, not the code |
 | Wake through the router and `cloud64-wake` | Wake drivers: a magic packet sent by the gateway on the LAN (default), the router's TR-064, or a custom command |
@@ -187,4 +189,4 @@ changed in the config.
 | D9 | Default container runtime for the app store | Podman with Quadlet units (no always-running daemon, containers are systemd units); Docker supported |
 | D10 | Licence | Open. Permissive (MIT or Apache-2.0) or copyleft that also covers hosted use (AGPL-3.0) |
 | D11 | Sign-in providers for v1 of the public release | Tailscale and a reverse proxy's trusted header first; built-in accounts with passkeys after |
-| D12 | Config format | One TOML file, with secrets kept in separate 600 env files |
+| D12 | Config format | Plain `NAME=value` env files, one per part (gateway, agent, helper). **Decided:** Go's standard library has no TOML reader, and systemd reads env files natively |

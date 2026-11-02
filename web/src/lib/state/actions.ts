@@ -1,22 +1,23 @@
 // Every action the panel can take, as a confirmation (PLAN §3.3, rules 2–3).
-// Buttons, the command palette, Undo and Grok all go through these. Live,
-// the gateway queues the action for cloud64's agent and logs it; in demo
+// Buttons, the command palette, Undo and the assistant all go through these.
+// Live, the gateway queues the action for the server's agent and logs it; in demo
 // mode it's simulated.
 import { live } from './live.svelte';
 import { allowSleep, power, stayAwake, wake } from './power.svelte';
 import { ask, type Confirm } from './ui.svelte';
 import { now } from '../time.svelte';
-import { api, mode } from '../api.svelte';
+import { api, mode, sleeps } from '../api.svelte';
 import { loadChangelog, refreshSoon } from '../sync.svelte';
 import { toast } from './ui.svelte';
 
-type Opts = { source?: 'grok' };
+type Opts = { source?: 'assistant' };
 
 export interface ActionReq { action: string; args?: Record<string, string> }
 
 interface Command { id: string; state: 'pending' | 'sent' | 'done' | 'failed'; error?: string; output?: string[] }
 
-const D3 = 'Keeps cloud64 awake for at least 10 minutes afterwards.';
+/** Decision D3, for servers that sleep. */
+const d3 = () => (sleeps() ? ` Keeps ${mode.server} awake for at least 10 minutes afterwards.` : '');
 
 function offline(): boolean {
   if (!mode.offline) return false;
@@ -24,11 +25,11 @@ function offline(): boolean {
   return true;
 }
 
-/** Sends an action to cloud64 through the gateway and waits for the result. */
+/** Sends an action to the server through the gateway and waits for the result. */
 export async function sendAction(req: ActionReq, label: string, quiet = false): Promise<Command | null> {
   try {
     const { id } = await api<{ id: string }>('/api/actions', { method: 'POST', body: JSON.stringify(req) });
-    if (!quiet) toast(`${label}: sent to cloud64…`, 'info');
+    if (!quiet) toast(`${label}: sent to ${mode.server}…`, 'info');
     const deadline = Date.now() + 5 * 60_000;
     let c: Command;
     do {
@@ -37,7 +38,7 @@ export async function sendAction(req: ActionReq, label: string, quiet = false): 
     } while ((c.state === 'pending' || c.state === 'sent') && Date.now() < deadline);
     if (!quiet) {
       if (c.state === 'done') toast(`${label}. Logged to CHANGELOG.`, 'ok');
-      else toast(`${label} failed: ${c.error ?? 'no answer from cloud64'}`, 'warn');
+      else toast(`${label} failed: ${c.error ?? `no answer from ${mode.server}`}`, 'warn');
     }
     void loadChangelog();
     refreshSoon();
@@ -63,11 +64,11 @@ export function confirmWake(o: Opts = {}): void {
   if (offline()) return;
   ask({
     ...o,
-    title: 'Wake cloud64?',
+    title: `Wake ${mode.server}?`,
     body: 'Sends a magic packet through the router. The server is usually reachable in 20–30 seconds.',
     command: 'cirrusux-wake',
     confirmLabel: 'Wake',
-    changelog: 'Woke cloud64',
+    changelog: `Woke ${mode.server}`,
     run: () => (mode.live ? void liveWake() : wake()),
   });
 }
@@ -79,14 +80,14 @@ export function confirmStayAwake(minutes: number | 'forever', o: Opts = {}): voi
   const label = holdLabel(minutes);
   ask({
     ...o,
-    title: `Keep cloud64 awake ${label}?`,
+    title: `Keep ${mode.server} awake ${label}?`,
     body: 'The idle check will not suspend the server while this is set.',
     command: `cirrusux-helper stay-awake ${minutes}`,
     undo: 'cirrusux-helper allow-sleep',
     confirmLabel: 'Keep awake',
-    changelog: `Kept cloud64 awake ${label}`,
+    changelog: `Kept ${mode.server} awake ${label}`,
     run: () =>
-      mode.live ? void sendAction({ action: 'stay_awake', args: { minutes: String(minutes) } }, `Kept cloud64 awake ${label}`) : stayAwake(minutes),
+      mode.live ? void sendAction({ action: 'stay_awake', args: { minutes: String(minutes) } }, `Kept ${mode.server} awake ${label}`) : stayAwake(minutes),
   });
 }
 
@@ -94,12 +95,12 @@ export function confirmAllowSleep(o: Opts = {}): void {
   if (offline()) return;
   ask({
     ...o,
-    title: 'Allow cloud64 to sleep?',
+    title: `Allow ${mode.server} to sleep?`,
     body: 'Removes the stay-awake hold. The normal 30-minute idle timer applies again.',
     command: 'cirrusux-helper allow-sleep',
     confirmLabel: 'Allow sleep',
-    changelog: 'Allowed cloud64 to sleep',
-    run: () => (mode.live ? void sendAction({ action: 'allow_sleep' }, 'Allowed cloud64 to sleep') : allowSleep()),
+    changelog: `Allowed ${mode.server} to sleep`,
+    run: () => (mode.live ? void sendAction({ action: 'allow_sleep' }, `Allowed ${mode.server} to sleep`) : allowSleep()),
   });
 }
 
@@ -118,7 +119,7 @@ export function confirmContainer(id: string, verb: 'restart' | 'stop' | 'start',
         ? `${c.app} will be unavailable until it is started again.`
         : verb === 'restart'
           ? `${c.app} will be unavailable for a few seconds.`
-          : `Starts ${c.app} with its pinned image ${c.image}:${c.tag}.`) + ' ' + D3,
+          : `Starts ${c.app} with its pinned image ${c.image}:${c.tag}.`) + d3(),
     command: `docker ${verb} ${c.name}`,
     undo: undo[verb],
     danger: verb === 'stop',
@@ -142,7 +143,7 @@ export function confirmBackup(o: Opts = {}): void {
   ask({
     ...o,
     title: 'Run a backup now?',
-    body: `Takes about 40 seconds and ~900 MB of memory. The result is encrypted with age. Media is not included. ${D3}`,
+    body: `Runs the backup unit on ${mode.server} now.${d3()}`,
     command: 'cirrusux-helper backup-run',
     confirmLabel: 'Run backup',
     changelog: 'Started a system backup',
@@ -159,7 +160,7 @@ export function confirmBackup(o: Opts = {}): void {
   });
 }
 
-/** Runs an action given by name, e.g. from a Grok proposal or an Undo. */
+/** Runs an action given by name, e.g. from an assistant proposal or an Undo. */
 export function confirmAction(req: ActionReq, o: Opts = {}): void {
   const a = req.args ?? {};
   switch (req.action) {
@@ -181,7 +182,7 @@ export function confirmAction(req: ActionReq, o: Opts = {}): void {
 /** Undo for a changelog entry the gateway logged with an undo action. */
 export function confirmUndo(undo: ActionReq): void {
   if (power.state !== 'awake') {
-    toast('cloud64 is asleep. Wake it first, then undo.', 'warn');
+    toast(`${mode.server} is asleep. Wake it first, then undo.`, 'warn');
     return;
   }
   confirmAction(undo);

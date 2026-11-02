@@ -1,6 +1,6 @@
-// Package gateway is the always-on half of the panel, running on cloud-box.
-// It serves the web UI, caches cloud64's snapshots, tracks power state,
-// wakes cloud64 and hosts the Grok assistant (PLAN §3.1).
+// Package gateway serves the panel. It serves the web UI, caches the
+// agent's snapshots, tracks power state, wakes a sleeping server and hosts
+// the assistant (PLAN §3.1).
 package gateway
 
 import (
@@ -12,12 +12,13 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/netip"
 	"path"
 	"slices"
 	"strings"
 	"time"
 
-	"cirrusux/internal/grok"
+	"cirrusux/internal/assistant"
 	"cirrusux/internal/snapshot"
 	"cirrusux/internal/version"
 )
@@ -28,18 +29,22 @@ func init() {
 }
 
 type Server struct {
-	cfg   Config
-	store *Store
-	power *Power
-	grok  *grok.Client
-	web   fs.FS
-	queue *Queue
+	cfg       Config
+	store     *Store
+	power     *Power
+	assistant *assistant.Client
+	web       fs.FS
+	queue     *Queue
 }
 
 func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 	s := &Server{cfg: cfg, store: store, power: power, web: web, queue: NewQueue()}
-	if cfg.GrokEnabled() {
-		s.grok = &grok.Client{Base: cfg.XAIBase, Model: cfg.XAIModel, Key: cfg.XAIKey}
+	if cfg.TZ != nil {
+		zone = cfg.TZ
+	}
+	if cfg.AssistantEnabled() {
+		a := cfg.Assistant
+		s.assistant = &assistant.Client{Base: a.Base, Model: a.Model, Key: a.Key}
 	}
 	return s
 }
@@ -62,7 +67,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/digest", s.getDigest)
 	api.HandleFunc("GET /api/wallpaper", s.getWallpaper)
 	api.HandleFunc("PUT /api/wallpaper", s.putWallpaper)
-	api.HandleFunc("POST /api/grok", s.askGrok)
+	api.HandleFunc("POST /api/assistant", s.askAssistant)
 	mux.Handle("/api/", s.auth(api))
 
 	mux.Handle("/", s.auth(http.HandlerFunc(s.static)))
@@ -78,13 +83,23 @@ func userOf(r *http.Request) string {
 	return u
 }
 
-// auth trusts the identity header that `tailscale serve` adds for tailnet
-// users. The gateway listens on 127.0.0.1 only, so the header can't come
-// from anywhere else on the network. State-changing API calls also need a
-// custom header and a same-origin Origin, which cross-site pages can't fake.
+// auth reads the signed-in user from a header that a trusted front end
+// sets: `tailscale serve` (Tailscale-User-Login) or a reverse proxy that
+// has already signed the user in (CIRRUS_AUTH_HEADER). The header is only
+// believed on connections from CIRRUS_TRUSTED_PROXIES, and the gateway
+// should listen on 127.0.0.1 so nothing else can reach it. State-changing
+// API calls also need a custom header and a same-origin Origin, which
+// cross-site pages can't fake.
 func (s *Server) auth(next http.Handler) http.Handler {
+	header := "Tailscale-User-Login"
+	if s.cfg.Auth == "header" {
+		header = s.cfg.AuthHeader
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := strings.ToLower(r.Header.Get("Tailscale-User-Login"))
+		user := ""
+		if s.fromTrustedProxy(r) {
+			user = strings.ToLower(strings.TrimSpace(r.Header.Get(header)))
+		}
 		if s.cfg.Dev && user == "" {
 			user = "dev"
 		}
@@ -100,6 +115,15 @@ func (s *Server) auth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, user)))
 	})
+}
+
+func (s *Server) fromTrustedProxy(r *http.Request) bool {
+	ap, err := netip.ParseAddrPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := ap.Addr().Unmap()
+	return slices.ContainsFunc(s.cfg.TrustedProxies, func(p netip.Prefix) bool { return p.Contains(ip) })
 }
 
 func sameOrigin(r *http.Request) bool {
@@ -158,7 +182,13 @@ func (s *Server) agentSnapshot(w http.ResponseWriter, r *http.Request) {
 // ---- API ----
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]any{"user": userOf(r), "dev": s.cfg.Dev, "grok": s.cfg.GrokEnabled(), "version": version.String()})
+	c := s.cfg
+	writeJSON(w, map[string]any{
+		"user": userOf(r), "dev": c.Dev, "version": version.String(),
+		"server": c.ServerName, "serverHost": c.ServerHost, "gateway": c.GatewayName,
+		"setup": c.Setup, "tz": c.TZName, "wake": s.power.CanWake(),
+		"assistant": map[string]any{"enabled": c.AssistantEnabled(), "name": c.Assistant.Name},
+	})
 }
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
@@ -171,20 +201,24 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) wake(w http.ResponseWriter, r *http.Request) {
+	if !s.power.CanWake() {
+		http.Error(w, "no wake method is set up (CIRRUS_WAKE)", http.StatusNotImplemented)
+		return
+	}
 	v := s.power.View(time.Now(), s.store.Snapshot())
 	if v.State == "awake" {
-		http.Error(w, "cloud64 is already awake", http.StatusConflict)
+		http.Error(w, s.cfg.ServerName+" is already awake", http.StatusConflict)
 		return
 	}
 	who := userOf(r)
 	failed := func(err error) {
-		s.record(AuditEntry{Who: who, What: "Wake of cloud64 (failed)", Result: err.Error()})
+		s.record(AuditEntry{Who: who, What: "Wake of " + s.cfg.ServerName + " (failed)", Result: err.Error()})
 	}
 	if !s.power.Wake(failed) {
 		http.Error(w, "a wake is already in progress", http.StatusConflict)
 		return
 	}
-	s.record(AuditEntry{Who: who, What: "Sent a wake to cloud64"})
+	s.record(AuditEntry{Who: who, What: "Sent a wake to " + s.cfg.ServerName})
 	w.WriteHeader(http.StatusAccepted)
 }
 

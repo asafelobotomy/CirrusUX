@@ -1,4 +1,4 @@
-# /etc/systemd/system/cirrusux-dockerfilter.socket on cloud64
+# /etc/systemd/system/cirrusux-dockerfilter.socket on the server
 [Unit]
 Description=Filtered Docker API socket for the CirrusUX agent
 

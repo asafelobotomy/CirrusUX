@@ -1,7 +1,7 @@
 <script lang="ts">
   import Dialog from '../components/Dialog.svelte';
   import Button from '../components/Button.svelte';
-  import { WIDGETS } from '../widgets/registry';
+  import { WIDGETS, usable } from '../widgets/registry';
   import { addWidget } from '../state/layout.svelte';
   import { toast, ui } from '../state/ui.svelte';
   import { Plus } from '../icons';
@@ -21,7 +21,7 @@
   <h2>Add a widget</h2>
   <p class="muted sub">Adds to the {ui.boardDevice} layout of this board. Drag it into place afterwards.</p>
   <ul>
-    {#each Object.entries(WIDGETS) as [type, m]}
+    {#each Object.entries(WIDGETS).filter(([type]) => usable(type)) as [type, m]}
       {@const Icon = m.icon}
       <li>
         <button onclick={() => add(type)}>

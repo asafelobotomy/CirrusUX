@@ -1,4 +1,4 @@
-// Package agent runs on cloud64. It collects a snapshot and pushes it to
+// Package agent runs on the managed server. It collects a snapshot and pushes it to
 // the gateway. Phase 1 opens no listening port at all: every connection is
 // outbound, which the idle check does not count as activity.
 package agent
@@ -19,11 +19,11 @@ import (
 )
 
 type Config struct {
-	GatewayURL string // https://cloud-box.<tailnet>.ts.net/agent/snapshot
+	GatewayURL string // e.g. https://gateway.<tailnet>.ts.net/agent/snapshot
 	Token      string
 	Interval   time.Duration
 	// DemoFile replaces the collector with a recorded snapshot whose times
-	// are shifted to now. For running the panel without cloud64.
+	// are shifted to now. For running the panel without a server.
 	DemoFile string
 }
 
@@ -87,7 +87,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			case time.Now().Before(retryUntil):
 				nextPush = time.Now().Add(15 * time.Second)
 			default:
-				// The gateway or cloud-box's tailnet link is down (it
+				// The gateway or its tailnet link is down (it
 				// drops now and then); try again soon rather than in a
 				// full interval.
 				nextPush = time.Now().Add(min(a.cfg.Interval, time.Minute))

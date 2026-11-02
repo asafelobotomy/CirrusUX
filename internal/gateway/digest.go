@@ -9,46 +9,46 @@ import (
 	"strings"
 	"time"
 
-	"cirrusux/internal/grok"
+	"cirrusux/internal/assistant"
 	"cirrusux/internal/snapshot"
 )
 
-// The daily digest (PLAN §3.6): a morning summary built on cloud-box from
-// the cached snapshot and the audit log, so it never wakes cloud64. With
-// CIRRUS_DIGEST_GROK=1, Grok adds a short written summary on top of the plain
-// facts; without it the digest sends nothing to xAI.
+// The daily digest (PLAN §3.6): a morning summary built on the gateway from
+// the cached snapshot and the audit log, so it never wakes a sleeping
+// server. With CIRRUS_DIGEST_ASSISTANT=1 the assistant adds a short written
+// summary on top of the plain facts; without it the digest sends nothing out.
 
-const digestHour = 8 // UK time
+const digestHour = 8 // local time (CIRRUS_TZ)
 
 type Digest struct {
 	Day     string    `json:"day"` // UK date, 2006-01-02
 	At      time.Time `json:"at"`
 	Lines   []string  `json:"lines"`
-	Summary string    `json:"summary,omitempty"` // from Grok
+	Summary string    `json:"summary,omitempty"` // from the assistant
 }
 
 func buildDigest(now time.Time, snap *snapshot.Snapshot, audit []AuditEntry) Digest {
-	d := Digest{Day: now.In(london).Format("2006-01-02"), At: now}
+	d := Digest{Day: now.In(zone).Format("2006-01-02"), At: now}
 	add := func(format string, a ...any) { d.Lines = append(d.Lines, fmt.Sprintf(format, a...)) }
 	if snap == nil {
-		add("No report from cloud64 yet.")
+		add("No report from the server yet.")
 		return d
 	}
-	add("Data from %s.", ukStamp(snap.TakenAt))
+	add("Data from %s.", stamp(snap.TakenAt))
 
 	switch r := snap.Backups.LastRun; {
 	case r == nil:
 		add("Backup: no run found in the journal.")
 	case !r.OK:
-		add("Backup: the last run FAILED (%s).", ukStamp(r.End))
+		add("Backup: the last run FAILED (%s).", stamp(r.End))
 	case now.Sub(r.End) > 26*time.Hour:
-		add("Backup: last good run was %s, more than a day ago.", ukStamp(r.End))
+		add("Backup: last good run was %s, more than a day ago.", stamp(r.End))
 	default:
 		size := ""
 		if len(snap.Backups.Files) > 0 {
 			size = fmt.Sprintf(", %.1f GB", float64(snap.Backups.Files[0].Bytes)/1e9)
 		}
-		add("Backup: OK at %s%s.", ukStamp(r.End), size)
+		add("Backup: OK at %s%s.", stamp(r.End), size)
 	}
 
 	var down []string
@@ -83,14 +83,18 @@ func buildDigest(now time.Time, snap *snapshot.Snapshot, audit []AuditEntry) Dig
 	if sec := snap.Security; sec != nil {
 		parts := []string{}
 		if sec.ClamAV != nil {
-			parts = append(parts, fmt.Sprintf("ClamAV %d infected (scan %s)", sec.ClamAV.Infected, ukStamp(sec.ClamAV.At)))
+			parts = append(parts, fmt.Sprintf("ClamAV %d infected (scan %s)", sec.ClamAV.Infected, stamp(sec.ClamAV.At)))
 		}
-		if sec.Lockdown && sec.PanelDrop {
-			parts = append(parts, "firewall lockdown intact")
-		} else {
-			parts = append(parts, "firewall lockdown MISSING")
+		if len(sec.Firewall) > 0 {
+			if bad := sec.FirewallFailing(); len(bad) > 0 {
+				parts = append(parts, "firewall rules MISSING in "+strings.Join(bad, ", "))
+			} else {
+				parts = append(parts, "firewall rules intact")
+			}
 		}
-		parts = append(parts, fmt.Sprintf("%d banned by fail2ban", sec.Banned))
+		if sec.Banned != nil {
+			parts = append(parts, fmt.Sprintf("%d banned by fail2ban", *sec.Banned))
+		}
 		add("Security: %s.", strings.Join(parts, "; "))
 	}
 
@@ -123,7 +127,7 @@ func (s *Server) RunDigest(ctx context.Context) {
 		now := time.Now()
 		// Wait for data: a digest made before the first snapshot would say
 		// nothing and then stand for the whole day.
-		if now.In(london).Hour() >= digestHour && s.store.Snapshot() != nil && s.store.Digest().Day != now.In(london).Format("2006-01-02") {
+		if now.In(zone).Hour() >= digestHour && s.store.Snapshot() != nil && s.store.Digest().Day != now.In(zone).Format("2006-01-02") {
 			s.makeDigest(ctx, now)
 		}
 		select {
@@ -136,11 +140,11 @@ func (s *Server) RunDigest(ctx context.Context) {
 
 func (s *Server) makeDigest(ctx context.Context, now time.Time) Digest {
 	d := buildDigest(now, s.store.Snapshot(), s.store.RecentAudit(100))
-	if s.cfg.DigestGrok && s.grok != nil && s.store.GrokUsage(0) < s.cfg.GrokDailyTokens {
+	if s.cfg.DigestAssistant && s.assistant != nil && s.store.AssistantUsage(0) < s.cfg.AssistantDailyTokens {
 		gctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		reply, err := s.grok.Ask(gctx, systemPrompt, []grok.Turn{{Role: "user", Text: "Write this morning's digest for cloud64 in two or three sentences: anything that needs attention first, then what's fine. Use only these facts:\n- " + strings.Join(d.Lines, "\n- ")}}, nil)
+		reply, err := s.assistant.Ask(gctx, s.systemPrompt(), []assistant.Turn{{Role: "user", Text: "Write this morning's digest for " + s.cfg.ServerName + " in two or three sentences: anything that needs attention first, then what's fine. Use only these facts:\n- " + strings.Join(d.Lines, "\n- ")}}, nil)
 		cancel()
-		s.store.GrokUsage(reply.TokensIn + reply.TokensOut)
+		s.store.AssistantUsage(reply.TokensIn + reply.TokensOut)
 		if err != nil {
 			slog.Warn("digest summary", "err", err)
 		} else {
@@ -156,7 +160,7 @@ func (s *Server) makeDigest(ctx context.Context, now time.Time) Digest {
 func (s *Server) getDigest(w http.ResponseWriter, r *http.Request) {
 	d := s.store.Digest()
 	if d.Day == "" {
-		// Before the first morning run: the facts now, without Grok.
+		// Before the first morning run: the facts now, without the assistant.
 		d = buildDigest(time.Now(), s.store.Snapshot(), s.store.RecentAudit(100))
 	}
 	writeJSON(w, d)

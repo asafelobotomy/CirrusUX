@@ -8,7 +8,7 @@
     storage: ['Usage per folder, refreshed rarely (du over USB 2 counts as activity)', 'USB link-speed warning', 'SMART and btrfs health once smartmontools and btrfs-progs are installed'],
     updates: ['Image tags vs pinned versions', 'apt upgrades after an approved apt update', 'Backup → set tag → pull → health check → changelog, with restore on failure'],
     media: ['Library counts and scans', 'Archive review with two-step delete', 'AVI re-encode queue (later)'],
-    logs: ['cloud64-idle.log, backup journal, ClamAV log', 'Per-container logs, live tails time out after 5 min'],
+    logs: ['Idle log, backup journal, virus-scan log', 'Per-container logs, live tails time out after 5 min'],
   };
   const nav = $derived(ALL_NAV.find((n) => n.route === ui.route));
 </script>

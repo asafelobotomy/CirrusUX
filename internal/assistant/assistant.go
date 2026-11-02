@@ -1,7 +1,7 @@
-// Package grok talks to xAI's chat API (OpenAI-compatible) with a fixed
-// set of tools. Read tools answer from the gateway's cached data; the one
+// Package assistant talks to an OpenAI-compatible chat API (xAI, OpenAI,
+// Anthropic's compatibility endpoint, Ollama) with a fixed set of tools. Read tools answer from the gateway's cached data; the one
 // action tool only proposes, and the user confirms in the UI (PLAN §3.6).
-package grok
+package assistant
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ type Client struct {
 	HTTP             *http.Client
 }
 
-// Tool is one function Grok may call. Run returns plain data; it is JSON
+// Tool is one function the model may call. Run returns plain data; it is JSON
 // encoded and redacted before it leaves the gateway.
 type Tool struct {
 	Name        string
@@ -71,7 +71,7 @@ type toolCall struct {
 
 const maxRounds = 4
 
-// Ask runs the conversation, letting Grok call tools for up to maxRounds.
+// Ask runs the conversation, letting the model call tools for up to maxRounds.
 // Everything sent — system prompt, user turns and tool results — passes
 // through redact.String.
 func (c *Client) Ask(ctx context.Context, system string, turns []Turn, tools []Tool) (Reply, error) {
@@ -119,7 +119,7 @@ func (c *Client) Ask(ctx context.Context, system string, turns []Turn, tools []T
 			msgs = append(msgs, message{Role: "tool", ToolCallID: call.ID, Content: redact.String(out)})
 		}
 	}
-	return reply, fmt.Errorf("Grok used too many tool calls without answering")
+	return reply, fmt.Errorf("the assistant used too many tool calls without answering")
 }
 
 func (c *Client) runTool(byName map[string]Tool, call toolCall, reply *Reply) string {
@@ -188,7 +188,7 @@ func (c *Client) complete(ctx context.Context, msgs []message, tools []map[strin
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode/100 != 2 {
 		// The error body may echo our request; keep only the status.
-		return out, fmt.Errorf("xAI API: %s", resp.Status)
+		return out, fmt.Errorf("assistant API: %s", resp.Status)
 	}
 	return out, json.Unmarshal(b, &out)
 }

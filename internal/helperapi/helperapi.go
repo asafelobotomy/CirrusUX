@@ -5,6 +5,7 @@ package helperapi
 
 // Read-only subcommands (Phase 1).
 const (
+	CmdFeatures       = "features" // which modules this machine has
 	CmdIdleStatus     = "idle-status"
 	CmdIdleLog        = "idle-log"
 	CmdBackupList     = "backup-list"
@@ -19,17 +20,39 @@ const (
 	CmdStayAwake    = "stay-awake"    // 30 | 120 | forever
 	CmdAllowSleep   = "allow-sleep"   // remove the hold
 	CmdNudgeAwake   = "nudge-awake"   // ≥10 min, unless a longer hold exists (decision D3)
-	CmdBackupRun    = "backup-run"    // start cloud64-backup.service, don't wait
+	CmdBackupRun    = "backup-run"    // start the backup unit, don't wait
 	CmdEgressReport = "egress-report" // read-only, but slow: on demand only
 )
 
 var Commands = []string{
-	CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
+	CmdFeatures, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport,
 }
 
 // StayAwakeArgs are the only holds the panel can set.
 var StayAwakeArgs = []string{"30", "120", "forever"}
+
+// Modules a machine can have, set up in the helper's config file
+// (/etc/cirrusux/helper.env). Containers need none of them.
+const (
+	ModSleep     = "sleep"      // an idle checker that suspends the server
+	ModStayAwake = "stay-awake" // holds that keep it awake
+	ModBackup    = "backup"     // a systemd unit that makes system backups
+	ModAV        = "av"         // a ClamAV scan log
+	ModSecurity  = "security"   // fail2ban jail and firewall checks
+	ModEgress    = "egress"     // the outbound-traffic report
+)
+
+// Features is what `features` prints.
+type Features struct {
+	Modules []string `json:"modules"`
+}
+
+// BackupLast is the backup unit's recent journal.
+type BackupLast struct {
+	Unit  string   `json:"unit"`
+	Lines []string `json:"lines"`
+}
 
 // Result is what the Phase 2 subcommands print.
 type Result struct {
@@ -37,10 +60,10 @@ type Result struct {
 }
 
 type IdleStatus struct {
-	// Files in /run/cloud64-idle/, name → content (trimmed, size-limited).
+	// Files in the idle checker's state directory, name → content (trimmed, size-limited).
 	// The checker rewrites them every minute: last-msg (its verdict),
 	// last-active, last-wake, last-suspend (unix seconds). The panel never
-	// runs cloud64-idle-check itself: its --dry-run is not write-free.
+	// runs the idle checker itself: on cloud64 its --dry-run was not write-free.
 	State map[string]string `json:"state"`
 	// Content of /run/stay-awake, nil when the file does not exist.
 	StayAwake *string `json:"stayAwake"`
@@ -61,8 +84,14 @@ type BackupList struct {
 }
 
 type SecurityStatus struct {
-	Banned    int      `json:"banned"`
-	Lockdown  bool     `json:"lockdown"`
-	PanelDrop bool     `json:"panelDrop"`
-	Errors    []string `json:"errors,omitempty"`
+	Fail2ban bool            `json:"fail2ban"` // a jail is set up
+	Banned   int             `json:"banned"`
+	Firewall []FirewallCheck `json:"firewall"`
+	Errors   []string        `json:"errors,omitempty"`
+}
+
+// FirewallCheck is one configured rule check: Chain holds the pattern.
+type FirewallCheck struct {
+	Chain string `json:"chain"`
+	OK    bool   `json:"ok"`
 }

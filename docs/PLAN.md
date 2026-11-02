@@ -1,7 +1,7 @@
 # CirrusUX — build plan
 
 Written 1 Nov 2026. Based on `cloud64-server-brief.pdf` (1 Nov 2026, 20:30 GMT).
-Section numbers like "brief §5.4" point into that brief. Status: **Phase 0 checks done and Phase 0.5 signed off. Phases 1 and 2 released (v0.2.0) and tested locally; not installed on cloud64 or cloud-box yet (see INSTALL.md). Work after v0.2.0 follows [ROADMAP.md](ROADMAP.md): CirrusUX becomes a general panel for any server, and cloud64 a private profile.**
+Section numbers like "brief §5.4" point into that brief. Status: **Phase 0 checks done and Phase 0.5 signed off. Phases 1 and 2 released (v0.2.0) and tested locally; not installed on cloud64 or cloud-box yet (see deploy/profiles/cloud64/INSTALL.md). Work after v0.2.0 follows [ROADMAP.md](ROADMAP.md): CirrusUX becomes a general panel for any server, and cloud64 a private profile.**
 
 ## 1. Goal
 
@@ -225,7 +225,7 @@ A clickable prototype with fake data: the design tokens, the four built-in theme
 Built (1 Nov 2026), with three changes from the original plan:
 - **No listening port on cloud64 yet.** The agent only pushes; Phase 1 needs nothing from the gateway that would require connecting in. The agent port (D5) and its firewall question move to Phase 2.
 - **JSON files instead of SQLite** on the gateway (snapshot, versioned UI settings, audit log). Enough for one household and keeps the Go code dependency-free.
-- **Log parsers checked against real output** (INSTALL.md §0, 1 Nov). The agent reads the idle checker's state files rather than running `--dry-run`, which turned out not to be write-free.
+- **Log parsers checked against real output** (the cloud64 profile's INSTALL.md §0, 1 Nov). The agent reads the idle checker's state files rather than running `--dry-run`, which turned out not to be write-free.
 - **Wake goes through `cirrusux-wake`**, a root wrapper that reads the router password from a root-only file and runs the existing `cloud64-wake` as the admin user. The password was only in the admin bot's process environment, which `sudo -u` can't reach.
 Gateway (login, Power page, Wake, cache), agent (snapshots), helper subcommands marked 1, Docker filter (read-only verbs), Services and Backups pages (view only), Grok with read tools only.
 Includes from the UI work: themes, boards with drag-and-drop layout, app tiles, command palette, PWA install, settings screen (customisation levels 1–2). PWA added 1 Nov: installable (Chrome reports no installability errors) with an offline shell that shows the last saved data, clearly marked as offline.
@@ -290,6 +290,6 @@ WoL proxy on an always-on LAN device (brief §5.6); offsite backup status; AVI r
 ## 10. Risks
 
 - **Calls to app APIs count as activity.** Jellyfin/Navidrome/ABS/Kavita API calls open TCP into the container's published port (brief §5.4 item 5). Keep them on-demand and short, and cache the results.
-- **cloud-box tailscaled drops out** (brief §10 item 19; seen again 1 Nov): handled. The gateway checks its own tailnet link, falls back to snapshot age and shows a notice; the agent retries after a minute. tailscaled there was also started by hand, not as a service: make it one before installing (INSTALL.md §0).
+- **cloud-box tailscaled drops out** (brief §10 item 19; seen again 1 Nov): handled. The gateway checks its own tailnet link, falls back to snapshot age and shows a notice; the agent retries after a minute. tailscaled there was also started by hand, not as a service: make it one before installing (cloud64 profile, INSTALL.md §0).
 - **1Panel firewall rules may be rewritten by 1Panel.** Any rule added for the agent port must be added through 1Panel itself, or re-checked like the lockdown timer.
 - **Prompt injection through logs.** Log text sent to Grok may contain instructions. Mitigated by proposal-only actions and confirm cards; Grok output is never executed.

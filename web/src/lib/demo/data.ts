@@ -1,4 +1,4 @@
-// Sample data for demo mode (no gateway), shaped after the cloud64 brief (1 Nov 2026).
+// Sample data for demo mode (no gateway): a home media server on 1 Nov 2026.
 import { at } from '../time.svelte';
 
 import type { Health } from '../state/live.svelte';
@@ -18,13 +18,12 @@ export interface Container {
 }
 
 export const containers: Container[] = [
-  { id: 'jf', name: '1Panel-jellyfin-a1B2', app: 'Jellyfin', image: 'jellyfin/jellyfin', tag: '10.11.11', port: 8096, health: 'healthy', upSince: at('20:20'), restart: 'always', memMb: 412 },
-  { id: 'nd', name: '1Panel-navidrome-c3D4', app: 'Navidrome', image: 'deluan/navidrome', tag: '0.64.2', port: 40108, health: 'running', upSince: at('20:20'), restart: 'always', memMb: 58 },
-  { id: 'abs', name: '1Panel-audiobookshelf-e5F6', app: 'Audiobookshelf', image: 'advplyr/audiobookshelf', tag: '2.37.2', port: 40096, health: 'running', upSince: at('20:20'), restart: 'always', memMb: 96 },
+  { id: 'jf', name: 'jellyfin', app: 'Jellyfin', image: 'jellyfin/jellyfin', tag: '10.11.11', port: 8096, health: 'healthy', upSince: at('20:20'), restart: 'always', memMb: 412 },
+  { id: 'nd', name: 'navidrome', app: 'Navidrome', image: 'deluan/navidrome', tag: '0.64.2', port: 40108, health: 'running', upSince: at('20:20'), restart: 'always', memMb: 58 },
+  { id: 'abs', name: 'audiobookshelf', app: 'Audiobookshelf', image: 'advplyr/audiobookshelf', tag: '2.37.2', port: 40096, health: 'running', upSince: at('20:20'), restart: 'always', memMb: 96 },
   { id: 'kv', name: 'kavita', app: 'Kavita', image: 'lscr.io/linuxserver/kavita', tag: 'v0.9.1.4-ls130', port: 5000, health: 'running', upSince: at('20:20'), restart: 'unless-stopped', memMb: 131 },
   { id: 'tmm', name: 'tinymediamanager', app: 'tinyMediaManager', image: 'tinymediamanager/tinymediamanager', tag: '5.3.5', port: 4000, health: 'running', upSince: at('20:20'), restart: 'unless-stopped', memMb: 388 },
   { id: 'pic', name: 'musicbrainz-picard-1', app: 'Picard', image: 'mikenye/picard', tag: '2.13.3', port: 5800, health: 'running', upSince: at('20:20'), restart: 'unless-stopped', memMb: 174 },
-  { id: 'or', name: '1Panel-openresty-g7H8', app: 'OpenResty', image: '1panel/openresty', tag: '1.31.8.1-2-1-noble', port: null, health: 'running', upSince: at('20:20'), restart: 'always', memMb: 22 },
   { id: 'ng', name: 'nginx_server', app: 'nginx (leftover)', image: 'nginx', tag: 'latest', port: null, health: 'exited', upSince: null, restart: 'no', memMb: 0, leftover: true },
 ];
 
@@ -36,9 +35,9 @@ export interface Backup {
 }
 
 export const backups: Backup[] = [
-  { file: 'cloud64-system-2026-11-01_0330.tar.zst.age', at: at('03:30'), sizeGb: 2.1, encrypted: true },
-  { file: 'cloud64-system-2026-10-31_0331.tar.zst.age', at: at('03:31', '2026-10-31'), sizeGb: 2.1, encrypted: true },
-  { file: 'cloud64-system-2026-10-30_0935.tar.zst', at: at('09:35', '2026-10-30'), sizeGb: 2.3, encrypted: false },
+  { file: 'homeserver-system-2026-11-01_0330.tar.zst.age', at: at('03:30'), sizeGb: 2.1, encrypted: true },
+  { file: 'homeserver-system-2026-10-31_0331.tar.zst.age', at: at('03:31', '2026-10-31'), sizeGb: 2.1, encrypted: true },
+  { file: 'homeserver-system-2026-10-30_0935.tar.zst', at: at('09:35', '2026-10-30'), sizeGb: 2.3, encrypted: false },
 ];
 
 export const lastBackupRun = { start: at('03:30'), end: at('03:31'), ok: true, sizeGb: 2.0 };
@@ -84,8 +83,10 @@ export const timeline: Segment[] = [
 export const security = {
   fail2ban: { jail: 'sshd', banned: 0, totalBans: 3 },
   clamav: { at: at('04:38'), files: 24098, infected: 0 },
-  lockdown: true,
-  panelDrop: true,
+  firewall: [
+    { chain: 'DOCKER-USER', ok: true },
+    { chain: 'INPUT-LAN-ONLY', ok: true },
+  ],
   egressTop: [
     { dest: 'Tailscale DERP / peers', share: 0.71 },
     { dest: 'DNS-over-HTTPS (tailnet resolver)', share: 0.22 },
@@ -109,12 +110,12 @@ export interface ChangeEntry {
 }
 
 export const changelog: ChangeEntry[] = [
-  { at: at('20:20'), who: 'admin box', what: 'Woke cloud64 (router)' },
-  { at: at('16:05'), who: 'admin box', what: 'Switched Wake-on-LAN to magic packet only (g)', undo: 'ethtool -s enp1s0 wol ug' },
-  { at: at('03:31'), who: 'cloud64-backup', what: 'Nightly backup finished, 2.0 GB, encrypted' },
-  { at: at('11:12', '2026-10-31'), who: 'admin box', what: 'Encrypted backups with age (recipients file)', undo: 'restore age-recipients.txt.bak-20261031-1110' },
-  { at: at('15:40', '2026-10-30'), who: 'admin box', what: 'Removed the x-bit from 7,015 media files' },
+  { at: at('20:20'), who: 'gateway', what: 'Woke homeserver' },
+  { at: at('16:05'), who: 'gateway', what: 'Switched Wake-on-LAN to magic packet only (g)', undo: 'ethtool -s enp1s0 wol ug' },
+  { at: at('03:31'), who: 'system-backup', what: 'Nightly backup finished, 2.0 GB, encrypted' },
+  { at: at('11:12', '2026-10-31'), who: 'gateway', what: 'Encrypted backups with age (recipients file)', undo: 'restore age-recipients.txt.bak-20261031-1110' },
+  { at: at('15:40', '2026-10-30'), who: 'gateway', what: 'Removed the x-bit from 7,015 media files' },
 ];
 
-/** Idle-check config from /etc/cloud64-idle.conf. */
+/** Idle-check config (IDLE_MIN, GRACE_MIN). */
 export const idleConf = { idleMin: 30, graceMin: 15 };
