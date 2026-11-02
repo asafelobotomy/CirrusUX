@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -232,6 +233,12 @@ func rootOnly(f *os.File) error {
 	return nil
 }
 
+// hasApt: OS updates need Debian's apt; tests replace it.
+var hasApt = func() bool {
+	_, err := exec.LookPath("apt-get")
+	return err == nil
+}
+
 // features lists the modules this machine has, for the agent and the UI.
 func (c conf) features() helperapi.Features {
 	f := helperapi.Features{Modules: []string{}}
@@ -247,5 +254,6 @@ func (c conf) features() helperapi.Features {
 	add(c.Fail2banJail != "" || len(c.FirewallChecks) > 0, helperapi.ModSecurity)
 	add(c.EgressReport != "", helperapi.ModEgress)
 	add(c.ContainerRuntime != "" && c.AppsDir != "" && c.AppsUser != "", helperapi.ModApps)
+	add(hasApt(), helperapi.ModOS)
 	return f
 }

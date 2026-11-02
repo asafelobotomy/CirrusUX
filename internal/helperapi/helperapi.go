@@ -28,12 +28,22 @@ const (
 	CmdAppJob = "app-job"
 	// CmdAppRun runs a checked job; systemd starts it, never sudo.
 	CmdAppRun = "app-run"
+	// OS updates, only when asked: each starts a background job.
+	CmdOSCheck   = "os-check"
+	CmdOSUpgrade = "os-upgrade"
+	CmdOSRun     = "os-run" // the job itself; systemd starts it, never sudo
+	// CmdJournal prints the recent journal of one CirrusUX unit.
+	CmdJournal = "journal"
 )
 
 var Commands = []string{
 	CmdFeatures, CmdAppsInfo, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
+	CmdOSCheck, CmdOSUpgrade, CmdJournal,
 }
+
+// OSUpdatesFile holds the last OS update check, readable by the agent.
+const OSUpdatesFile = "/var/lib/cirrusux/os-updates.json"
 
 // App store paths shared by the agent and the helper.
 const (
@@ -59,6 +69,7 @@ const (
 	ModSecurity  = "security"   // fail2ban jail and firewall checks
 	ModEgress    = "egress"     // the outbound-traffic report
 	ModApps      = "apps"       // the app store: a container runtime and an apps folder
+	ModOS        = "os"         // Debian package updates, on request
 )
 
 // Features is what `features` prints.

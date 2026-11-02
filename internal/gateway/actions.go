@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -98,6 +100,21 @@ var actionSpecs = map[string]actionSpec{
 			return "Started removing " + appName(a["app"]) + " (its folder is archived)"
 		},
 		check: checkInstalled,
+	},
+	// OS updates (Phase 6b): a check reads; an upgrade changes the system
+	// and can't be undone, which its confirmation says.
+	"os_check": {
+		label:    func(map[string]string) string { return "Checked for OS updates" },
+		readOnly: true,
+	},
+	"os_upgrade": {
+		label: func(map[string]string) string { return "Started installing OS package updates" },
+	},
+	// Logs (Phase 6b): one recent window, never followed.
+	"logs": {
+		label:    func(a map[string]string) string { return "Read logs of " + a["source"] },
+		check:    checkLogSource,
+		readOnly: true,
 	},
 	"egress_report": {
 		label:    func(map[string]string) string { return "Egress report" },
@@ -199,6 +216,26 @@ func (s *Server) previewApp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+var logUnitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
+
+// checkLogSource accepts a container the agent reported, or one of
+// CirrusUX's own units.
+func checkLogSource(a map[string]string, snap *snapshot.Snapshot) error {
+	if n, err := strconv.Atoi(a["lines"]); a["lines"] != "" && (err != nil || n < 1 || n > 1000) {
+		return fmt.Errorf("lines: 1 to 1000")
+	}
+	kind, name, _ := strings.Cut(a["source"], ":")
+	switch kind {
+	case "container":
+		return checkContainer(map[string]string{"name": name}, snap)
+	case "unit":
+		if logUnitRe.MatchString(name) {
+			return nil
+		}
+	}
+	return fmt.Errorf("logs come from a container or a CirrusUX unit (cirrusux-….service)")
+}
+
 func checkInstalled(a map[string]string, snap *snapshot.Snapshot) error {
 	if snap == nil || !slices.ContainsFunc(snap.Apps, func(x snapshot.App) bool { return x.ID == a["app"] }) {
 		return fmt.Errorf("%s isn't installed by the app store", appName(a["app"]))
@@ -222,7 +259,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 		return q, spec, fmt.Errorf("unknown action %q", q.Action)
 	}
 	clean := ActionReq{Action: q.Action}
-	for _, k := range []string{"minutes", "name", "app", "options", "tag", "digest"} {
+	for _, k := range []string{"minutes", "name", "app", "options", "tag", "digest", "source", "lines"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}

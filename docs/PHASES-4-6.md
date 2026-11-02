@@ -169,14 +169,18 @@ In four parts, each its own commit.
   its data back by itself. And for real on rootless Podman: Syncthing 2.1.6
   → 2.1.7 with its data kept and backed up, then back to 2.1.6.
 
-### 6b. OS updates and the Logs page
+### 6b. OS updates and the Logs page — done
 
 - Pending OS packages, checked on request (`apt-get update` then the list),
   and an upgrade run as a job. Nothing updates by itself.
-- Per-container logs (the Docker filter allows the logs endpoint with a line
-  limit) and the journal of CirrusUX's own units; live tails stop after 5
-  minutes; "Explain this" sends the selected lines (redacted) to the
-  assistant.
+- Per-container logs (the Docker filter allows the logs endpoint, but never
+  `follow`) and the journal of CirrusUX's own units (`cirrusux-helper journal
+  <unit>`, unit names checked against `cirrusux-….service`); "Follow"
+  refreshes every 5 s and stops by itself after 5 minutes; "Explain this"
+  sends the chosen lines (redacted) to the assistant.
+- An OS upgrade is `apt-get upgrade` with the old config files kept: it never
+  removes packages or adds new ones. It can't be undone from the panel, and
+  its confirmation says so; a restart that's needed afterwards is shown.
 
 ### 6c. Storage and archive review
 

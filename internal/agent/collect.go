@@ -19,6 +19,7 @@ import (
 
 	"cirrusux/internal/appjob"
 	"cirrusux/internal/helperapi"
+	"cirrusux/internal/osupdate"
 	"cirrusux/internal/snapshot"
 )
 
@@ -143,8 +144,14 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 			}
 		}
 	}
+	if has(helperapi.ModApps) || has(helperapi.ModOS) {
+		s.Jobs = recentJobs(now)
+	}
+	if has(helperapi.ModOS) {
+		s.OSUpdates = osupdate.Read(helperapi.OSUpdatesFile)
+	}
 	if has(helperapi.ModApps) {
-		s.Apps, s.Jobs = appsAndJobs(now)
+		s.Apps = installedApps()
 		var info helperapi.AppsInfo
 		if err := c.helper(ctx, helperapi.CmdAppsInfo, &info); err != nil {
 			errf("apps info: %v", err)
@@ -208,11 +215,16 @@ func (c *Collector) collectSleep(ctx context.Context, s *snapshot.Snapshot, errf
 
 // appsAndJobs reads the app store's records and recent job statuses; the
 // helper writes both readable, so no root is needed.
-func appsAndJobs(now time.Time) ([]snapshot.App, []snapshot.Job) {
+func installedApps() []snapshot.App {
 	var apps []snapshot.App
 	for _, r := range appjob.Records(helperapi.AppRecordsDir) {
 		apps = append(apps, snapshot.App{ID: r.App, Name: r.Name, Tag: r.Tag, Digest: r.Digest, PreviousTag: r.PreviousTag, PreviousDigest: r.PreviousDigest, Runtime: r.Runtime, MainPort: r.MainPort, HTTPS: r.HTTPS, Installed: r.Installed})
 	}
+	return apps
+}
+
+// recentJobs: running ones, and the last day's (app store and OS updates).
+func recentJobs(now time.Time) []snapshot.Job {
 	var jobs []snapshot.Job
 	for _, j := range appjob.Statuses(helperapi.JobsDir) {
 		if j.State != "running" && now.Sub(j.Started) > 24*time.Hour || len(jobs) == 10 {
@@ -220,7 +232,7 @@ func appsAndJobs(now time.Time) ([]snapshot.App, []snapshot.Job) {
 		}
 		jobs = append(jobs, snapshot.Job{ID: j.Job, Action: j.Action, App: j.App, Name: j.Name, State: j.State, Step: j.Step, Detail: j.Detail, Error: j.Error, Started: j.Started, Finished: j.Finished})
 	}
-	return apps, jobs
+	return jobs
 }
 
 func (c *Collector) helper(ctx context.Context, sub string, out any, args ...string) error {

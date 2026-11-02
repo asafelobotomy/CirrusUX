@@ -32,7 +32,8 @@ interface Snap {
   timeline: { from: string; to?: string; state: 'awake' | 'asleep'; reason?: string }[];
   errors?: string[];
   apps?: { id: string; name: string; tag: string; digest?: string; previousTag?: string; previousDigest?: string; runtime: string; mainPort: number; https?: boolean; installed: string }[];
-  jobs?: { id: string; action: 'install' | 'remove' | 'update'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
+  osUpdates?: { checked: string; packages: { name: string; from: string; to: string; security?: boolean }[]; rebootRequired?: boolean; upgraded?: string; upgradedCount?: number };
+  jobs?: { id: string; action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
   appsHost?: AppsHost;
 }
 
@@ -100,6 +101,7 @@ function apply(st: StateResp): void {
   store.installed = (s.apps ?? []).map((a) => ({ ...a, installed: new Date(a.installed) }));
   store.jobs = (s.jobs ?? []).map((j) => ({ ...j, started: new Date(j.started), finished: d(j.finished) }));
   store.host = s.appsHost ?? null;
+  store.os = s.osUpdates ? { ...s.osUpdates, checked: new Date(s.osUpdates.checked), upgraded: d(s.osUpdates.upgraded) } : null;
 }
 
 export async function refresh(): Promise<void> {

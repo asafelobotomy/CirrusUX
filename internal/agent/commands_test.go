@@ -48,6 +48,17 @@ func fakeDocker(t *testing.T) (socket string, posts func() []string) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		if strings.HasSuffix(r.URL.Path, "/logs") {
+			if r.URL.Query().Get("follow") != "" || r.URL.Query().Get("tail") != "50" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			for _, l := range []string{"2026-11-02T12:00:00Z starting\n", "2026-11-02T12:00:01Z ready\n"} {
+				hdr := []byte{1, 0, 0, 0, 0, 0, 0, byte(len(l))}
+				w.Write(append(hdr, l...))
+			}
+			return
+		}
 		if r.URL.Path == "/containers/json" {
 			io.WriteString(w, `[{"Id":"0123456789abcdef","Names":["/kavita"],"Image":"kavita:1","State":"running","Status":"Up 1 hour"}]`)
 			return
@@ -264,5 +275,28 @@ func TestAppRequest(t *testing.T) {
 		if res := a.run(context.Background(), bad); res.OK {
 			t.Errorf("options %s accepted", opts)
 		}
+	}
+}
+
+func TestLogs(t *testing.T) {
+	a, calls, _ := testAgent(t)
+	got, err := a.logs(context.Background(), "container:kavita", "50")
+	if err != nil || strings.Join(got, "|") != "2026-11-02T12:00:00Z starting|2026-11-02T12:00:01Z ready" {
+		t.Errorf("container logs = %q, %v", got, err)
+	}
+	if _, err := a.logs(context.Background(), "container:not-there", "50"); err == nil {
+		t.Error("logs of an unknown container")
+	}
+	if _, err := a.logs(context.Background(), "unit:sshd.service", "50"); err == nil {
+		t.Error("journal of a unit that isn't CirrusUX's")
+	}
+	if _, err := a.logs(context.Background(), "unit:cirrusux-backup.service", "50"); err != nil {
+		t.Errorf("unit logs: %v", err)
+	}
+	if c := calls(); len(c) != 1 || c[0] != "journal_cirrusux-backup.service" {
+		t.Errorf("helper calls = %v", c)
+	}
+	if string(demux([]byte("plain tty output\n"))) != "plain tty output\n" {
+		t.Error("a TTY container's plain output was mangled")
 	}
 }

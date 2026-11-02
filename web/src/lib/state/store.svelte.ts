@@ -23,7 +23,7 @@ export interface InstalledApp {
 
 export interface Job {
   id: string;
-  action: 'install' | 'remove' | 'update';
+  action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade';
   app: string;
   name: string;
   state: 'running' | 'done' | 'failed';
@@ -50,9 +50,20 @@ export const store = $state({
   host: null as AppsHost | null,
   /** The app whose page is open. */
   open: null as string | null,
+  /** The last OS package check, from the server (os module). */
+  os: null as OSUpdates | null,
   /** The last update check (gateway, on request). */
   updates: { checked: null as Date | null, apps: [] as AppUpdate[] },
 });
+
+/** The last OS package check (osupdate.Result). */
+export interface OSUpdates {
+  checked: Date;
+  packages: { name: string; from: string; to: string; security?: boolean }[];
+  rebootRequired?: boolean;
+  upgraded?: Date | null;
+  upgradedCount?: number;
+}
 
 /** One installed app's update check (gateway.AppUpdate). */
 export interface AppUpdate {

@@ -9,6 +9,20 @@ gets a minor version.
 
 ### Added
 
+- OS updates, on request (Phase 6b): "Check now" refreshes the package
+  lists and lists what's upgradable (security updates marked); "Install
+  updates" runs `apt-get upgrade`, keeping changed config files and never
+  removing or adding packages. Both run as jobs on the server with live
+  progress, and a needed restart is shown. The confirmation says plainly
+  that package upgrades can't be undone from the panel.
+- The Logs page: recent lines of any container (through the Docker filter,
+  which allows the logs endpoint but never `follow`) or of CirrusUX's own
+  units (`cirrusux-helper journal`), "Follow" for up to 5 minutes, and
+  "Explain this" sending the lines you pick to the assistant, redacted.
+- Sudoers: `journal *` (read; the helper checks the unit name), `os-check`
+  and `os-upgrade` (actions). Replace `/etc/sudoers.d/cirrusux` when
+  upgrading.
+
 - App updates, on request (Phase 6a). "Check now" on the new Updates page
   asks the registries from the gateway (standard registry API, anonymous
   tokens; a sleeping server isn't woken) and offers the newest release of

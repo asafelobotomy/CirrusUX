@@ -37,6 +37,10 @@ func main() {
 		// the one subcommand with an argument, from a fixed list
 	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdAppRun && jobRe.MatchString(os.Args[2]) {
 		// started by systemd-run for a checked job; not in sudoers
+	} else if len(os.Args) == 4 && os.Args[1] == helperapi.CmdOSRun && (os.Args[2] == "check" || os.Args[2] == "upgrade") && jobRe.MatchString(os.Args[3]) {
+		// started by systemd-run; not in sudoers
+	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdJournal && unitRe.MatchString(os.Args[2]) {
+		// a CirrusUX unit, checked by pattern
 	} else if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}
@@ -101,6 +105,14 @@ func main() {
 	case helperapi.CmdAppRun:
 		need(helperapi.ModApps)
 		out, err = appRun(c, os.Args[2])
+	case helperapi.CmdOSCheck, helperapi.CmdOSUpgrade:
+		need(helperapi.ModOS)
+		out, err = osJob(ctx, strings.TrimPrefix(sub, "os-"))
+	case helperapi.CmdOSRun:
+		need(helperapi.ModOS)
+		out, err = osRun(os.Args[2], os.Args[3])
+	case helperapi.CmdJournal:
+		out, err = command(ctx, "journalctl", "-u", os.Args[2], "-n", "300", "-o", "short-iso", "--no-pager")
 	case helperapi.CmdEgressReport:
 		need(helperapi.ModEgress)
 		out, err = run(ctx, c.EgressReport, "-n", "20")
@@ -207,6 +219,10 @@ func command(ctx context.Context, name string, args ...string) (helperapi.Lines,
 }
 
 var jobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
+
+// unitRe: the journal command reads only CirrusUX's own units, and app
+// units the app store made (cirrusux-<app>.service).
+var unitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
 
 var bannedRe = regexp.MustCompile(`Currently banned:\s*(\d+)`)
 

@@ -6,10 +6,11 @@
   import JobList from '../lib/store/JobList.svelte';
   import { mode } from '../lib/api.svelte';
   import { power } from '../lib/state/power.svelte';
-  import { confirmUpdate } from '../lib/state/actions';
+  import { checkOS, confirmOSUpgrade, confirmUpdate } from '../lib/state/actions';
+  import { has } from '../lib/api.svelte';
   import { checkUpdates, findApp, loadCatalogue, loadUpdates, runningJob, store } from '../lib/state/store.svelte';
   import { fmtAgo, fmtDayTime } from '../lib/time.svelte';
-  import { RefreshCw, Undo2 } from '../lib/icons';
+  import { RefreshCw, TriangleAlert, Undo2 } from '../lib/icons';
 
   let checking = $state(false);
   onMount(() => {
@@ -27,7 +28,9 @@
     store.installed.map((a) => ({ a, u: store.updates.apps.find((u) => u.app === a.id && u.current === a.tag) })),
   );
   const waiting = $derived(rows.filter((r) => r.u?.latest).length);
-  const updateJobs = $derived(store.jobs.filter((j) => j.action === 'update'));
+  const updateJobs = $derived(store.jobs.filter((j) => j.action === 'update' || j.action.startsWith('os-')));
+  const osJob = $derived(store.jobs.find((j) => j.app === 'os' && j.state === 'running'));
+  const security = $derived(store.os?.packages.filter((p) => p.security).length ?? 0);
   // Updates need the server awake; checking doesn't.
   const canAct = $derived(!mode.live || power.state === 'awake');
 </script>
@@ -81,9 +84,33 @@
     {/if}
   </Card>
 
-  <Card title="Operating system" subtitle="Pending packages, checked and installed only when you ask.">
-    <p class="muted">Coming next (Phase 6b).</p>
-  </Card>
+  {#if has('os')}
+    <Card title="Operating system" subtitle={store.os ? `Checked ${fmtAgo(store.os.checked)} (${fmtDayTime(store.os.checked)})` : 'Not checked yet. Nothing is checked or installed unless you ask.'}>
+      {#snippet actions()}
+        <Button size="sm" disabled={!canAct || !!osJob} onclick={checkOS}>{#snippet icon()}<RefreshCw />{/snippet}{osJob?.action === 'os-check' ? 'Checking…' : 'Check now'}</Button>
+      {/snippet}
+      {#if store.os}
+        {#if store.os.upgraded}<p class="faint small">Last upgrade: {store.os.upgradedCount} package(s), {fmtAgo(store.os.upgraded)}.</p>{/if}
+        {#if store.os.rebootRequired}<p class="warn"><TriangleAlert size={15} />A restart is needed to finish the last upgrade. Restart {mode.server} when it suits you.</p>{/if}
+        {#if store.os.packages.length}
+          <p class="summary">
+            {store.os.packages.length} package update{store.os.packages.length === 1 ? '' : 's'} waiting{#if security}, <strong>{security} for security</strong>{/if}.
+          </p>
+          <details>
+            <summary>Show the packages</summary>
+            <ul class="pkgs">
+              {#each store.os.packages as p}
+                <li><span>{p.name}{#if p.security} <Badge tone="warn">security</Badge>{/if}</span><code class="faint">{p.from} → {p.to}</code></li>
+              {/each}
+            </ul>
+          </details>
+          <div class="row"><Button variant="primary" disabled={!canAct || !!osJob} onclick={() => confirmOSUpgrade(store.os!.packages.length)}>Install updates</Button></div>
+        {:else}
+          <p class="summary">The system is up to date.</p>
+        {/if}
+      {/if}
+    </Card>
+  {/if}
 
   <p class="faint note">
     Checks ask the registries from the gateway, so a sleeping server isn't woken. An update backs up the app's settings and data first, and if the
@@ -101,4 +128,10 @@
   .state { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .err { color: var(--bad); font-size: 0.85rem; }
   .small, .note { font-size: 0.8rem; }
+  .warn { display: flex; gap: 6px; align-items: flex-start; color: var(--warn); font-size: 0.88rem; margin-bottom: var(--space-2); }
+  details { margin: var(--space-2) 0; }
+  summary { cursor: pointer; color: var(--text-muted); font-size: 0.88rem; }
+  .pkgs { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.86rem; max-height: 260px; overflow: auto; }
+  .pkgs li { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .row { display: flex; justify-content: flex-end; }
 </style>

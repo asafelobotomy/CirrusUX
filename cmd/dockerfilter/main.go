@@ -18,6 +18,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"cirrusux/internal/version"
@@ -31,11 +32,18 @@ var allowedGet = []*regexp.Regexp{
 	regexp.MustCompile(`^(/v[0-9.]+)?/containers/[A-Za-z0-9_.-]+/json$`),
 }
 
+// Logs, without following: a tail that never ends would hold the agent.
+var allowedLogs = regexp.MustCompile(`^(/v[0-9.]+)?/containers/[A-Za-z0-9_.-]+/logs$`)
+
 var allowedPost = regexp.MustCompile(`^(/v[0-9.]+)?/containers/[A-Za-z0-9_.-]+/(start|stop|restart)$`)
 
 func allow(r *http.Request) bool {
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
+		if allowedLogs.MatchString(r.URL.Path) {
+			f := strings.ToLower(r.URL.Query().Get("follow"))
+			return f == "" || f == "0" || f == "false"
+		}
 		for _, re := range allowedGet {
 			if re.MatchString(r.URL.Path) {
 				return true

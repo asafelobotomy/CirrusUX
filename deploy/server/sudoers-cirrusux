@@ -1,12 +1,14 @@
 # /etc/sudoers.d/cirrusux on the server (mode 440; check with `visudo -cf`).
 # The agent may run only these helper command lines as root, exactly as
-# written: no other arguments are accepted.
+# written. The one wildcard, journal's unit name, is checked again by the
+# helper against cirrusux-<name>.service.
 
 Defaults:cirrusux !lecture, !requiretty, env_reset
 
 # Phase 1: reads.
 Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper features, \
                          /usr/local/sbin/cirrusux-helper apps-info, \
+                         /usr/local/sbin/cirrusux-helper journal *, \
                          /usr/local/sbin/cirrusux-helper idle-status, \
                          /usr/local/sbin/cirrusux-helper idle-log, \
                          /usr/local/sbin/cirrusux-helper backup-list, \
@@ -23,6 +25,8 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
                         /usr/local/sbin/cirrusux-helper allow-sleep, \
                         /usr/local/sbin/cirrusux-helper nudge-awake, \
                         /usr/local/sbin/cirrusux-helper backup-run, \
-                        /usr/local/sbin/cirrusux-helper app-job
+                        /usr/local/sbin/cirrusux-helper app-job, \
+                        /usr/local/sbin/cirrusux-helper os-check, \
+                        /usr/local/sbin/cirrusux-helper os-upgrade
 
 cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT

@@ -163,6 +163,12 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		return helper(helperapi.CmdBackupRun)
 	case "egress_report":
 		return helper(helperapi.CmdEgressReport)
+	case "os_check":
+		return helper(helperapi.CmdOSCheck)
+	case "os_upgrade":
+		return helper(helperapi.CmdOSUpgrade)
+	case "logs":
+		return a.logs(ctx, c.Args["source"], c.Args["lines"])
 	case "app_install", "app_remove", "app_update":
 		if err := writeRequest(c); err != nil {
 			return nil, err

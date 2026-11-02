@@ -12,6 +12,7 @@ import { toast } from './ui.svelte';
 import { cleanOptions, type AppOptions, type CatalogueApp } from '../catalogue';
 import { demoJob, findApp, store } from './store.svelte';
 
+
 type Opts = { source?: 'assistant' };
 
 export interface ActionReq { action: string; args?: Record<string, string> }
@@ -216,6 +217,61 @@ export function confirmUpdate(app: CatalogueApp, from: string, tag: string, dige
       void sendAction({ action: 'app_update', args: { app: app.id, tag, digest } }, `Started updating ${app.name} to ${tag}`).then(() => refreshSoon());
     },
   });
+}
+
+// ---- OS updates (PHASES-4-6 §6b) ----
+
+/** Refreshes the package lists and lists what's upgradable: a job on the server. */
+export async function checkOS(): Promise<void> {
+  if (offline()) return;
+  if (!mode.live) {
+    const job = demoOSJob('os-check', ['Refreshing the package lists', 'Listing upgradable packages'], '3 package update(s) available');
+    setTimeout(() => {
+      store.os = {
+        checked: now(),
+        packages: [
+          { name: 'openssl', from: '3.5.1-1', to: '3.5.1-1+deb13u1', security: true },
+          { name: 'tzdata', from: '2026a-0+deb13u1', to: '2026b-0+deb13u1' },
+          { name: 'systemd', from: '257.8-1~deb13u1', to: '257.9-1~deb13u1' },
+        ],
+      };
+    }, job);
+    return;
+  }
+  await sendAction({ action: 'os_check' }, 'Checked for OS updates', true);
+  refreshSoon();
+}
+
+/** Installs the pending OS updates. apt can't undo them, so the dialog says so. */
+export function confirmOSUpgrade(count: number): void {
+  if (offline()) return;
+  ask({
+    title: `Install ${count} OS package update${count === 1 ? '' : 's'}?`,
+    body:
+      `Runs apt-get upgrade on ${mode.server}: it updates installed packages only, never removes any or adds new ones, and keeps config files you changed. ` +
+      `Package upgrades can't be undone from the panel; the nightly system backup is the way back.${d3()}`,
+    command: 'cirrusux-helper os-upgrade (apt-get upgrade)',
+    confirmLabel: 'Install updates',
+    changelog: 'Started installing OS package updates',
+    run: () => {
+      if (!mode.live) {
+        const n = store.os?.packages.length ?? 0;
+        const at = demoOSJob('os-upgrade', ['Refreshing the package lists', `Installing ${n} packages`, 'Listing upgradable packages'], `Installed ${n} package update(s)`);
+        setTimeout(() => (store.os = { checked: now(), packages: [], rebootRequired: true, upgraded: now(), upgradedCount: n }), at);
+        return;
+      }
+      void sendAction({ action: 'os_upgrade' }, 'Started installing OS package updates').then(() => refreshSoon());
+    },
+  });
+}
+
+function demoOSJob(action: 'os-check' | 'os-upgrade', steps: string[], done: string): number {
+  const job = { id: Math.random().toString(16).slice(2, 10), action, app: 'os', name: 'Operating system', state: 'running' as const, step: steps[0], started: now(), finished: null };
+  store.jobs.unshift(job);
+  steps.forEach((s, i) => setTimeout(() => (store.jobs.find((j) => j.id === job.id)!.step = s), i * 1000));
+  const end = steps.length * 1000;
+  setTimeout(() => Object.assign(store.jobs.find((j) => j.id === job.id)!, { state: 'done', step: done, finished: now() }), end);
+  return end;
 }
 
 /** Runs an action given by name, e.g. from an assistant proposal or an Undo. */

@@ -7,6 +7,20 @@ import (
 	"testing"
 )
 
+func TestLogs(t *testing.T) {
+	for target, want := range map[string]bool{
+		"/v1.43/containers/jellyfin/logs?stdout=1&stderr=1&tail=200": true,
+		"/containers/jellyfin/logs?follow=0&tail=10":                 true,
+		"/containers/jellyfin/logs?follow=1":                         false,
+		"/containers/jellyfin/logs?follow=true":                      false,
+	} {
+		r := httptest.NewRequest(http.MethodGet, target, nil)
+		if allow(r) != want {
+			t.Errorf("%s: allowed = %v", target, !want)
+		}
+	}
+}
+
 func TestAllow(t *testing.T) {
 	ok := []string{
 		"POST /containers/kavita/restart",
@@ -19,7 +33,7 @@ func TestAllow(t *testing.T) {
 	}
 	denied := []string{
 		"POST /containers/create",
-		"GET /containers/abc/logs",
+		"GET /containers/abc/logs?follow=1",
 		"GET /containers/abc/archive",
 		"GET /images/json",
 		"DELETE /containers/abc",

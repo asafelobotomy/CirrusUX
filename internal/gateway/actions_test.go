@@ -245,3 +245,31 @@ func TestAppPreview(t *testing.T) {
 		t.Errorf("unknown field: %v", got)
 	}
 }
+
+func TestOSAndLogActions(t *testing.T) {
+	snap := awakeSnap()
+	for name, req := range map[string]ActionReq{
+		"os check":       {Action: "os_check"},
+		"os upgrade":     {Action: "os_upgrade"},
+		"container logs": {Action: "logs", Args: map[string]string{"source": "container:kavita", "lines": "200"}},
+		"unit journal":   {Action: "logs", Args: map[string]string{"source": "unit:cirrusux-backup.service"}},
+	} {
+		if _, _, err := req.Validate(&snap); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for name, req := range map[string]ActionReq{
+		"unknown container": {Action: "logs", Args: map[string]string{"source": "container:mystery"}},
+		"other unit":        {Action: "logs", Args: map[string]string{"source": "unit:sshd.service"}},
+		"sneaky unit":       {Action: "logs", Args: map[string]string{"source": "unit:cirrusux-x.service --all"}},
+		"too many lines":    {Action: "logs", Args: map[string]string{"source": "container:kavita", "lines": "100000"}},
+		"no kind":           {Action: "logs", Args: map[string]string{"source": "/var/log/syslog"}},
+	} {
+		if _, _, err := req.Validate(&snap); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if !actionSpecs["os_check"].readOnly || !actionSpecs["logs"].readOnly || actionSpecs["os_upgrade"].readOnly || actionSpecs["os_upgrade"].undo != nil {
+		t.Error("audit and undo flags")
+	}
+}

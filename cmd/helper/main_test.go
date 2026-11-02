@@ -57,6 +57,11 @@ func TestTimeoutFor(t *testing.T) {
 	}
 }
 
+func TestMain(m *testing.M) {
+	hasApt = func() bool { return false } // whatever this machine has
+	os.Exit(m.Run())
+}
+
 func writeConf(t *testing.T, body string) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "helper.env")
