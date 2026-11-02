@@ -10,6 +10,8 @@ test('container names map to app names', () => {
     tinymediamanager: 'tinyMediaManager',
     'musicbrainz-picard-1': 'Picard',
     nginx_server: 'Nginx_server',
+    'cirrus-test': 'Cirrus-test',
+    'home-assistant': 'Home Assistant',
   };
   for (const [container, app] of Object.entries(cases)) assert.equal(appName(container), app, container);
 });

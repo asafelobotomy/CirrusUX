@@ -2,19 +2,14 @@
   import { fly, fade } from 'svelte/transition';
   import Button from '../components/Button.svelte';
   import Badge from '../components/Badge.svelte';
-  import { chat, askAssistant } from '../state/assistant.svelte';
+  import { chat, askAssistant, suggestions } from '../state/assistant.svelte';
   import { ui } from '../state/ui.svelte';
-  import { has, mode, sleeps } from '../api.svelte';
+  import { mode, sleeps } from '../api.svelte';
   import { Database, Lock, Send, Sparkles, X, WandSparkles } from '../icons';
 
   let q = $state('');
   let scroller = $state<HTMLElement>();
-  const suggestions = $derived([
-    sleeps() ? `Is ${mode.server} asleep?` : `Is everything on ${mode.server} running?`,
-    ...(has('backup') ? ['Did last night’s backup work?'] : []),
-    ...(sleeps() ? ['Why did it wake last?'] : []),
-    'Which containers need attention?',
-  ]);
+  const starters = $derived(suggestions());
 
   function submit(text = q) {
     if (!text.trim() || chat.thinking) return;
@@ -43,7 +38,7 @@
           <h2>Ask about {mode.server}</h2>
           <p class="muted">{mode.assistant.name} reads the panel's cached snapshot{sleeps() ? ", so asking doesn't wake the server" : ''}. It can suggest actions, but nothing runs until you confirm.</p>
           <div class="sugg">
-            {#each suggestions as s}<button onclick={() => submit(s)}>{s}</button>{/each}
+            {#each starters as s}<button onclick={() => submit(s)}>{s}</button>{/each}
           </div>
         </div>
       {/if}

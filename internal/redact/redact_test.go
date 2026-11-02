@@ -24,10 +24,10 @@ func TestMasks(t *testing.T) {
 		{"ula fd00:db8:1::/64", "fd00:db8"},
 		{"MAC 02:00:5e:00:00:01", "02:00:5e"},
 		{"MAC 02-00-5E-00-00-01", "02-00-5E"},
-		{"wrote /mnt/media/BackUp/cloud64-system/x.tar.zst.age", "/mnt/media"},
-		{"(see /etc/cloud64-idle.conf)", "/etc/cloud64"},
+		{"wrote /srv/backups/homeserver-system/x.tar.zst.age", "/srv/backups"},
+		{"(see /etc/idle-check.conf)", "/etc/idle-check"},
 		{"mail fly.someone@example.com", "example.com"},
-		{"host cloud-box.tail1234.ts.net", "tail1234"},
+		{"host gateway.tail1234.ts.net", "tail1234"},
 		{"-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk\n-----END OPENSSH PRIVATE KEY-----", "b3BlbnNzaC1rZXk"},
 	}
 	for _, c := range cases {

@@ -6,7 +6,7 @@ import { power } from './power.svelte';
 import { live } from './live.svelte';
 import { confirmAction, confirmBackup, confirmContainer, confirmStayAwake, confirmWake } from './actions';
 import { fmtTime } from '../time.svelte';
-import { api, mode } from '../api.svelte';
+import { api, has, mode, sleeps } from '../api.svelte';
 
 export interface Proposal {
   label: string;
@@ -21,6 +21,16 @@ export interface Msg {
   proposal?: Proposal;
   /** The gateway or the model's API failed; not sent back as history. */
   error?: boolean;
+}
+
+/** Starter questions that suit this server. */
+export function suggestions(): string[] {
+  return [
+    sleeps() ? `Is ${mode.server} asleep?` : `Is everything on ${mode.server} running?`,
+    ...(has('backup') ? ['Did last night’s backup work?'] : []),
+    ...(sleeps() ? ['Why did it wake last?'] : []),
+    'What’s using the most space?',
+  ];
 }
 
 export const chat = $state<{ messages: Msg[]; thinking: boolean }>({ messages: [], thinking: false });

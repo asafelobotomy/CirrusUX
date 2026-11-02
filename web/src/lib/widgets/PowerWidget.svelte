@@ -2,10 +2,10 @@
   import Button from '../components/Button.svelte';
   import { power, sleepsInMs, WAKE_STEPS } from '../state/power.svelte';
   import { confirmAllowSleep, confirmStayAwake, confirmWake } from '../state/actions';
-  import { clock, fmtDayTime, fmtDuration, fmtTime, tzLabel } from '../time.svelte';
+  import { clock, fmtAgo, fmtDayTime, fmtDuration, fmtTime, tzLabel } from '../time.svelte';
   import { live } from '../state/live.svelte';
   import { has, mode, sleeps } from '../api.svelte';
-  import { Check, Coffee, Loader, Moon, MoonStar, Power, Sun, TriangleAlert, Wifi, Zap } from '../icons';
+  import { Activity, Check, Coffee, HardDrive, Loader, Moon, MoonStar, Package, Power, Sun, Thermometer, TriangleAlert, Wifi, Zap } from '../icons';
 
   const LABEL = $derived({ awake: sleeps() ? 'Awake' : 'Online', asleep: 'Asleep', waking: 'Waking…', unreachable: 'No reports' });
 
@@ -14,6 +14,12 @@
   const idleFrac = $derived(sleepsIn === null ? 0 : 1 - Math.min(1, sleepsIn / (live.idle.idleMin * 60_000)));
   const next = $derived(live.nextWakes[0] ?? null);
   const stay = $derived(power.stayAwakeUntil);
+  // The single setup's vitals: what's worth a glance on a server that's always on.
+  const running = $derived(live.containers.filter((c) => c.health !== 'exited').length);
+  const ailing = $derived(live.containers.filter((c) => c.health === 'unhealthy' || (c.health === 'exited' && !c.leftover)).length);
+  const diskUsed = $derived(live.disk ? live.disk.usedGb / live.disk.totalGb : 0);
+  const temp = $derived(live.temps.at(-1));
+  const gb = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)} TB` : `${Math.round(n)} GB`);
   const holding = $derived(stay === 'forever' || (stay instanceof Date && stay.getTime() > clock.now));
 </script>
 
@@ -43,7 +49,34 @@
     <p class="notice" role="status"><TriangleAlert size={15} />{power.notice}</p>
   {/if}
 
-  {#if power.state === 'awake'}
+  {#if power.state === 'awake' && !sleeps()}
+    <ul class="vitals">
+      <li class:warn={ailing > 0}>
+        <span class="vl"><Package size={14} />Containers</span>
+        <strong class="num">{running}<small>/{live.containers.length}</small></strong>
+        <span class="vs">{ailing ? `${ailing} need${ailing === 1 ? 's' : ''} attention` : 'all running'}</span>
+      </li>
+      {#if live.disk}
+        <li class:warn={diskUsed > 0.85}>
+          <span class="vl"><HardDrive size={14} />Disk</span>
+          <strong class="num">{Math.round(diskUsed * 100)}<small>%</small></strong>
+          <span class="vs">{gb(live.disk.totalGb - live.disk.usedGb)} free</span>
+        </li>
+      {/if}
+      {#if temp !== undefined}
+        <li class:warn={temp >= 80}>
+          <span class="vl"><Thermometer size={14} />CPU</span>
+          <strong class="num">{Math.round(temp)}<small>°C</small></strong>
+          <span class="vs">{temp >= 80 ? 'running hot' : 'normal'}</span>
+        </li>
+      {/if}
+      <li>
+        <span class="vl"><Activity size={14} />Report</span>
+        <strong class="report">{fmtAgo(power.lastSnapshot)}</strong>
+        <span class="vs">at {fmtTime(power.lastSnapshot)}</span>
+      </li>
+    </ul>
+  {:else if power.state === 'awake'}
     <div class="status">
       {#if power.reasons.length}
         <p class="line"><Zap size={16} /> Kept awake by {power.reasons.join(', ')}</p>
@@ -165,5 +198,21 @@
   .done .tick { background: var(--ok); border-color: var(--ok); color: var(--bg); }
   .now .tick { border-color: var(--info); border-top-color: transparent; animation: spin 0.9s linear infinite; }
   .next { margin-top: auto; }
+  .vitals {
+    list-style: none; margin: auto 0 0; padding: 0; display: grid; gap: var(--space-2);
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @container (min-width: 620px) { .vitals { grid-template-columns: repeat(4, 1fr); } }
+  .vitals li {
+    display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius);
+    background: color-mix(in oklab, var(--surface-2) 80%, transparent); border: 1px solid var(--border);
+  }
+  .vitals li.warn { border-color: color-mix(in oklab, var(--warn) 55%, var(--border)); }
+  .vl { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .vitals strong { font-size: 1.45rem; font-weight: 650; letter-spacing: -0.02em; color: var(--text); }
+  .vitals strong small { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+  .vitals .report { font-size: 1rem; line-height: 2.1rem; }
+  .vs { font-size: 0.78rem; color: var(--text-muted); }
+  .warn .vs { color: var(--warn); }
   @media (prefers-reduced-motion: reduce) { .spin, .now .tick { animation: none; } }
 </style>

@@ -20,7 +20,7 @@ func TestAskToolLoopAndRedaction(t *testing.T) {
 		if len(bodies) == 1 {
 			io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[
 				{"id":"1","type":"function","function":{"name":"backups","arguments":"{}"}},
-				{"id":"2","type":"function","function":{"name":"propose_wake","arguments":"{\"label\":\"Wake cloud64\"}"}}]}}],
+				{"id":"2","type":"function","function":{"name":"propose_wake","arguments":"{\"label\":\"Wake homeserver\"}"}}]}}],
 				"usage":{"prompt_tokens":100,"completion_tokens":10}}`)
 			return
 		}
@@ -33,13 +33,13 @@ func TestAskToolLoopAndRedaction(t *testing.T) {
 		{Name: "backups", Description: "backups", Run: func(json.RawMessage) (any, error) {
 			return map[string]string{"file": "/mnt/media/BackUp/x.age", "client": "192.0.2.23", "env": "TMM_PASSWORD=hunter2"}, nil
 		}},
-		{Name: "propose_wake", Description: "Wake cloud64", Proposal: true, Action: "wake"},
+		{Name: "propose_wake", Description: "Wake homeserver", Proposal: true, Action: "wake"},
 	}
 	reply, err := c.Ask(context.Background(), "system", []Turn{{Role: "user", Text: "my mac is 02:00:5e:00:00:01"}}, tools)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reply.Text != "Backup OK." || reply.Proposal == nil || reply.Proposal.Action != "wake" || reply.Proposal.Label != "Wake cloud64" {
+	if reply.Text != "Backup OK." || reply.Proposal == nil || reply.Proposal.Action != "wake" || reply.Proposal.Label != "Wake homeserver" {
 		t.Errorf("reply = %+v", reply)
 	}
 	if reply.TokensIn != 150 || reply.TokensOut != 15 {

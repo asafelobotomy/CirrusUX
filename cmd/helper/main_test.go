@@ -74,7 +74,7 @@ STAY_AWAKE_BIN=/usr/local/bin/stay-awake
 ALLOW_SLEEP_BIN=/usr/local/bin/allow-sleep
 BACKUP_UNIT=system-backup.service
 FAIL2BAN_JAIL=sshd
-FIREWALL_CHECKS=DOCKER-USER:LOCKDOWN 1PANEL_BASIC_AFTER:DROP
+FIREWALL_CHECKS=DOCKER-USER:LOCKDOWN INPUT-LAN:DROP
 EGRESS_REPORT=
 `))
 	if err != nil {
@@ -84,7 +84,7 @@ EGRESS_REPORT=
 	if got := c.features().Modules; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("features = %v, want %v", got, want)
 	}
-	if len(c.FirewallChecks) != 2 || c.FirewallChecks[1] != (firewallCheck{"1PANEL_BASIC_AFTER", "DROP"}) {
+	if len(c.FirewallChecks) != 2 || c.FirewallChecks[1] != (firewallCheck{"INPUT-LAN", "DROP"}) {
 		t.Errorf("firewall checks = %+v", c.FirewallChecks)
 	}
 	if c, err := loadConf(filepath.Join(t.TempDir(), "missing")); err != nil || len(c.features().Modules) != 0 {

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { mode } from '../api.svelte';
-  import { askAssistant } from '../state/assistant.svelte';
+  import { askAssistant, suggestions } from '../state/assistant.svelte';
   import { Send, Sparkles } from '../icons';
 
   let q = $state('');
-  const suggestions = ['Did last night’s backup work?', 'Why did it wake at 18:16?', 'What’s using the most space?'];
+  const starters = $derived(suggestions());
 
   function submit(text: string) {
     if (!text.trim()) return;
@@ -20,7 +20,7 @@
     <button type="submit" aria-label="Send"><Send size={16} /></button>
   </form>
   <div class="chips">
-    {#each suggestions as s}<button type="button" onclick={() => submit(s)}>{s}</button>{/each}
+    {#each starters as s}<button type="button" onclick={() => submit(s)}>{s}</button>{/each}
   </div>
 </div>
 

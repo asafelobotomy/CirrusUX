@@ -37,9 +37,11 @@ const KNOWN: Record<string, Known> = {
 
 const PALETTE = ['#5b8def', '#4cc38a', '#e9a23b', '#a35ee8', '#e56b6f', '#3fa7ff', '#8d7cf6'];
 
-/** "1Panel-jellyfin-a1B2" or "jellyfin-1" → "jellyfin". */
+/** "jellyfin-1" (a compose replica) → "jellyfin"; 1Panel's "1Panel-jellyfin-a1B2" too. */
 export function baseName(container: string): string {
-  return container.replace(/^1Panel-/i, '').replace(/-[A-Za-z0-9]{4}$/, '').replace(/-\d+$/, '').toLowerCase();
+  let base = container;
+  if (/^1Panel-/i.test(base)) base = base.slice('1Panel-'.length).replace(/-[A-Za-z0-9]{4}$/, '');
+  return base.replace(/-\d+$/, '').toLowerCase();
 }
 
 /** "jellyfin-1" → "Jellyfin"; unknown names are capitalised. */

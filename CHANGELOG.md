@@ -7,6 +7,24 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Changed
+
+- The power card in the single setup shows the server's vitals (containers
+  running, disk, CPU temperature, last report) instead of standing empty.
+- The assistant's starter questions follow the server's modules and setup.
+- Test fixtures use generic names instead of cloud64's.
+
+### Fixed
+
+- App tiles cut a four-letter suffix off any container name (`cirrus-test`
+  became "Cirrus"); only 1Panel's own names get that treatment now.
+
+### Tested
+
+- The single setup on a second machine with real data and Podman's
+  Docker-compatible API behind the filter: containers, disk, temperature
+  and a confirmed restart all work, and the filter refuses a delete.
+
 ## [0.3.0] - 2026-11-02
 
 Fixes from the full code review of 0.2.0, a new roadmap, and its Phase 3:

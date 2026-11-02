@@ -41,7 +41,7 @@ generic sleep manager in Phase 4.
 
 ### Phase 3 — generalise the core
 
-**Status:** built and tested locally (Unreleased in CHANGELOG.md); not yet tried on a second machine. Settings are in docs/CONFIG.md.
+**Status:** done in v0.3.0, and tried on a second machine (a workstation with Podman, single setup, real data). Settings are in docs/CONFIG.md.
 
 What is tied to cloud64 today, and what replaces it:
 

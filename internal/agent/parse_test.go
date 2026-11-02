@@ -13,11 +13,11 @@ func init() { logZone, _ = time.LoadLocation("Europe/London") }
 
 func TestSplitTS(t *testing.T) {
 	cases := map[string]string{
-		"2026-11-01T18:08:00+00:00 SUSPEND: idle 1800s":         "2026-11-01T18:08:00Z",
-		"2026-11-01 18:08:00 SUSPEND: idle 1800s":               "2026-11-01T18:08:00Z",
-		"[2026-11-01T18:08:00Z] SUSPEND":                        "2026-11-01T18:08:00Z",
-		"Nov  1 18:08:00 cloud64 cloud64-idle: SUSPEND":         "2026-11-01T18:08:00Z",
-		"2026-11-01T03:30:53+0000 cloud64 systemd[1]: Starting": "2026-11-01T03:30:53Z",
+		"2026-11-01T18:08:00+00:00 SUSPEND: idle 1800s":            "2026-11-01T18:08:00Z",
+		"2026-11-01 18:08:00 SUSPEND: idle 1800s":                  "2026-11-01T18:08:00Z",
+		"[2026-11-01T18:08:00Z] SUSPEND":                           "2026-11-01T18:08:00Z",
+		"Nov  1 18:08:00 homeserver idle-check: SUSPEND":           "2026-11-01T18:08:00Z",
+		"2026-11-01T03:30:53+0000 homeserver systemd[1]: Starting": "2026-11-01T03:30:53Z",
 	}
 	for in, want := range cases {
 		at, _, ok := splitTS(in, now)
@@ -78,10 +78,10 @@ func TestReasonsFromMsg(t *testing.T) {
 	}
 }
 
-// Lines in the exact format of /var/log/cloud64-idle.log (1 Nov 2026),
+// Lines in the exact format of /var/log/idle-check.log (1 Nov 2026),
 // addresses replaced with documentation ones.
 var realIdleLog = []string{
-	"2026-11-01 17:37:32 GMT WAKE-DIAG 20261101-173201: slept ~299s irq 122; inbound after resume: 192.0.2.1 Reply 198.51.100.7 (details /var/log/cloud64-wake/natural-20261101-173201.summary)",
+	"2026-11-01 17:37:32 GMT WAKE-DIAG 20261101-173201: slept ~299s irq 122; inbound after resume: 192.0.2.1 Reply 198.51.100.7 (details /var/log/wake-diag/natural-20261101-173201.summary)",
 	"2026-11-01 17:37:52 GMT ACTIVE: 1 remote login session(s) host conns: 22<-100.64.0.2 ",
 	"2026-11-01 17:39:10 GMT IDLE: nothing active, timer started",
 	"2026-11-01 18:08:00 GMT SUSPEND: idle 1800s; RTC wake set Mon 2026-11-02 03:34:51 GMT",
@@ -153,11 +153,11 @@ func TestParseEpoch(t *testing.T) {
 }
 
 func TestParseConf(t *testing.T) {
-	m := parseConf("# comment\nIDLE_MIN=30\nGRACE_MIN=\"15\" # minutes\nWAKE_TIMERS=\"cloud64-backup.timer clamav-weekly-scan.timer\"\n")
+	m := parseConf("# comment\nIDLE_MIN=30\nGRACE_MIN=\"15\" # minutes\nWAKE_TIMERS=\"system-backup.timer clamav-weekly-scan.timer\"\n")
 	if confInt(m, "IDLE_MIN", 0) != 30 || confInt(m, "GRACE_MIN", 0) != 15 || confInt(m, "MISSING", 7) != 7 {
 		t.Errorf("parsed %v", m)
 	}
-	if m["WAKE_TIMERS"] != "cloud64-backup.timer clamav-weekly-scan.timer" {
+	if m["WAKE_TIMERS"] != "system-backup.timer clamav-weekly-scan.timer" {
 		t.Errorf("WAKE_TIMERS = %q", m["WAKE_TIMERS"])
 	}
 }
@@ -173,24 +173,24 @@ func TestParseStayAwake(t *testing.T) {
 
 func TestParseBackupJournal(t *testing.T) {
 	lines := []string{
-		"2026-10-31T03:31:00+0000 cloud64 systemd[1]: Starting cloud64-backup.service - Nightly backup...",
-		"2026-10-31T03:31:40+0000 cloud64 systemd[1]: Finished cloud64-backup.service - Nightly backup.",
-		"2026-11-01T03:30:53+0000 cloud64 systemd[1]: Starting cloud64-backup.service - Nightly backup...",
-		"2026-11-01T03:30:53+00:00 cloud64 crontab[666619]: (root) LIST (root)",
-		"2026-11-01T03:31:33+00:00 cloud64 cloud64-backup.sh[666620]: tar: /etc/1panel/agent.sock: socket ignored",
-		"2026-11-01T03:31:33+0000 cloud64 cloud64-backup.sh[812]: OK 2.0G cloud64-system-2026-11-01_0330.tar.zst.age",
-		"2026-11-01T03:31:33+0000 cloud64 systemd[1]: cloud64-backup.service: Deactivated successfully.",
-		"2026-11-01T03:31:33+0000 cloud64 systemd[1]: Finished cloud64-backup.service - Nightly backup.",
+		"2026-10-31T03:31:00+0000 homeserver systemd[1]: Starting system-backup.service - Nightly backup...",
+		"2026-10-31T03:31:40+0000 homeserver systemd[1]: Finished system-backup.service - Nightly backup.",
+		"2026-11-01T03:30:53+0000 homeserver systemd[1]: Starting system-backup.service - Nightly backup...",
+		"2026-11-01T03:30:53+00:00 homeserver crontab[666619]: (root) LIST (root)",
+		"2026-11-01T03:31:33+00:00 homeserver system-backup.sh[666620]: tar: /etc/someapp/agent.sock: socket ignored",
+		"2026-11-01T03:31:33+0000 homeserver system-backup.sh[812]: OK 2.0G homeserver-system-2026-11-01_0330.tar.zst.age",
+		"2026-11-01T03:31:33+0000 homeserver systemd[1]: system-backup.service: Deactivated successfully.",
+		"2026-11-01T03:31:33+0000 homeserver systemd[1]: Finished system-backup.service - Nightly backup.",
 	}
-	r := parseBackupJournal(lines, "cloud64-backup.service", now)
+	r := parseBackupJournal(lines, "system-backup.service", now)
 	if r == nil || !r.OK || !r.Start.Equal(mustTime("2026-11-01T03:30:53Z")) || !r.End.Equal(mustTime("2026-11-01T03:31:33Z")) {
 		t.Fatalf("got %+v", r)
 	}
-	if r.Summary != "OK 2.0G cloud64-system-2026-11-01_0330.tar.zst.age" {
+	if r.Summary != "OK 2.0G homeserver-system-2026-11-01_0330.tar.zst.age" {
 		t.Errorf("summary %q", r.Summary)
 	}
-	failed := append(lines[:3:3], "2026-11-01T03:31:00+0000 cloud64 systemd[1]: cloud64-backup.service: Failed with result 'exit-code'.")
-	if r := parseBackupJournal(failed, "cloud64-backup.service", now); r == nil || r.OK {
+	failed := append(lines[:3:3], "2026-11-01T03:31:00+0000 homeserver systemd[1]: system-backup.service: Failed with result 'exit-code'.")
+	if r := parseBackupJournal(failed, "system-backup.service", now); r == nil || r.OK {
 		t.Errorf("failed run = %+v", r)
 	}
 }
