@@ -252,6 +252,9 @@ func TestUpdateAndRollback(t *testing.T) {
 	if strings.Join(rt.calls, ",") != "pull docker.io/deluan/navidrome:0.65.0@"+newDigest+",up navidrome 0.65.0" {
 		t.Errorf("calls = %v", rt.calls)
 	}
+	if s := status(t, e, "dddd1111"); s.Step != "Navidrome is updated" || !strings.Contains(s.Detail, "backup in") {
+		t.Errorf("update status = %+v", s)
+	}
 	rec := Records(e.RecordsDir)[0]
 	if rec.Tag != "0.65.0" || rec.Digest != newDigest || rec.PreviousTag != "0.64.2" || !strings.HasPrefix(rec.PreviousDigest, "sha256:38dc") || rec.Options.Media["music"] == "" {
 		t.Errorf("record = %+v", rec)

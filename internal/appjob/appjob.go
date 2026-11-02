@@ -411,10 +411,8 @@ func (e *Env) finish(st *Status, err error) error {
 	st.State = "done"
 	if err != nil {
 		st.State, st.Error = "failed", err.Error()
-	} else if st.Action == "install" {
-		st.Step = st.Name + " is installed"
 	} else {
-		st.Step = st.Name + " is removed"
+		st.Step = st.Name + map[string]string{"install": " is installed", "update": " is updated", "remove": " is removed"}[st.Action]
 	}
 	if werr := e.writeStatus(st); werr != nil && err == nil {
 		err = werr

@@ -166,7 +166,8 @@ In four parts, each its own commit.
   the real Docker Hub (`go test -tags live ./internal/registry`; its digest
   for Navidrome's pin matches the catalogue), and the restore path: a new
   version that breaks its data and never answers gets the old version and
-  its data back by itself.
+  its data back by itself. And for real on rootless Podman: Syncthing 2.1.6
+  → 2.1.7 with its data kept and backed up, then back to 2.1.6.
 
 ### 6b. OS updates and the Logs page
 

@@ -20,6 +20,13 @@ gets a minor version.
   found, or back to the previous one; each update's undo goes back.
 - Installed apps' records keep their digest and the version before the
   last update.
+- A live update test, `go test -tags live -run TestLivePodmanUpdate
+  ./internal/appjob`: installs Syncthing 2.1.6 on rootless Podman, updates
+  it to 2.1.7 with its data intact and backed up, rolls it back, removes it.
+
+### Fixed
+
+- A finished update's status said the app was removed.
 
 ### Changed
 
