@@ -1,0 +1,71 @@
+{
+  "id": "syncthing",
+  "name": "Syncthing",
+  "description": "Keep folders in sync between your devices, peer to peer.",
+  "website": "https://syncthing.net",
+  "icon": "RefreshCw",
+  "color": "#0891d1",
+  "group": "Files",
+  "image": "docker.io/syncthing/syncthing",
+  "tag": "2.1.7",
+  "digest": "sha256:2b71da7c0d0a91a6ae5285ad079226fecc0a365d08b27720e1f7037b018f7546",
+  "ports": [
+    {
+      "name": "web",
+      "container": 8384,
+      "host": 8384,
+      "main": true
+    },
+    {
+      "name": "sync",
+      "container": 22000,
+      "host": 22000
+    },
+    {
+      "name": "sync-quic",
+      "container": 22000,
+      "host": 22000,
+      "protocol": "udp"
+    },
+    {
+      "name": "discovery",
+      "container": 21027,
+      "host": 21027,
+      "protocol": "udp"
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "path": "/var/syncthing",
+      "kind": "data"
+    },
+    {
+      "name": "sync",
+      "path": "/sync",
+      "kind": "media",
+      "writable": true,
+      "label": "Folder to sync"
+    }
+  ],
+  "env": [
+    {
+      "name": "PUID",
+      "value": "{{uid}}"
+    },
+    {
+      "name": "PGID",
+      "value": "{{gid}}"
+    },
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    }
+  ],
+  "check": {
+    "port": "web",
+    "path": "/rest/noauth/health"
+  },
+  "minMemoryMB": 128,
+  "notes": "Set a GUI password on the first visit; share folders inside /sync."
+}

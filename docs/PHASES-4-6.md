@@ -78,10 +78,10 @@ firewalled, backed-up server that sleeps and wakes for its timers, by
 
 ## Phase 5 — app store
 
-### 5a. Catalogue and renderers (Go, no UI yet)
+### 5a. Catalogue and renderers (Go, no UI yet) — done
 
-- `catalogue/apps/<id>.json`, one file per app; JSON so Go reads it with the
-  standard library. Fields: name, description, icon, colour, group, website;
+- `internal/catalogue/apps/<id>.json`, one file per app, built into the
+  binaries; JSON so Go reads it with the standard library. Fields: name, description, icon, colour, group, website;
   image, tag, digest; ports (container port, default host port, protocol,
   https); volumes (config, media read-only by default, cache); devices
   (`/dev/dri`); extra groups; environment (fixed values, or a choice from a
@@ -91,8 +91,14 @@ firewalled, backed-up server that sleeps and wakes for its timers, by
   allowed roots).
 - Renderers: a compose file for Docker and a Quadlet `.container` unit for
   Podman, from the same definition and the owner's options. Golden-file tests.
-- Starter set: Jellyfin, Navidrome, Audiobookshelf, Kavita, Immich,
-  Nextcloud, Home Assistant, Syncthing, Vaultwarden, Uptime Kuma.
+- Starter set: Jellyfin, Navidrome, Audiobookshelf, Kavita, Nextcloud,
+  Home Assistant, Syncthing, Vaultwarden, Uptime Kuma, each pinned to a real
+  release tag and its digest from Docker Hub (2 Nov 2026). Immich needs
+  several containers (server, machine learning, Postgres, Redis); it waits
+  for multi-container definitions, after 5c.
+- Output checked against the real tools: the compose file parses as YAML,
+  and Podman's Quadlet generator turns the unit into the expected
+  `podman run`.
 
 ### 5b. Installing, as background jobs
 

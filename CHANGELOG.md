@@ -28,6 +28,15 @@ gets a minor version.
     wakes a sleeping server; `BACKUP_KEEP` retention (0 keeps all).
   - security: fail2ban's `sshd` jail on the journal, a weekly ClamAV scan
     that updates its signatures just before it runs (no daemon).
+- The app store's catalogue (Phase 5a): nine app definitions (Jellyfin,
+  Navidrome, Audiobookshelf, Kavita, Nextcloud, Home Assistant, Syncthing,
+  Vaultwarden, Uptime Kuma), each pinned to a release tag and digest. A
+  strict loader refuses unknown fields (so no privileged mode or host
+  networking), `:latest`, missing digests and devices off a short
+  allow-list. The owner's choices are checked (ports, media folders inside
+  the allowed roots and read-only by default, env choices, optional
+  devices), and one definition renders to a Docker compose file or a
+  Podman Quadlet unit, both checked against the real tools.
 - `cirrusux-idle`, CirrusUX's own sleep manager (Phase 4c), and the `sleep`
   setup module that installs it on a split setup's server. Once a minute it
   counts inbound connections (and, through conntrack, connections to
