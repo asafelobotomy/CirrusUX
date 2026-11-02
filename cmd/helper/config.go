@@ -37,8 +37,31 @@ type conf struct {
 	EgressReport   string
 }
 
-// firewallCheck passes when `iptables -S Chain` contains Pattern.
+// firewallCheck passes when the chain's rules contain Pattern. Chain is an
+// iptables chain ("DOCKER-USER") or an nftables one ("inet/cirrusux/input").
 type firewallCheck struct{ Chain, Pattern string }
+
+// validChain accepts CHAIN or family/table/chain, each part a word.
+func validChain(c string) bool {
+	parts := strings.Split(c, "/")
+	if len(parts) != 1 && len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts {
+		if !isWord(p) || strings.HasPrefix(p, ".") {
+			return false
+		}
+	}
+	return true
+}
+
+// chainCommand is the argv that lists the chain's rules.
+func (f firewallCheck) chainCommand() []string {
+	if p := strings.Split(f.Chain, "/"); len(p) == 3 {
+		return []string{"nft", "list", "chain", p[0], p[1], p[2]}
+	}
+	return []string{"iptables", "-S", f.Chain}
+}
 
 var keys = map[string]func(c *conf, v string) error{
 	"IDLE_STATE_DIR":  path(func(c *conf) *string { return &c.IdleStateDir }),
@@ -55,8 +78,8 @@ var keys = map[string]func(c *conf, v string) error{
 	"FIREWALL_CHECKS": func(c *conf, v string) error {
 		for _, f := range strings.Fields(v) {
 			chain, pat, ok := strings.Cut(f, ":")
-			if !ok || !isWord(chain) || pat == "" {
-				return fmt.Errorf("FIREWALL_CHECKS: want CHAIN:pattern, got %q", f)
+			if !ok || !validChain(chain) || pat == "" {
+				return fmt.Errorf("FIREWALL_CHECKS: want CHAIN:pattern or family/table/chain:pattern, got %q", f)
 			}
 			c.FirewallChecks = append(c.FirewallChecks, firewallCheck{chain, pat})
 		}

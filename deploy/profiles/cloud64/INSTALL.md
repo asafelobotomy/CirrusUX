@@ -1,5 +1,10 @@
 # Installing CirrusUX on cloud64 and cloud-box
 
+Before the reinstall (ROADMAP Phase 8), copy cloud64's own setup off it with
+`sudo bash capture.sh` from this folder. It's read-only, leaves keys and env
+files out, and names (without printing) any file that looks like it holds a
+secret.
+
 The general guide is docs/INSTALL.md; this is the cloud64 profile's version,
 with its Phase 0 findings. The env files to install are in this folder
 (`gateway.env`, `agent.env`, `helper.env`); unit files and sudoers rules are

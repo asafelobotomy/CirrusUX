@@ -63,11 +63,16 @@ What is tied to cloud64 today, and what replaces it:
 
 ### Phase 4 — host modules
 
+**Status:** in progress. Done: `cirrusux-setup` with check and apply, and the
+base, firewall and cirrusux modules, tested in private namespaces
+(`make test-host`). The cloud64 capture script is ready to run. Still to
+come: network, sleep manager (after the capture), backups and security.
+
 Re-runnable setup scripts under `deploy/host/`, each with a check-only mode
 that reports what it would change. Each module is optional:
 
-- **Base:** users, SSH settings, time zone, unattended nothing (no automatic
-  updates).
+- **Base:** the cirrusux user, time zone, no automatic updates. SSH settings
+  are left alone: how people log in stays the owner's choice (rule 10).
 - **Network:** Tailscale, wake-on-LAN on the network card.
 - **Firewall:** an nftables ruleset owned by CirrusUX, versioned and backed up.
   Changes apply with an automatic rollback: unless confirmed within 2 minutes,

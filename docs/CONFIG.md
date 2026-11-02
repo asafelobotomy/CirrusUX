@@ -78,7 +78,7 @@ containers, disk and temperature, and hides what the server doesn't have.
 | stay-awake | `STAY_AWAKE_FILE`, `STAY_AWAKE_BIN`, `ALLOW_SLEEP_BIN` | Stay awake / Allow sleep; actions keep the server up 10 minutes (D3) |
 | backup | `BACKUP_UNIT`, `BACKUP_DIR`, `BACKUP_PREFIX` | Backups page and widget, Run backup now |
 | av | `AV_LOG` | Virus-scan result |
-| security | `FAIL2BAN_JAIL`, `FIREWALL_CHECKS` | fail2ban bans; firewall rule checks (`CHAIN:pattern`, passes when `iptables -S CHAIN` contains the pattern) |
+| security | `FAIL2BAN_JAIL`, `FIREWALL_CHECKS` | fail2ban bans; firewall rule checks: `CHAIN:pattern` passes when `iptables -S CHAIN` contains the pattern, `family/table/chain:pattern` when `nft list chain …` does (e.g. `inet/cirrusux/input:drop` for the firewall module) |
 | egress | `EGRESS_REPORT` | The outbound-traffic report on the Security page |
 
 Paths must be absolute; unit and jail names may only use letters, digits and
@@ -86,3 +86,23 @@ Paths must be absolute; unit and jail names may only use letters, digits and
 
 Today the sleep, backup and egress modules wrap scripts you already have.
 CirrusUX's own versions of them are ROADMAP Phase 4.
+
+## host.env
+
+`cirrusux-setup` reads `/etc/cirrusux/host.env` (owner root, not writable by
+anyone else). The example, `deploy/host/host.env.example`, lists every
+setting; each module's file in `deploy/host/modules/` describes its own.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `HOST_MODULES` | `base` | Modules to run when none are named |
+| `HOST_TZ` | — | base: time zone to set |
+| `HOST_AUTO_UPDATES` | `no` | base: `no` switches off apt's daily upgrade timer |
+| `CIRRUS_ROLE` | `single` | cirrusux: `single`, `server` or `gateway` |
+| `CIRRUS_ACTIONS` | `yes` | cirrusux: `no` installs a read-only sudoers rule |
+| `CIRRUS_SERVER_NAME`, `CIRRUS_ALLOWED_USERS` | — | cirrusux: written into a new gateway.env |
+| `CIRRUS_RELEASE` | this checkout | cirrusux: folder holding `bin/` and `deploy/` |
+| `FIREWALL_ALLOW` | — | firewall: networks allowed in (IPv4 and IPv6) |
+| `FIREWALL_TAILSCALE` | `yes` | firewall: also allow the tailnet |
+| `FIREWALL_PUBLIC_TCP` | — | firewall: ports open to everyone |
+| `FIREWALL_CONFIRM_SECONDS` | `120` | firewall: time to confirm before rollback |

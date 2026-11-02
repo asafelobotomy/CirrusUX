@@ -14,6 +14,31 @@ Pick a setup (docs/CONFIG.md):
 The agent never listens on a port: it pushes reports to the gateway and
 fetches actions over its own outbound connection.
 
+## The quick way: cirrusux-setup
+
+`deploy/host/cirrusux-setup` does sections 2 and 3 for you, one module at a
+time, and changes only what differs from your settings:
+
+```bash
+make build
+sudo install -D -m 644 deploy/host/host.env.example /etc/cirrusux/host.env   # then edit it
+sudo deploy/host/cirrusux-setup check        # what it would change
+sudo deploy/host/cirrusux-setup apply        # do it
+```
+
+Every change goes to `/var/lib/cirrusux/setup.log` with its undo, and replaced
+files keep a dated `.bak-` copy. Config files are created once (with a shared
+token in the single setup) and then left to you; services start once nothing
+in them is still a placeholder. `cirrusux-setup list` shows the modules.
+
+The **firewall** module (add it to `HOST_MODULES` when ready) writes an
+nftables table of its own: LAN and tailnet only, and containers' published
+ports closed to everything else. A new ruleset rolls back after two minutes
+unless you run `sudo cirrusux-setup firewall-confirm`, and setup refuses a
+ruleset that would cut off the SSH session running it.
+
+The manual steps below do the same by hand.
+
 ## 1. Build
 
 ```bash

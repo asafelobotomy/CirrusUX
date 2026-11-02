@@ -74,7 +74,7 @@ STAY_AWAKE_BIN=/usr/local/bin/stay-awake
 ALLOW_SLEEP_BIN=/usr/local/bin/allow-sleep
 BACKUP_UNIT=system-backup.service
 FAIL2BAN_JAIL=sshd
-FIREWALL_CHECKS=DOCKER-USER:LOCKDOWN INPUT-LAN:DROP
+FIREWALL_CHECKS=DOCKER-USER:LOCKDOWN INPUT-LAN:DROP inet/cirrusux/input:drop
 EGRESS_REPORT=
 `))
 	if err != nil {
@@ -84,7 +84,8 @@ EGRESS_REPORT=
 	if got := c.features().Modules; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("features = %v, want %v", got, want)
 	}
-	if len(c.FirewallChecks) != 2 || c.FirewallChecks[1] != (firewallCheck{"INPUT-LAN", "DROP"}) {
+	if len(c.FirewallChecks) != 3 || c.FirewallChecks[1] != (firewallCheck{"INPUT-LAN", "DROP"}) ||
+		strings.Join(c.FirewallChecks[2].chainCommand(), " ") != "nft list chain inet cirrusux input" {
 		t.Errorf("firewall checks = %+v", c.FirewallChecks)
 	}
 	if c, err := loadConf(filepath.Join(t.TempDir(), "missing")); err != nil || len(c.features().Modules) != 0 {
@@ -100,6 +101,8 @@ func TestLoadConfRejects(t *testing.T) {
 		"BACKUP_UNIT=--help",
 		"BACKUP_UNIT=a;b",
 		"FIREWALL_CHECKS=DOCKER-USER",
+		"FIREWALL_CHECKS=inet/cirrusux:drop",
+		"FIREWALL_CHECKS=inet/../input:drop",
 		"SHELL=/bin/sh",
 	} {
 		if _, err := loadConf(writeConf(t, body)); err == nil {

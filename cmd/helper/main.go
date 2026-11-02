@@ -210,7 +210,8 @@ func securityStatus(ctx context.Context, c conf) helperapi.SecurityStatus {
 		}
 	}
 	for _, fc := range c.FirewallChecks {
-		out, err := exec.CommandContext(ctx, "iptables", "-S", fc.Chain).Output()
+		argv := fc.chainCommand()
+		out, err := exec.CommandContext(ctx, argv[0], argv[1:]...).Output()
 		if err != nil {
 			s.Errors = append(s.Errors, fc.Chain+": "+err.Error())
 		}

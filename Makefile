@@ -12,7 +12,7 @@ LDFLAGS := -s -w $(STAMP)
 # Development only: a fixed token for the local gateway and agent.
 DEV_TOKEN := dev-only-token-not-a-secret-0123456789
 
-.PHONY: all web web-stub build test dev-gateway dev-agent bump clean
+.PHONY: all web web-stub build test test-host dev-gateway dev-agent bump clean
 
 all: build
 
@@ -36,6 +36,11 @@ test: web-stub
 	$(GO) vet ./...
 	$(GO) test ./...
 	cd web && npm run check && npm test
+
+# The host setup scripts: shellcheck, then each module in a private user
+# namespace (never as real root). The firewall test needs nft.
+test-host:
+	deploy/host/tests/run.sh
 
 # Local run without a server or Tailscale: the gateway in dev mode and an
 # agent pushing the recorded demo snapshot. Open http://127.0.0.1:8064

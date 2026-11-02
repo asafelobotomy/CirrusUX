@@ -1,0 +1,91 @@
+#!/bin/bash
+# cirrusux-setup — sets a machine up for CirrusUX, one module at a time
+# (ROADMAP Phase 4). Re-runnable: it changes only what differs from the
+# settings in /etc/cirrusux/host.env.
+#
+#   cirrusux-setup check [MODULE...]   report what apply would change (exit 2 if anything)
+#   cirrusux-setup apply [MODULE...]   make the changes, logged with their undo
+#   cirrusux-setup list                the modules and what they do
+#   cirrusux-setup firewall-confirm    keep a new firewall (see the firewall module)
+#
+# Without MODULE it runs the modules in HOST_MODULES. Changes are logged to
+# /var/lib/cirrusux/setup.log; replaced files keep a .bak-YYYYMMDD-HHMM copy.
+set -euo pipefail
+
+HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+# shellcheck source=lib.sh
+. "$HERE/lib.sh"
+
+CONFIG=${CONFIG:-$ROOT/etc/cirrusux/host.env}
+HOST_MODULES="base"
+
+usage() { sed -n '2,13s/^# \{0,1\}//p' "$0"; }
+
+module_file() { printf '%s/modules/%s.sh' "$HERE" "$1"; }
+
+cmd=${1:-}
+[ $# -gt 0 ] && shift
+case "$cmd" in
+list)
+	for f in "$HERE"/modules/*.sh; do
+		printf '%-10s %s\n' "$(basename "$f" .sh)" "$(sed -n '2s/^# //p' "$f")"
+	done
+	exit 0
+	;;
+check | apply) MODE=$cmd ;;
+firewall-confirm | firewall-rollback) ;;
+-h | --help | help | "")
+	usage
+	exit 0
+	;;
+*)
+	usage >&2
+	exit 64
+	;;
+esac
+
+if [ -z "${NO_CHOWN:-}" ] && [ "$(id -u)" -ne 0 ]; then
+	die "run as root (sudo cirrusux-setup …)"
+fi
+load_config "$CONFIG"
+
+case "$cmd" in
+firewall-confirm | firewall-rollback)
+	MODULE=firewall
+	MODE=apply
+	# shellcheck source=modules/firewall.sh
+	. "$(module_file firewall)"
+	"${cmd//-/_}" "$@"
+	exit 0
+	;;
+esac
+
+modules=("$@")
+# shellcheck disable=SC2206 # a space-separated list from the config
+[ ${#modules[@]} -gt 0 ] || modules=($HOST_MODULES)
+
+for m in "${modules[@]}"; do
+	f=$(module_file "$m")
+	[ -f "$f" ] || die "no module named $m (see: cirrusux-setup list)"
+done
+
+total=0
+for m in "${modules[@]}"; do
+	MODULE=$m
+	CHANGES=0
+	say "$m:"
+	# shellcheck source=/dev/null
+	. "$(module_file "$m")"
+	"module_$m"
+	total=$((total + CHANGES))
+done
+
+if [ "$MODE" = check ]; then
+	if [ "$total" -gt 0 ]; then
+		say "$total change(s) to make. Run: cirrusux-setup apply ${modules[*]}"
+		exit 2
+	fi
+	say "Nothing to change."
+else
+	say "$total change(s) made. Log: /var/lib/cirrusux/setup.log"
+fi

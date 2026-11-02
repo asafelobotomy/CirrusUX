@@ -14,6 +14,7 @@ sleeps to save power, answering from the last report while it does.
 - `cmd/helper` — on the server, root via sudo: fixed reads plus a few fixed actions, paths from its own config
 - `cmd/dockerfilter` — on the server, root: Docker API on a unix socket, reads plus start/stop/restart only
 - `deploy/server`, `deploy/gateway` — systemd units, sudoers rules, example config
+- `deploy/host` — `cirrusux-setup`: re-runnable host modules (base, firewall, cirrusux) with a check mode
 - `deploy/profiles/cloud64` — the owner's own setup (private; leaves before the repo goes public)
 - `deploy/dev` — the demo snapshot for local runs
 - `scripts/bump-version.sh` — used by `make bump`
@@ -23,6 +24,7 @@ sleeps to save power, answering from the last report while it does.
 
 ```bash
 make test                  # gofmt, go vet, go test, svelte-check, UI unit tests
+make test-host             # shellcheck and the host modules, in private namespaces
 cd web && npm run dev      # UI on :5174, demo data unless a gateway runs
 ```
 

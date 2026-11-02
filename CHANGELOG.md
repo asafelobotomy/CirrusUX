@@ -7,6 +7,25 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `cirrusux-setup` (roadmap Phase 4, first part): re-runnable host modules
+  with a check mode that reports what apply would change. Every change is
+  logged with its undo and replaced files keep a dated copy.
+  - base: the cirrusux user, time zone, no automatic updates.
+  - firewall: an nftables table of its own, LAN and tailnet only, closing
+    containers' published ports to everything else. A new ruleset rolls
+    back by itself unless confirmed, setup refuses one that would cut off
+    the SSH session running it, and every ruleset is kept.
+  - cirrusux: binaries, units, a visudo-checked sudoers rule and config
+    files (created once, with a shared token in the single setup); services
+    start once their config has no placeholders left.
+- `make test-host`: shellcheck plus each module tested as root in a private
+  namespace, never on the real machine.
+- The helper can check nftables chains (`family/table/chain:pattern`).
+- `capture.sh` in the cloud64 profile: a read-only copy of cloud64's own
+  scripts and settings before the reinstall.
+
 ### Changed
 
 - The power card in the single setup shows the server's vitals (containers
