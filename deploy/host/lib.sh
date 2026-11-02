@@ -124,3 +124,19 @@ need_packages() {
 # helper_module NAME < settings — the file a setup module writes so the
 # panel's helper knows about it (/etc/cirrusux/helper.d/NAME.env).
 helper_module() { put_file "/etc/cirrusux/helper.d/$1.env" 644 root:root; }
+
+# put_link LINK TARGET — a symlink, replaced if it points elsewhere.
+put_link() {
+	local link=$1 target=$2
+	if [ "$(readlink "$ROOT$link" 2>/dev/null)" = "$target" ]; then
+		ok "$link → $target"
+		return 0
+	fi
+	change "link $link → $target" "rm $link" _link "$target" "$ROOT$link"
+}
+
+_link() {
+	mkdir -p "$(dirname "$2")"
+	[ -e "$2" ] && [ ! -L "$2" ] && backup "$2"
+	ln -sfn "$1" "$2"
+}

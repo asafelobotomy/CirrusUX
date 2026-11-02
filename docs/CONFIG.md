@@ -62,7 +62,7 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `CIRRUS_GATEWAY_URL` | — (required) | The gateway's `/agent/snapshot` URL |
 | `CIRRUS_AGENT_TOKEN` | — (required) | Same as the gateway's |
 | `CIRRUS_DISK` | `/` | File system the disk widget shows; empty to skip |
-| `CIRRUS_IDLE_CONF` | — | Sleep module: the idle checker's config (`IDLE_MIN`, `GRACE_MIN`, `WAKE_TIMERS`) |
+| `CIRRUS_IDLE_CONF` | `/etc/cirrusux/sleep.env` | Sleep module: the idle checker's config (`IDLE_MIN`, `GRACE_MIN`, `WAKE_TIMERS`) |
 | `CIRRUS_PORT_NAMES` | — | Names for port numbers in activity reasons, e.g. `8080=Proxy,9000=Admin` |
 
 ## helper.env and modules
@@ -121,6 +121,22 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `SEC_AV` | `yes` | security: weekly ClamAV scan; signatures update just before it |
 | `SEC_AV_PATHS` | `/home /srv /usr/local /tmp /var/tmp` | security: what the scan covers |
 | `SEC_AV_SCHEDULE` | `Sun *-*-* 04:00` | security: when it runs |
+| `SLEEP_IDLE_MIN` | `30` | sleep: quiet minutes before it suspends |
+| `SLEEP_GRACE_MIN` | `15` | sleep: minutes after a wake before it may sleep again |
+| `SLEEP_WATCH_PORTS` | — (all) | sleep: only these local ports count |
+| `SLEEP_IGNORE_CLIENTS` | — | sleep: addresses or networks whose connections don't count |
+| `SLEEP_MAX_LOAD` | `0` (off) | sleep: a 5-minute load above this counts as activity |
+| `SLEEP_COUNT_LOGINS` | `yes` | sleep: logged-in sessions count |
+| `SLEEP_WAKE_TIMERS` | backup and scan timers | sleep: timers that wake it, shown as the next wake |
+
+The sleep module installs `cirrusux-idle`, CirrusUX's own sleep manager. A
+timer runs `cirrusux-idle check` every minute: inbound connections (to the
+machine, and through conntrack to containers' published ports), logins,
+busy units (backups, scans, app jobs) and stay-awake holds count as
+activity; outbound connections never do. It suspends after the quiet time,
+and timers with `WakeSystem=yes` wake it. `cirrusux-idle status` shows what
+it sees without changing anything, and `cirrusux-idle check --dry-run`
+writes nothing at all. Anything it can't read counts as activity.
 
 Modules that the panel shows (backup, virus scan, security) tell the helper
 about themselves in `/etc/cirrusux/helper.d/`, so `helper.env` stays yours.

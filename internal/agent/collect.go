@@ -159,7 +159,7 @@ func (c *Collector) collectSleep(ctx context.Context, s *snapshot.Snapshot, errf
 	if c.IdleConf != "" {
 		if b, err := os.ReadFile(c.IdleConf); err == nil {
 			conf = parseConf(string(b))
-		} else {
+		} else if !os.IsNotExist(err) {
 			errf("idle config: %v", err)
 		}
 	}

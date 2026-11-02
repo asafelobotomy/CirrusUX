@@ -226,14 +226,17 @@ func reasonsFromMsg(msg string, extra map[string]string) []string {
 	if !ok {
 		return nil
 	}
-	rest = strings.TrimSpace(rest)
+	// CirrusUX's own checker separates reasons with "; "; older checkers
+	// only with labels ("host conns: …").
 	var parts []string
-	last := 0
-	for _, loc := range reasonSplit.FindAllStringIndex(rest, -1) {
-		parts = append(parts, rest[last:loc[0]])
-		last = loc[0]
+	for _, chunk := range strings.Split(strings.TrimSpace(rest), "; ") {
+		last := 0
+		for _, loc := range reasonSplit.FindAllStringIndex(chunk, -1) {
+			parts = append(parts, chunk[last:loc[0]])
+			last = loc[0]
+		}
+		parts = append(parts, chunk[last:])
 	}
-	parts = append(parts, rest[last:])
 
 	var reasons []string
 	for _, p := range parts {

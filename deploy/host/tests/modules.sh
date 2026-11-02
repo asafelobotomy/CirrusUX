@@ -92,3 +92,20 @@ printf 'NET_WOL_IFACE=eth0\nBACKUP_AGE_RECIPIENT=%s\nBACKUP_DIR=%s\nBACKUP_PATHS
 $H/cirrusux-setup check network backup security > $T/out 2>&1; rc=$?
 [ $rc = 0 ] || { cat $T/out; fail "re-check $rc"; }
 echo "security: jail on the journal, scan updates itself (no daemon), panel checks written; re-check clean"
+
+# sleep: only for a split setup's server; installs the checker, its timer,
+# the sleep hook and the stay-awake commands the panel uses.
+mkdir -p $T/rel/bin && echo "idle v1" > $T/rel/bin/cirrusux-idle
+printf 'CIRRUS_ROLE=single\nCIRRUS_RELEASE=%s\n' $T/rel > $CONFIG
+$H/cirrusux-setup check sleep > $T/out 2>&1 && fail "sleep module accepted the single setup"
+grep -q "for a split setup" $T/out || fail "wrong refusal"
+printf 'CIRRUS_ROLE=server\nCIRRUS_RELEASE=%s\nSLEEP_IDLE_MIN=20\nSLEEP_IGNORE_CLIENTS="192.0.2.23"\n' $T/rel > $CONFIG
+$H/cirrusux-setup apply sleep > $T/out 2>&1 || { cat $T/out; fail "sleep apply"; }
+[ "$(readlink $ROOT/usr/local/sbin/cirrusux-stay-awake)" = cirrusux-idle ] && [ "$(readlink $ROOT/usr/local/sbin/cirrusux-allow-sleep)" = cirrusux-idle ] || fail "stay-awake links"
+grep -q "^IDLE_MIN=20" $ROOT/etc/cirrusux/sleep.env && grep -q 'IGNORE_CLIENTS="192.0.2.23"' $ROOT/etc/cirrusux/sleep.env || fail "sleep.env"
+[ "$(stat -c %a $ROOT/usr/lib/systemd/system-sleep/cirrusux-idle)" = 755 ] || fail "sleep hook"
+grep -qx cirrusux-idle.timer $T/enabled || fail "timer not on"
+grep -q "STAY_AWAKE_BIN=/usr/local/sbin/cirrusux-stay-awake" $ROOT/etc/cirrusux/helper.d/sleep.env || fail "helper.d"
+grep -qx conntrack $T/installed || fail "conntrack not installed"
+$H/cirrusux-setup check sleep > $T/out 2>&1; [ $? = 0 ] || { cat $T/out; fail "sleep re-check"; }
+echo "sleep: refuses the single setup; checker, timer, hook, stay-awake links and panel hookup; re-check clean"

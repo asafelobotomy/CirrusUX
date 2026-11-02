@@ -35,7 +35,8 @@ Other modules: **network** (Wake-on-LAN that survives reboots, Tailscale at
 boot), **backup** (age-encrypted system backups on a timer that wakes a
 sleeping server; only the public key goes on the machine) and **security**
 (fail2ban for SSH, a weekly virus scan). Each switches its page on in the
-panel by itself.
+panel by itself. In a split setup, **sleep** installs CirrusUX's own sleep
+manager on the server (see docs/CONFIG.md).
 
 The **firewall** module (add it to `HOST_MODULES` when ready) writes an
 nftables table of its own: LAN and tailnet only, and containers' published
@@ -49,7 +50,7 @@ The manual steps below do the same by hand.
 
 ```bash
 make test
-make build        # bin/cirrusux-{gateway,agent,helper,dockerfilter}
+make build        # bin/cirrusux-{gateway,agent,helper,dockerfilter,idle}
 ```
 
 Static binaries with no runtime dependencies. Copy them to the machines.

@@ -28,6 +28,18 @@ gets a minor version.
     wakes a sleeping server; `BACKUP_KEEP` retention (0 keeps all).
   - security: fail2ban's `sshd` jail on the journal, a weekly ClamAV scan
     that updates its signatures just before it runs (no daemon).
+- `cirrusux-idle`, CirrusUX's own sleep manager (Phase 4c), and the `sleep`
+  setup module that installs it on a split setup's server. Once a minute it
+  counts inbound connections (and, through conntrack, connections to
+  containers' published ports), logins, busy units and stay-awake holds;
+  outbound connections never count. It suspends after the quiet time with
+  a grace period after each wake, records wakes through a systemd sleep
+  hook, and writes the state files and log the agent already reads.
+  Anything it can't read counts as activity, and `--dry-run` writes
+  nothing. It also answers as `cirrusux-stay-awake` and
+  `cirrusux-allow-sleep` for the panel's stay-awake buttons.
+- The agent splits activity reasons on `; ` too, and reads
+  `/etc/cirrusux/sleep.env` by default.
 - The helper reads `/etc/cirrusux/helper.d/*.env` after `helper.env`, so
   setup modules switch panel modules on without touching the owner's file.
 - `docs/PHASES-4-6.md`: the build plan for phases 4–6.

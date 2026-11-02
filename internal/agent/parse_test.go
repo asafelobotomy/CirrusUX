@@ -66,7 +66,9 @@ func TestReasonsFromMsg(t *testing.T) {
 		"ACTIVE: 1 remote login session(s) host conns: 22<-100.64.0.2 ":               {"1 remote login session(s)", "SSH from 100.64.0.2"},
 		"ACTIVE: host conns: 22457<-192.0.2.133 443<-192.0.2.40":                      {"Admin panel from 192.0.2.133", "HTTPS from 192.0.2.40"},
 		"ACTIVE: playback by ignored client 192.0.2.23 (11 MB sent since last check)": {"playback by ignored client 192.0.2.23 (11 MB sent since last check)"},
-		"ACTIVE: stay-awake flag":             {"stay-awake flag"},
+		"ACTIVE: stay-awake flag": {"stay-awake flag"},
+		"ACTIVE: stay-awake hold until 13:00; 1 login session(s); running cirrusux-backup.service; host conns: 22<-192.0.2.5 8096<-192.0.2.9": {
+			"stay-awake hold until 13:00", "1 login session(s)", "running cirrusux-backup.service", "SSH from 192.0.2.5", "port 8096 from 192.0.2.9"},
 		"IDLE: nothing active, timer started": nil,
 		"":                                    nil,
 	}
@@ -93,6 +95,24 @@ var realIdleLog = []string{
 	"2026-11-01 19:08:40 GMT IDLE: nothing active, timer started",
 	"2026-11-01 19:56:45 GMT SUSPEND: idle 1810s; RTC wake set Mon 2026-11-02 03:29:10 GMT",
 	"2026-11-02 03:29:12 GMT RESUMED (wakeup irq 8)",
+}
+
+// The log CirrusUX's own checker writes (internal/idle): RFC 3339 times.
+func TestCirrusIdleLog(t *testing.T) {
+	log := []string{
+		"2026-11-01T17:37:52Z ACTIVE: 1 login session(s); host conns: 22<-192.0.2.5",
+		"2026-11-01T17:40:00Z IDLE: nothing active, timer started",
+		"2026-11-01T18:10:00Z SUSPEND: idle 1800s; RTC wake set Mon 2026-11-02 03:30:00 GMT",
+		"2026-11-02T03:30:05Z RESUMED (wakeup irq 8)",
+	}
+	ev := parseIdleLog(log, now.Add(12*time.Hour))
+	if len(ev) != 4 || ev[0].Kind != "ACTIVE" || ev[3].Kind != "RESUMED" {
+		t.Fatalf("events = %+v", ev)
+	}
+	segs := timeline(ev, time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC), time.Time{})
+	if len(segs) != 2 || segs[0].State != "asleep" || segs[1].Reason != "Scheduled wake (RTC)" {
+		t.Errorf("timeline = %+v", segs)
+	}
 }
 
 func TestRealIdleLog(t *testing.T) {

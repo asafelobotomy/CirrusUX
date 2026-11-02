@@ -25,7 +25,7 @@ func main() {
 		demo     = flag.String("demo", "", "push a recorded snapshot instead of collecting (development)")
 		once     = flag.Bool("once", false, "collect once, print the snapshot as JSON and exit")
 		disk     = flag.String("disk", env("CIRRUS_DISK", "/"), "file system the disk widget shows; empty to skip")
-		idleConf = flag.String("idle-conf", env("CIRRUS_IDLE_CONF", ""), "idle checker config to read (sleep module)")
+		idleConf = flag.String("idle-conf", env("CIRRUS_IDLE_CONF", "/etc/cirrusux/sleep.env"), "idle checker config to read (sleep module)")
 		dock     = flag.String("docker", "/run/cirrusux/docker.sock", "filtered Docker socket")
 		showVer  = flag.Bool("version", false, "print the version and exit")
 		helper   = flag.String("helper", "sudo -n /usr/local/sbin/cirrusux-helper", "root helper command; empty to skip")

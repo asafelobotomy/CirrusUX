@@ -49,7 +49,7 @@ re-runnable and tested as root in a private namespace (`make test-host`).
   are installed by `apply` and listed by `check`; nothing else is ever
   installed or upgraded.
 
-### 4c. The sleep manager
+### 4c. The sleep manager — done
 
 The panel already speaks the idle checker's language: a state folder
 (`last-msg`, `last-active`, `last-wake`, `last-suspend`) and a log of
