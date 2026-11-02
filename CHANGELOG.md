@@ -7,6 +7,8 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-02
+
 ### Added
 
 - A router power check for the split setup (Phase 6d, optional): the gateway
