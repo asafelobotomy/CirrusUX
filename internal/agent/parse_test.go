@@ -249,6 +249,8 @@ func TestSplitImage(t *testing.T) {
 		{"nginx", "nginx", "latest"},
 		{"localhost:5000/app", "localhost:5000/app", "latest"},
 		{"lscr.io/linuxserver/kavita:v0.9.1.4-ls130", "lscr.io/linuxserver/kavita", "v0.9.1.4-ls130"},
+		{"docker.io/syncthing/syncthing@sha256:2b71da7c0d0a91a6ae5285ad079226fecc0a365d08b27720e1f7037b018f7546", "docker.io/syncthing/syncthing", "sha256:2b71da7c0d0a"},
+		{"docker.io/syncthing/syncthing:2.1.7@sha256:2b71da7c0d0a91a6ae5285ad079226fecc0a365d08b27720e1f7037b018f7546", "docker.io/syncthing/syncthing", "2.1.7"},
 	}
 	for _, c := range cases {
 		img, tag := splitImage(c[0])

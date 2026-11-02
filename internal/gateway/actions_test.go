@@ -179,3 +179,37 @@ func TestDigest(t *testing.T) {
 		t.Errorf("day = %s", d.Day)
 	}
 }
+
+func TestAppActions(t *testing.T) {
+	snap := awakeSnap()
+	ok := ActionReq{Action: "app_install", Args: map[string]string{"app": "navidrome", "options": `{"media":{"music":"/srv/media/music"}}`}}
+	if c, spec, err := ok.Validate(&snap); err != nil || spec.label(c.Args) != "Started installing Navidrome" || spec.undo(c.Args).Action != "app_remove" {
+		t.Errorf("install: %v", err)
+	}
+	for name, req := range map[string]ActionReq{
+		"unknown app":          {Action: "app_install", Args: map[string]string{"app": "bitcoin-miner"}},
+		"unknown option field": {Action: "app_install", Args: map[string]string{"app": "navidrome", "options": `{"volumes":["/:/host"]}`}},
+		"remove not installed": {Action: "app_remove", Args: map[string]string{"app": "navidrome"}},
+		"options carry a key":  {Action: "app_install", Args: map[string]string{"app": "navidrome", "options": `{}, "action":"remove"`}},
+		"trailing data":        {Action: "app_install", Args: map[string]string{"app": "navidrome", "options": `{} {}`}},
+	} {
+		if _, _, err := req.Validate(&snap); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	snap.Apps = []snapshot.App{{ID: "navidrome", Name: "Navidrome"}}
+	if _, _, err := ok.Validate(&snap); err == nil {
+		t.Error("installing an installed app")
+	}
+	if _, _, err := (ActionReq{Action: "app_remove", Args: map[string]string{"app": "navidrome"}}).Validate(&snap); err != nil {
+		t.Errorf("remove: %v", err)
+	}
+
+	_, h := newTestServer(t)
+	w := do(h, "GET", "/api/catalogue", "", owner)
+	var apps []struct{ ID, Tag, Digest string }
+	_ = json.Unmarshal(w.Body.Bytes(), &apps)
+	if w.Code != http.StatusOK || len(apps) < 9 || apps[0].Digest == "" {
+		t.Errorf("catalogue: %d %d", w.Code, len(apps))
+	}
+}

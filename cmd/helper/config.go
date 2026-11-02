@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,6 +56,15 @@ type conf struct {
 	Fail2banJail   string
 	FirewallChecks []firewallCheck
 	EgressReport   string
+	// App store: the runtime (docker or podman), where apps keep their
+	// folders, where removed ones go, the user they run as, and the folders
+	// media may be chosen from.
+	ContainerRuntime string
+	AppsDir          string
+	AppsArchive      string
+	AppsUser         string
+	MediaRoots       []string
+	AppsBind         string // publish apps' ports on this address only
 }
 
 // firewallCheck passes when the chain's rules contain Pattern. Chain is an
@@ -95,6 +105,33 @@ var keys = map[string]func(c *conf, v string) error{
 	"AV_LOG":          path(func(c *conf) *string { return &c.AVLog }),
 	"FAIL2BAN_JAIL":   word(func(c *conf) *string { return &c.Fail2banJail }),
 	"EGRESS_REPORT":   path(func(c *conf) *string { return &c.EgressReport }),
+	"CONTAINER_RUNTIME": func(c *conf, v string) error {
+		if v != "docker" && v != "podman" {
+			return fmt.Errorf("docker or podman")
+		}
+		c.ContainerRuntime = v
+		return nil
+	},
+	"APPS_DIR":     path(func(c *conf) *string { return &c.AppsDir }),
+	"APPS_ARCHIVE": path(func(c *conf) *string { return &c.AppsArchive }),
+	"APPS_USER":    word(func(c *conf) *string { return &c.AppsUser }),
+	"APPS_BIND": func(c *conf, v string) error {
+		if _, err := netip.ParseAddr(v); err != nil {
+			return fmt.Errorf("an IP address")
+		}
+		c.AppsBind = v
+		return nil
+	},
+	"MEDIA_ROOTS": func(c *conf, v string) error {
+		for _, f := range strings.Fields(v) {
+			var p string
+			if err := path(func(*conf) *string { return &p })(c, f); err != nil {
+				return err
+			}
+			c.MediaRoots = append(c.MediaRoots, p)
+		}
+		return nil
+	},
 	"FIREWALL_CHECKS": func(c *conf, v string) error {
 		for _, f := range strings.Fields(v) {
 			chain, pat, ok := strings.Cut(f, ":")
@@ -209,5 +246,6 @@ func (c conf) features() helperapi.Features {
 	add(c.AVLog != "", helperapi.ModAV)
 	add(c.Fail2banJail != "" || len(c.FirewallChecks) > 0, helperapi.ModSecurity)
 	add(c.EgressReport != "", helperapi.ModEgress)
+	add(c.ContainerRuntime != "" && c.AppsDir != "" && c.AppsUser != "", helperapi.ModApps)
 	return f
 }

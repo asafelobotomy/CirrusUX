@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"cirrusux/internal/appjob"
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/snapshot"
 )
@@ -142,6 +143,9 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 			}
 		}
 	}
+	if has(helperapi.ModApps) {
+		s.Apps, s.Jobs = appsAndJobs(now)
+	}
 	if has(helperapi.ModAV) {
 		var av helperapi.Lines
 		if err := c.helper(ctx, helperapi.CmdAVLast, &av); err != nil {
@@ -196,6 +200,23 @@ func (c *Collector) collectSleep(ctx context.Context, s *snapshot.Snapshot, errf
 	}
 }
 
+// appsAndJobs reads the app store's records and recent job statuses; the
+// helper writes both readable, so no root is needed.
+func appsAndJobs(now time.Time) ([]snapshot.App, []snapshot.Job) {
+	var apps []snapshot.App
+	for _, r := range appjob.Records(helperapi.AppRecordsDir) {
+		apps = append(apps, snapshot.App{ID: r.App, Name: r.Name, Tag: r.Tag, Runtime: r.Runtime, MainPort: r.MainPort, HTTPS: r.HTTPS, Installed: r.Installed})
+	}
+	var jobs []snapshot.Job
+	for _, j := range appjob.Statuses(helperapi.JobsDir) {
+		if j.State != "running" && now.Sub(j.Started) > 24*time.Hour || len(jobs) == 10 {
+			continue
+		}
+		jobs = append(jobs, snapshot.Job{ID: j.Job, Action: j.Action, App: j.App, Name: j.Name, State: j.State, Step: j.Step, Detail: j.Detail, Error: j.Error, Started: j.Started, Finished: j.Finished})
+	}
+	return apps, jobs
+}
+
 func (c *Collector) helper(ctx context.Context, sub string, out any, args ...string) error {
 	if len(c.Helper) == 0 {
 		return fmt.Errorf("no helper configured")
@@ -216,11 +237,12 @@ func (c *Collector) helper(ctx context.Context, sub string, out any, args ...str
 // ---- Docker, through the filtered unix socket ----
 
 type dockerContainer struct {
-	ID     string   `json:"Id"`
-	Names  []string `json:"Names"`
-	Image  string   `json:"Image"`
-	State  string   `json:"State"`
-	Status string   `json:"Status"`
+	ID     string            `json:"Id"`
+	Names  []string          `json:"Names"`
+	Image  string            `json:"Image"`
+	State  string            `json:"State"`
+	Status string            `json:"Status"`
+	Labels map[string]string `json:"Labels"`
 	Ports  []struct {
 		PublicPort int `json:"PublicPort"`
 	} `json:"Ports"`
@@ -264,6 +286,11 @@ func (c *Collector) containers(ctx context.Context) ([]snapshot.Container, error
 	out := make([]snapshot.Container, 0, len(list))
 	for _, d := range list {
 		img, tag := splitImage(d.Image)
+		if v := d.Labels["io.cirrusux.version"]; v != "" {
+			// Pinned by the app store as tag@digest: the runtime reports
+			// only the digest, so the version comes from its label.
+			tag = v
+		}
 		ct := snapshot.Container{
 			Name: strings.TrimPrefix(firstOr(d.Names, d.ID[:12]), "/"), Image: img, Tag: tag,
 			State: d.State, Status: d.Status, Health: containerHealth(d.State, d.Status), Ports: []int{},

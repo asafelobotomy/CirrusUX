@@ -3,6 +3,8 @@ package catalogue
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/netip"
 	"path"
 	"regexp"
 	"slices"
@@ -17,6 +19,9 @@ type Host struct {
 	UID, GID   int            // the apps' own user, for {{uid}}, {{gid}} and RunAsUser
 	Groups     map[string]int // host group name → gid, for devices' HostGroups
 	MediaRoots []string       // folders media may be chosen from
+	// BindAddress publishes ports on one address only (a LAN or tailnet
+	// address, or 127.0.0.1); empty publishes on all of them.
+	BindAddress string
 }
 
 // Options are the owner's choices on the app's page. Every key must name a
@@ -26,6 +31,24 @@ type Options struct {
 	Media   map[string]string `json:"media,omitempty"`   // media volume name → host folder
 	Env     map[string]string `json:"env,omitempty"`     // env name → one of its choices
 	Devices map[string]bool   `json:"devices,omitempty"` // optional device path → on
+}
+
+// ParseOptions reads options sent by the panel: one JSON object, unknown
+// fields and anything after it refused.
+func ParseOptions(s string) (Options, error) {
+	var o Options
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&o); err != nil {
+		return o, err
+	}
+	if dec.More() {
+		return o, fmt.Errorf("unexpected data after the options")
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return o, fmt.Errorf("unexpected data after the options")
+	}
+	return o, nil
 }
 
 // Plan is a definition with the owner's choices applied: exactly what runs.
@@ -42,8 +65,21 @@ type Plan struct {
 }
 
 type PortMap struct {
+	Bind            string // address to publish on; empty: all
 	Host, Container int
 	Protocol        string
+}
+
+// publish is "[addr:]host:container/proto" for compose and Quadlet alike.
+func (pm PortMap) publish() string {
+	s := fmt.Sprintf("%d:%d/%s", pm.Host, pm.Container, pm.Protocol)
+	if pm.Bind == "" {
+		return s
+	}
+	if strings.Contains(pm.Bind, ":") {
+		return "[" + pm.Bind + "]:" + s
+	}
+	return pm.Bind + ":" + s
 }
 
 type Mount struct {
@@ -80,9 +116,14 @@ func Resolve(a App, o Options, h Host) (Plan, error) {
 			return bad("port %s: host port %d must be 1024–65535 and not used twice", port.Name, host)
 		}
 		used[key] = true
-		p.Ports = append(p.Ports, PortMap{Host: host, Container: port.Container, Protocol: proto})
+		p.Ports = append(p.Ports, PortMap{Bind: h.BindAddress, Host: host, Container: port.Container, Protocol: proto})
 	}
 
+	if h.BindAddress != "" {
+		if _, err := netip.ParseAddr(h.BindAddress); err != nil {
+			return bad("bind address %q isn't an IP address", h.BindAddress)
+		}
+	}
 	if !path.IsAbs(h.AppsDir) || !hostPathRe.MatchString(h.AppsDir) {
 		return bad("the apps folder %q isn't a plain absolute path", h.AppsDir)
 	}
@@ -194,7 +235,7 @@ func (p Plan) Compose() string {
 	}
 	w("    ports:")
 	for _, pm := range p.Ports {
-		w("      - %s", q(fmt.Sprintf("%d:%d/%s", pm.Host, pm.Container, pm.Protocol)))
+		w("      - %s", q(pm.publish()))
 	}
 	if len(p.Mounts) > 0 {
 		w("    volumes:")
@@ -246,7 +287,7 @@ func (p Plan) Quadlet() string {
 		w("Environment=%s", unitQuote(e[0]+"="+e[1]))
 	}
 	for _, pm := range p.Ports {
-		w("PublishPort=%d:%d/%s", pm.Host, pm.Container, pm.Protocol)
+		w("PublishPort=%s", pm.publish())
 	}
 	for _, m := range p.Mounts {
 		w("Volume=%s:%s%s", m.Host, m.Container, ro(m.ReadOnly))

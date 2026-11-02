@@ -22,12 +22,28 @@ const (
 	CmdNudgeAwake   = "nudge-awake"   // ≥10 min, unless a longer hold exists (decision D3)
 	CmdBackupRun    = "backup-run"    // start the backup unit, don't wait
 	CmdEgressReport = "egress-report" // read-only, but slow: on demand only
+	// CmdAppJob takes the oldest request the agent left in RequestsDir,
+	// checks it against the built-in catalogue and starts it as a job.
+	CmdAppJob = "app-job"
+	// CmdAppRun runs a checked job; systemd starts it, never sudo.
+	CmdAppRun = "app-run"
 )
 
 var Commands = []string{
 	CmdFeatures, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
-	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport,
+	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
 }
+
+// App store paths shared by the agent and the helper.
+const (
+	// RequestsDir is the agent's own folder for job requests
+	// (RuntimeDirectory=cirrusux-agent); the helper reads and removes them.
+	RequestsDir = "/run/cirrusux-agent/requests"
+	// JobsDir holds job statuses, readable by the agent.
+	JobsDir = "/run/cirrusux-jobs"
+	// AppRecordsDir holds installed apps' records, readable by the agent.
+	AppRecordsDir = "/var/lib/cirrusux/apps"
+)
 
 // StayAwakeArgs are the only holds the panel can set.
 var StayAwakeArgs = []string{"30", "120", "forever"}
@@ -41,6 +57,7 @@ const (
 	ModAV        = "av"         // a ClamAV scan log
 	ModSecurity  = "security"   // fail2ban jail and firewall checks
 	ModEgress    = "egress"     // the outbound-traffic report
+	ModApps      = "apps"       // the app store: a container runtime and an apps folder
 )
 
 // Features is what `features` prints.

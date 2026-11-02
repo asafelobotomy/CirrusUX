@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -157,5 +158,53 @@ func TestLoadAll(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "70-bad.env"), []byte("SHELL=/bin/sh\n"), 0o644)
 	if _, err := loadAll(main, dir); err == nil {
 		t.Error("a bad helper.d file should fail the whole load")
+	}
+}
+
+// The agent writes the requests folder; root reads it. Links and big or odd
+// files are refused, and the oldest request goes first.
+func TestOldestRequest(t *testing.T) {
+	dir := t.TempDir()
+	if _, _, err := oldestRequest(dir); err == nil {
+		t.Error("empty folder")
+	}
+	os.WriteFile(filepath.Join(dir, "b.json"), []byte(`{"second":1}`), 0o644)
+	old := time.Now().Add(-time.Minute)
+	os.WriteFile(filepath.Join(dir, "a.json"), []byte(`{"first":1}`), 0o644)
+	os.Chtimes(filepath.Join(dir, "a.json"), old, old)
+	if name, b, err := oldestRequest(dir); err != nil || filepath.Base(name) != "a.json" || string(b) != `{"first":1}` {
+		t.Errorf("got %s %s %v", name, b, err)
+	}
+
+	links := t.TempDir()
+	os.Symlink("/etc/shadow", filepath.Join(links, "x.json"))
+	if _, _, err := oldestRequest(links); err == nil {
+		t.Error("followed a symlink")
+	}
+	big := t.TempDir()
+	os.WriteFile(filepath.Join(big, "x.json"), make([]byte, 17<<10), 0o644)
+	if _, _, err := oldestRequest(big); err == nil {
+		t.Error("read a big file")
+	}
+}
+
+func TestHostGroups(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "group")
+	os.WriteFile(p, []byte("root:x:0:\nvideo:x:44:jellyfin\nrender:x:105:\nbroken\n"), 0o644)
+	g := hostGroups(p)
+	if g["video"] != 44 || g["render"] != 105 || len(g) != 3 {
+		t.Errorf("groups = %v", g)
+	}
+}
+
+func TestAppsConfig(t *testing.T) {
+	c, err := loadConf(writeConf(t, "CONTAINER_RUNTIME=podman\nAPPS_DIR=/srv/cirrusux/apps\nAPPS_USER=cirrusux-apps\nMEDIA_ROOTS=/srv/media /mnt\n"))
+	if err != nil || !slices.Contains(c.features().Modules, "apps") || len(c.MediaRoots) != 2 {
+		t.Errorf("%+v %v", c, err)
+	}
+	for _, bad := range []string{"CONTAINER_RUNTIME=lxc", "MEDIA_ROOTS=/srv/../etc", "APPS_DIR=apps", "APPS_BIND=0.0.0.0;id"} {
+		if _, err := loadConf(writeConf(t, bad)); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
 	}
 }

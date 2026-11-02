@@ -240,3 +240,29 @@ func TestNoNudgeWithoutSleep(t *testing.T) {
 		t.Errorf("helper calls = %v", calls())
 	}
 }
+
+// An app request goes to the helper as a file, written back from its parsed
+// form, and the helper is then asked to take it.
+func TestAppRequest(t *testing.T) {
+	a, calls, _ := testAgent(t)
+	requestsDir = t.TempDir()
+	t.Cleanup(func() { requestsDir = helperapi.RequestsDir })
+	c := command{ID: "0123456789abcdef", Action: "app_install", Args: map[string]string{
+		"app": "kavita", "options": `{"media":{"books":"/srv/media/books"}}`}}
+	if res := a.run(context.Background(), c); !res.OK {
+		t.Fatalf("install: %s", res.Error)
+	}
+	b, err := os.ReadFile(filepath.Join(requestsDir, "0123456789abcdef.json"))
+	if err != nil || !strings.Contains(string(b), `"books":"/srv/media/books"`) {
+		t.Errorf("request file = %s, %v", b, err)
+	}
+	if got := calls(); len(got) != 1 || got[0] != "app-job" {
+		t.Errorf("helper calls = %v", got)
+	}
+	for _, opts := range []string{`{"privileged":true}`, `{}} {"job":"x"`, `{}, "action":"remove"`} {
+		bad := command{ID: "0123456789abcdee", Action: "app_install", Args: map[string]string{"app": "kavita", "options": opts}}
+		if res := a.run(context.Background(), bad); res.OK {
+			t.Errorf("options %s accepted", opts)
+		}
+	}
+}

@@ -28,6 +28,25 @@ gets a minor version.
     wakes a sleeping server; `BACKUP_KEEP` retention (0 keeps all).
   - security: fail2ban's `sshd` jail on the journal, a weekly ClamAV scan
     that updates its signatures just before it runs (no daemon).
+- App-store installs and removals as background jobs (Phase 5b). The
+  gateway checks the app and the options' shape; the agent writes the
+  request as a file in its own folder (built from parsed parts, so options
+  can't carry an action or app of their own) and runs one fixed sudoers
+  line, `cirrusux-helper app-job`; the helper checks everything again
+  against its built-in catalogue and the server (free ports, existing media
+  folders) and starts a `cirrusux-job-*` unit, which keeps a sleeping server
+  awake. The job creates the app's folders, pulls the pinned image, writes
+  the compose file or Quadlet unit, starts it and waits for its health
+  check, stopping it again if that fails. Removing stops it and archives
+  its folder. Jobs and installed apps are in the agent's reports.
+- The `apps` setup module: Podman (default) or Docker, folders, the
+  `cirrusux-apps` user, and with Podman the Docker filter pointed at its
+  API socket, so the panel's containers work on either runtime.
+- Ports can be published on one address only (`APPS_BIND`).
+- Containers pulled by digest show their version from the app store's
+  label (or the digest), not `:latest`.
+- A live test, `go test -tags live ./internal/appjob`, installs and removes
+  Syncthing with rootless Podman for real.
 - The app store's catalogue (Phase 5a): nine app definitions (Jellyfin,
   Navidrome, Audiobookshelf, Kavita, Nextcloud, Home Assistant, Syncthing,
   Vaultwarden, Uptime Kuma), each pinned to a release tag and digest. A

@@ -22,6 +22,9 @@ type Snapshot struct {
 	Temps    []float64 `json:"temps"`
 	Security *Security `json:"security,omitempty"`
 	Timeline []Segment `json:"timeline"`
+	// Apps installed by the app store, and its recent jobs (apps module).
+	Apps []App `json:"apps,omitempty"`
+	Jobs []Job `json:"jobs,omitempty"`
 	// Problems collecting individual sections; the rest of the snapshot is
 	// still valid.
 	Errors []string `json:"errors,omitempty"`
@@ -83,6 +86,31 @@ type Disk struct {
 	FreeBytes  uint64 `json:"freeBytes"`
 	// USB link speed in Mb/s when the disk sits behind USB, else 0.
 	LinkMbps int `json:"linkMbps"`
+}
+
+// App is one app the app store installed.
+type App struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Tag       string    `json:"tag"`
+	Runtime   string    `json:"runtime"`
+	MainPort  int       `json:"mainPort"`
+	HTTPS     bool      `json:"https,omitempty"`
+	Installed time.Time `json:"installed"`
+}
+
+// Job is an app-store install or removal, running or recent.
+type Job struct {
+	ID       string     `json:"id"`
+	Action   string     `json:"action"` // install, remove
+	App      string     `json:"app"`
+	Name     string     `json:"name"`
+	State    string     `json:"state"` // running, done, failed
+	Step     string     `json:"step"`
+	Detail   string     `json:"detail,omitempty"`
+	Error    string     `json:"error,omitempty"`
+	Started  time.Time  `json:"started"`
+	Finished *time.Time `json:"finished,omitempty"`
 }
 
 type Security struct {

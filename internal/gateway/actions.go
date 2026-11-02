@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"cirrusux/internal/catalogue"
 	"cirrusux/internal/snapshot"
 )
 
@@ -71,10 +72,75 @@ var actionSpecs = map[string]actionSpec{
 	"backup_run": {
 		label: func(map[string]string) string { return "Started a system backup" },
 	},
+	// The app store (Phase 5b). The gateway checks the app and the shape of
+	// the options; the helper checks everything again against the server.
+	"app_install": {
+		label: func(a map[string]string) string { return "Started installing " + appName(a["app"]) },
+		check: checkInstall,
+		undo: func(a map[string]string) *ActionReq {
+			return &ActionReq{Action: "app_remove", Args: map[string]string{"app": a["app"]}}
+		},
+	},
+	"app_remove": {
+		label: func(a map[string]string) string {
+			return "Started removing " + appName(a["app"]) + " (its folder is archived)"
+		},
+		check: checkInstalled,
+	},
 	"egress_report": {
 		label:    func(map[string]string) string { return "Egress report" },
 		readOnly: true,
 	},
+}
+
+// catalogueApps is the built-in catalogue, loaded once.
+var catalogueApps = func() []catalogue.App {
+	apps, err := catalogue.Load()
+	if err != nil {
+		panic("built-in catalogue: " + err.Error())
+	}
+	return apps
+}()
+
+func findApp(id string) (catalogue.App, bool) {
+	for _, a := range catalogueApps {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return catalogue.App{}, false
+}
+
+func appName(id string) string {
+	if a, ok := findApp(id); ok {
+		return a.Name
+	}
+	return id
+}
+
+func checkInstall(a map[string]string, snap *snapshot.Snapshot) error {
+	if _, ok := findApp(a["app"]); !ok {
+		return fmt.Errorf("no app %q in the catalogue", a["app"])
+	}
+	if len(a["options"]) > 4096 {
+		return fmt.Errorf("options too long")
+	}
+	if a["options"] != "" {
+		if _, err := catalogue.ParseOptions(a["options"]); err != nil {
+			return fmt.Errorf("options: %v", err)
+		}
+	}
+	if snap != nil && slices.ContainsFunc(snap.Apps, func(x snapshot.App) bool { return x.ID == a["app"] }) {
+		return fmt.Errorf("%s is already installed", appName(a["app"]))
+	}
+	return nil
+}
+
+func checkInstalled(a map[string]string, snap *snapshot.Snapshot) error {
+	if snap == nil || !slices.ContainsFunc(snap.Apps, func(x snapshot.App) bool { return x.ID == a["app"] }) {
+		return fmt.Errorf("%s isn't installed by the app store", appName(a["app"]))
+	}
+	return nil
 }
 
 // checkContainer only accepts containers the agent last reported.
@@ -93,7 +159,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 		return q, spec, fmt.Errorf("unknown action %q", q.Action)
 	}
 	clean := ActionReq{Action: q.Action}
-	for _, k := range []string{"minutes", "name"} {
+	for _, k := range []string{"minutes", "name", "app", "options"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}

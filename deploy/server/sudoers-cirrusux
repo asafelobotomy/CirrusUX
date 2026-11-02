@@ -21,6 +21,7 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
                         /usr/local/sbin/cirrusux-helper stay-awake forever, \
                         /usr/local/sbin/cirrusux-helper allow-sleep, \
                         /usr/local/sbin/cirrusux-helper nudge-awake, \
-                        /usr/local/sbin/cirrusux-helper backup-run
+                        /usr/local/sbin/cirrusux-helper backup-run, \
+                        /usr/local/sbin/cirrusux-helper app-job
 
 cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT

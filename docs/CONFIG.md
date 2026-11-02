@@ -83,6 +83,7 @@ The helper reads `helper.env`, then every `helper.d/*.env` in name order
 | av | `AV_LOG` | Virus-scan result |
 | security | `FAIL2BAN_JAIL`, `FIREWALL_CHECKS` | fail2ban bans; firewall rule checks: `CHAIN:pattern` passes when `iptables -S CHAIN` contains the pattern, `family/table/chain:pattern` when `nft list chain …` does (e.g. `inet/cirrusux/input:drop` for the firewall module) |
 | egress | `EGRESS_REPORT` | The outbound-traffic report on the Security page |
+| apps | `CONTAINER_RUNTIME`, `APPS_DIR`, `APPS_USER`, `MEDIA_ROOTS` (`APPS_ARCHIVE`, `APPS_BIND`) | The app store: installs and removals as background jobs |
 
 Paths must be absolute; unit and jail names may only use letters, digits and
 `- _ . @`. The helper refuses the file otherwise.
@@ -121,6 +122,11 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `SEC_AV` | `yes` | security: weekly ClamAV scan; signatures update just before it |
 | `SEC_AV_PATHS` | `/home /srv /usr/local /tmp /var/tmp` | security: what the scan covers |
 | `SEC_AV_SCHEDULE` | `Sun *-*-* 04:00` | security: when it runs |
+| `APPS_RUNTIME` | `podman` | apps: `podman` (Quadlet units) or `docker` (compose) |
+| `APPS_DIR` | `/srv/cirrusux/apps` | apps: each app's own folders |
+| `APPS_ARCHIVE` | `/srv/cirrusux/archive` | apps: removed apps' folders, kept |
+| `APPS_MEDIA_ROOTS` | `/srv/media` | apps: folders media may be chosen from |
+| `APPS_BIND` | — (all) | apps: publish apps' ports on this address only |
 | `SLEEP_IDLE_MIN` | `30` | sleep: quiet minutes before it suspends |
 | `SLEEP_GRACE_MIN` | `15` | sleep: minutes after a wake before it may sleep again |
 | `SLEEP_WATCH_PORTS` | — (all) | sleep: only these local ports count |

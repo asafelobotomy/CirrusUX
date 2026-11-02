@@ -8,10 +8,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"cirrusux/internal/appjob"
+	"cirrusux/internal/catalogue"
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/snapshot"
 )
@@ -159,6 +163,11 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		return helper(helperapi.CmdBackupRun)
 	case "egress_report":
 		return helper(helperapi.CmdEgressReport)
+	case "app_install", "app_remove":
+		if err := writeRequest(c); err != nil {
+			return nil, err
+		}
+		return helper(helperapi.CmdAppJob)
 	}
 	if verb, ok := containerVerbs[c.Action]; ok {
 		name := c.Args["name"]
@@ -173,6 +182,39 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		return col.containerAction(ctx, name, verb)
 	}
 	return nil, fmt.Errorf("unknown action %q", c.Action)
+}
+
+// requestsDir is helperapi.RequestsDir; tests point it elsewhere.
+var requestsDir = helperapi.RequestsDir
+
+// writeRequest leaves an app-store request for the helper, which checks it
+// again in full: the agent can't pass free text to root on the command line.
+func writeRequest(c command) error {
+	req := appjob.Request{Job: c.ID, Action: strings.TrimPrefix(c.Action, "app_"), App: c.Args["app"]}
+	if opts := c.Args["options"]; opts != "" && req.Action == "install" {
+		o, err := catalogue.ParseOptions(opts)
+		if err != nil {
+			return fmt.Errorf("app options: %v", err)
+		}
+		req.Options = o
+	}
+	// Built from parsed parts, never by pasting text together, so options
+	// can't carry an action or an app of their own.
+	clean, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	if _, err := appjob.ParseRequest(clean); err != nil {
+		return fmt.Errorf("app request: %v", err)
+	}
+	if err := os.MkdirAll(requestsDir, 0o700); err != nil {
+		return err
+	}
+	tmp := filepath.Join(requestsDir, "."+c.ID)
+	if err := os.WriteFile(tmp, clean, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filepath.Join(requestsDir, c.ID+".json"))
 }
 
 // nudgeAwake gives an action at least 10 minutes before the server may sleep

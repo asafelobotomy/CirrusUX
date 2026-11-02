@@ -35,7 +35,9 @@ Other modules: **network** (Wake-on-LAN that survives reboots, Tailscale at
 boot), **backup** (age-encrypted system backups on a timer that wakes a
 sleeping server; only the public key goes on the machine) and **security**
 (fail2ban for SSH, a weekly virus scan). Each switches its page on in the
-panel by itself. In a split setup, **sleep** installs CirrusUX's own sleep
+panel by itself. **apps** sets up the app store: Podman (or Docker), the apps' folders and
+user, and, with Podman, points the Docker filter at Podman's API socket. In a
+split setup, **sleep** installs CirrusUX's own sleep
 manager on the server (see docs/CONFIG.md).
 
 The **firewall** module (add it to `HOST_MODULES` when ready) writes an

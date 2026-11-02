@@ -109,3 +109,20 @@ grep -q "STAY_AWAKE_BIN=/usr/local/sbin/cirrusux-stay-awake" $ROOT/etc/cirrusux/
 grep -qx conntrack $T/installed || fail "conntrack not installed"
 $H/cirrusux-setup check sleep > $T/out 2>&1; [ $? = 0 ] || { cat $T/out; fail "sleep re-check"; }
 echo "sleep: refuses the single setup; checker, timer, hook, stay-awake links and panel hookup; re-check clean"
+
+# apps: Podman by default, the filter pointed at Podman, folders and user.
+printf 'APPS_MEDIA_ROOTS="/srv/media /mnt/disk"\n' > $CONFIG
+printf '#!/bin/sh\n[ "$1" = cirrusux-apps ] && { [ -f "$STUBDIR/appsuser" ]; exit; }\n[ "$1" = cirrusux ] && exit 0\nexec /usr/bin/id "$@"\n' > $T/stub/id
+printf '#!/bin/sh\ntouch "$STUBDIR/appsuser"\n' > $T/stub/useradd
+printf '#!/bin/sh\nexec /usr/bin/mkdir "$@"\n' > $T/stub/mkdir
+chmod +x $T/stub/id $T/stub/useradd $T/stub/mkdir
+$H/cirrusux-setup apply apps > $T/out 2>&1 || { cat $T/out; fail "apps apply"; }
+grep -qx podman $T/installed && grep -qx podman.socket $T/enabled || fail "podman"
+grep -q "upstream /run/podman/podman.sock" $ROOT/etc/systemd/system/cirrusux-dockerfilter.service.d/podman.conf || fail "filter drop-in"
+grep -q "CONTAINER_RUNTIME=podman" $ROOT/etc/cirrusux/helper.d/apps.env && grep -q "MEDIA_ROOTS=/srv/media /mnt/disk" $ROOT/etc/cirrusux/helper.d/apps.env || fail "apps.env"
+[ -d $ROOT/srv/cirrusux/apps ] && [ -d $ROOT/var/lib/cirrusux/apps ] || fail "folders"
+grep -q "media folder /srv/media doesn't exist yet" $T/out || fail "no warning for a missing media folder"
+$H/cirrusux-setup check apps > $T/out 2>&1; [ $? = 0 ] || { cat $T/out; fail "apps re-check"; }
+printf 'APPS_MEDIA_ROOTS="/srv/My Media"\n' > $CONFIG
+$H/cirrusux-setup check apps > /dev/null 2>&1 && fail "a path with a space accepted"
+echo "apps: Podman with its socket, the filter pointed at it, folders, user and panel hookup; re-check clean"

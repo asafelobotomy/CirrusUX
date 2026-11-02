@@ -100,7 +100,7 @@ firewalled, backed-up server that sleeps and wakes for its timers, by
   and Podman's Quadlet generator turns the unit into the expected
   `podman run`.
 
-### 5b. Installing, as background jobs
+### 5b. Installing, as background jobs — done
 
 - The agent can't pass free text to root, so a request goes as a file: the
   agent writes `/run/cirrusux/requests/<job>.json` (app ID + chosen options),
@@ -114,7 +114,12 @@ firewalled, backed-up server that sleeps and wakes for its timers, by
   while one runs.
 - Remove: stop, then archive the app's folder to `/srv/cirrusux/archive/`.
 - Runtime from `CONTAINER_RUNTIME` in `helper.env` (docker or podman).
-- Undo: install ↔ remove (remove restores from the archive on undo).
+- Undo: an install's undo is removing it; a removal's folder waits in the
+  archive (restoring it is Phase 6's archive review).
+- Ports can be published on one address only (`APPS_BIND`: the LAN or
+  tailnet address, or 127.0.0.1).
+- Tested for real: `go test -tags live ./internal/appjob` installs and
+  removes Syncthing with rootless Podman on the machine running it.
 
 ### 5c. The store in the UI
 

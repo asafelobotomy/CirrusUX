@@ -397,12 +397,17 @@ func containerHealth(state, status string) string {
 
 // splitImage separates "repo/name:tag" into image and tag ("latest" if none).
 func splitImage(ref string) (string, string) {
+	digest := ""
 	if i := strings.LastIndex(ref, "@"); i >= 0 {
-		ref = ref[:i]
+		ref, digest = ref[:i], ref[i+1:]
 	}
 	slash := strings.LastIndex(ref, "/")
 	if i := strings.LastIndex(ref, ":"); i > slash {
 		return ref[:i], ref[i+1:]
+	}
+	if d, ok := strings.CutPrefix(digest, "sha256:"); ok && len(d) >= 12 {
+		// Pulled by digest alone: pinned, not latest.
+		return ref, "sha256:" + d[:12]
 	}
 	return ref, "latest"
 }

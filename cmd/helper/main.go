@@ -35,6 +35,8 @@ func main() {
 	}
 	if len(os.Args) == 3 && os.Args[1] == helperapi.CmdStayAwake && slices.Contains(helperapi.StayAwakeArgs, os.Args[2]) {
 		// the one subcommand with an argument, from a fixed list
+	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdAppRun && jobRe.MatchString(os.Args[2]) {
+		// started by systemd-run for a checked job; not in sudoers
 	} else if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}
@@ -90,6 +92,12 @@ func main() {
 	case helperapi.CmdBackupRun:
 		need(helperapi.ModBackup)
 		out, err = run(ctx, "systemctl", "start", "--no-block", c.BackupUnit)
+	case helperapi.CmdAppJob:
+		need(helperapi.ModApps)
+		out, err = appJob(ctx, c)
+	case helperapi.CmdAppRun:
+		need(helperapi.ModApps)
+		out, err = appRun(c, os.Args[2])
 	case helperapi.CmdEgressReport:
 		need(helperapi.ModEgress)
 		out, err = run(ctx, c.EgressReport, "-n", "20")
@@ -194,6 +202,8 @@ func command(ctx context.Context, name string, args ...string) (helperapi.Lines,
 	}
 	return helperapi.Lines{Lines: strings.Split(strings.TrimRight(string(out), "\n"), "\n")}, nil
 }
+
+var jobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
 
 var bannedRe = regexp.MustCompile(`Currently banned:\s*(\d+)`)
 

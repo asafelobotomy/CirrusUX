@@ -68,6 +68,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/wallpaper", s.getWallpaper)
 	api.HandleFunc("PUT /api/wallpaper", s.putWallpaper)
 	api.HandleFunc("POST /api/assistant", s.askAssistant)
+	api.HandleFunc("GET /api/catalogue", s.getCatalogue)
 	mux.Handle("/api/", s.auth(api))
 
 	mux.Handle("/", s.auth(http.HandlerFunc(s.static)))
@@ -238,6 +239,11 @@ func (s *Server) record(e AuditEntry) {
 
 func (s *Server) changelog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.store.RecentAudit(100))
+}
+
+// getCatalogue lists the app store's apps: the built-in catalogue.
+func (s *Server) getCatalogue(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, catalogueApps)
 }
 
 func (s *Server) getUI(w http.ResponseWriter, r *http.Request) {

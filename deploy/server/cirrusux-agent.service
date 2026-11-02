@@ -12,6 +12,9 @@ ExecStart=/usr/local/bin/cirrusux-agent
 Restart=on-failure
 RestartSec=30s
 Nice=10
+# App-store requests wait here for the helper (cirrusux-helper app-job).
+RuntimeDirectory=cirrusux-agent
+RuntimeDirectoryMode=0700
 # The agent calls the helper through sudo, so NoNewPrivileges and capability
 # limits would break it; keep the filesystem protections that don't.
 ProtectSystem=full

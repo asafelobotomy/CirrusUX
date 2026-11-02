@@ -167,6 +167,23 @@ func TestResolveRejects(t *testing.T) {
 	}
 }
 
+func TestBindAddress(t *testing.T) {
+	a, _ := Parse([]byte(good))
+	for addr, want := range map[string]string{"127.0.0.1": "PublishPort=127.0.0.1:8000:80/tcp", "fd7a:115c:a1e0::1": "PublishPort=[fd7a:115c:a1e0::1]:8000:80/tcp"} {
+		h := host
+		h.BindAddress = addr
+		p, err := Resolve(a, Options{}, h)
+		if err != nil || !strings.Contains(p.Quadlet(), want) || !strings.Contains(p.Compose(), want[len("PublishPort="):]) {
+			t.Errorf("%s: %v\n%s", addr, err, p.Quadlet())
+		}
+	}
+	h := host
+	h.BindAddress = "0.0.0.0; rm -rf /"
+	if _, err := Resolve(a, Options{}, h); err == nil {
+		t.Error("a bad bind address was accepted")
+	}
+}
+
 func TestQuadletQuoting(t *testing.T) {
 	a, _ := Parse([]byte(strings.Replace(good, `"volumes"`, `"env":[{"name":"MOTD","value":"Hello \"world\" 100%"}],"volumes"`, 1)))
 	p, err := Resolve(a, Options{}, host)
