@@ -52,6 +52,11 @@ type Power struct {
 	online   bool
 	lastSeen time.Time
 	waking   *wakeState
+
+	// The router's view (PowerCheckCmd): a second opinion, and the first
+	// sign of a wake, before Tailscale or the agent are back.
+	routerOnline bool
+	routerAt     time.Time // when it last answered online or offline
 }
 
 // PowerOptions come from the gateway's config.
@@ -64,12 +69,17 @@ type PowerOptions struct {
 	WakeBroadcast   string
 	WakeCmd         []string
 	Dev             bool // pretend wakes work, skip Tailscale
+	// CheckCmd asks the router whether the server is on the network; it
+	// prints "online" or "offline". Optional.
+	CheckCmd   []string
+	CheckEvery time.Duration
 }
 
 func PowerFromConfig(c Config) PowerOptions {
 	return PowerOptions{
 		Server: c.ServerName, Gateway: c.GatewayName, Split: c.Split(), Peer: c.TailscalePeer,
 		Wake: c.Wake, WakeMAC: c.WakeMAC, WakeBroadcast: c.WakeBroadcast, WakeCmd: c.WakeCmd, Dev: c.Dev,
+		CheckCmd: c.PowerCheckCmd, CheckEvery: c.PowerCheckEvery,
 	}
 }
 
@@ -99,6 +109,9 @@ func NewPower(opt PowerOptions) *Power {
 func (p *Power) CanWake() bool { return p.opt.Split && (p.opt.Wake != "none" || p.opt.Dev) }
 
 func (p *Power) Run(ctx context.Context) {
+	if p.opt.Split && !p.opt.Dev && len(p.opt.CheckCmd) > 0 {
+		go p.runRouter(ctx)
+	}
 	if !p.opt.Split || p.opt.Dev || p.opt.Peer == "" {
 		return
 	}
@@ -112,6 +125,59 @@ func (p *Power) Run(ctx context.Context) {
 		case <-t.C:
 		}
 	}
+}
+
+func (p *Power) runRouter(ctx context.Context) {
+	every := p.opt.CheckEvery
+	if every <= 0 {
+		every = time.Minute
+	}
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		p.pollRouter(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// pollRouter runs the check command once. Anything but "online" or
+// "offline" leaves the router's view as unknown.
+func (p *Power) pollRouter(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, p.opt.CheckCmd[0], p.opt.CheckCmd[1:]...).Output()
+	word := strings.ToLower(strings.TrimSpace(firstLine(string(out))))
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err != nil || (word != "online" && word != "offline") {
+		slog.Warn("router check", "err", err, "said", word)
+		return
+	}
+	p.routerOnline, p.routerAt = word == "online", time.Now()
+	if p.waking != nil && p.routerOnline && p.waking.step < 2 {
+		p.waking.step = 2 // the network link is up
+	}
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	return line
+}
+
+// routerSays is the router's view when it's recent enough to trust.
+func (p *Power) routerSays(now time.Time) (online, known bool) {
+	every := p.opt.CheckEvery
+	if every <= 0 {
+		every = time.Minute
+	}
+	if p.routerAt.IsZero() || now.Sub(p.routerAt) > 3*every {
+		return false, false
+	}
+	return p.routerOnline, true
 }
 
 func (p *Power) pollTailscale(ctx context.Context) {
@@ -188,7 +254,9 @@ func (p *Power) View(now time.Time, snap *snapshot.Snapshot) PowerView {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	v := p.view(now, snap)
-	v.Notice = p.notice
+	if p.notice != "" {
+		v.Notice = p.notice
+	}
 	return v
 }
 
@@ -218,18 +286,38 @@ func (p *Power) view(now time.Time, snap *snapshot.Snapshot) PowerView {
 		}
 	}
 
+	router, routerKnown := p.routerSays(now)
 	if p.tsKnown {
 		switch {
 		case p.online && fresh:
 			return PowerView{State: "awake", Since: &snap.Power.Since, Source: "tailscale+agent"}
 		case p.online:
 			return PowerView{State: "unreachable", Source: "tailscale"}
+		case routerKnown && router:
+			// On the network, but not on the tailnet: Tailscale is still
+			// starting after a wake, or has stopped.
+			return PowerView{State: "unreachable", Source: "router",
+				Notice: "The router sees " + p.opt.Server + " on the network, but Tailscale doesn't. If it just woke, Tailscale is still starting."}
 		default:
 			since := p.lastSeen
 			if snap != nil && snap.TakenAt.After(since) {
 				since = snap.TakenAt
 			}
 			return PowerView{State: "asleep", Since: nonZero(since), Source: "tailscale"}
+		}
+	}
+	if routerKnown {
+		switch {
+		case router && fresh:
+			return PowerView{State: "awake", Since: &snap.Power.Since, Source: "router+agent"}
+		case router:
+			return PowerView{State: "unreachable", Source: "router"}
+		default:
+			var since *time.Time
+			if snap != nil {
+				since = &snap.TakenAt
+			}
+			return PowerView{State: "asleep", Since: since, Source: "router"}
 		}
 	}
 	if fresh {

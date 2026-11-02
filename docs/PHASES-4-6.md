@@ -194,13 +194,28 @@ In four parts, each its own commit.
   types it. Only names directly inside the archive or backup folders, of the
   kinds CirrusUX makes, can be deleted; a link goes as a link.
 
-### 6d. Router power check and custom widgets
+### 6d. Router power check and custom widgets — done
 
-- A router power check as a wake-driver option (TR-064
-  `GetSpecificHostEntry`), through a root wrapper so the gateway never holds
-  the router password.
-- Custom widgets (customisation level 5): declarative widgets built from the
-  snapshot's data, no code.
+- A router power check (split setup, optional): the gateway asks the router
+  through TR-064 `GetSpecificHostEntry` whether it sees the server, through
+  a root wrapper (`cirrusux-router-check`, one sudoers line, no arguments).
+  The router password stays in `/etc/cirrusux/router.env` (root, mode 600)
+  and goes to curl on stdin, never on a command line. An answer counts for
+  three check intervals.
+- It sharpens the power state when Tailscale can't say: the router seeing
+  the server, with recent reports from it, means awake; seeing it without
+  reports means "no reports"; not seeing it means asleep. During a wake,
+  the router seeing the server moves the wake's progress on. When
+  Tailscale says offline but the router sees the server, the state is "no
+  reports" with a note that Tailscale is the problem.
+- Tested with a fake TR-064 router: online, offline, unknown host, a wrong
+  password, a bad MAC, wrong file permissions, and the password never in
+  the process list.
+- Custom widgets (customisation level 5): a title, up to six values picked
+  from a fixed list (power, uptime, containers, disk, CPU temperature, last
+  backup, next wake, apps and updates, archive size, bans, last report),
+  shown as tiles or a list. Only names from the list are stored, so nothing
+  typed runs as code; values a server's modules don't provide aren't offered.
 
 **Done when:** one app update goes through backup → tag → pull → health →
 changelog, and its restore path is tested once.

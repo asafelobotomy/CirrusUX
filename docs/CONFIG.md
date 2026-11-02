@@ -45,6 +45,8 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `CIRRUS_WAKE_BROADCAST` | `255.255.255.255:9` | `wol`: where the magic packet goes |
 | `CIRRUS_WAKE_CMD` | — | `command`: argv to run, no shell |
 | `CIRRUS_TAILSCALE_PEER` | the server name | Split only: the server's Tailscale name, for awake/asleep. `-` to rely on the agent's reports only |
+| `CIRRUS_POWER_CHECK_CMD` | — | Split only: a command that prints `online` or `offline` for the server, e.g. `sudo -n /usr/local/sbin/cirrusux-router-check` (TR-064). A second opinion beside Tailscale, the fallback when Tailscale can't be read, and a wake's "network up" step |
+| `CIRRUS_POWER_CHECK_SECS` | `60` | How often the power check runs |
 | `CIRRUS_CHANGELOG` | — | Also append every action to this Markdown file |
 | `ASSISTANT_PROVIDER` | — (off) | `xai`, `openai`, `anthropic`, `ollama` or `custom` |
 | `ASSISTANT_MODEL` | — | The model; the assistant is off without one |

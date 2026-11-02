@@ -71,8 +71,9 @@ The build plan, part by part, is in [PHASES-4-6.md](PHASES-4-6.md).
 - **Phase 5, app store:** a catalogue of app definitions rendered to compose
   files or Quadlet units (5a, done), installs as background jobs on the server
   (5b, done), and the store in the UI (5c, done).
-- **Phase 6, maintenance:** app updates on request (6a, done), OS updates and the Logs page (6b, done), the Storage page and archive review (6c, done), Logs page with "Explain
-  this", Storage page, archive review, router power check, custom widgets.
+- **Phase 6, maintenance:** app updates on request (6a), OS updates and
+  the Logs page with "Explain this" (6b), the Storage page and archive
+  review (6c), the router power check and custom widgets (6d). All done.
 
 ### Phase 7 — public release
 

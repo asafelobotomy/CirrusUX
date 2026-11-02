@@ -1,0 +1,55 @@
+#!/bin/sh
+# /usr/local/sbin/cirrusux-router-check on the gateway machine — root:root,
+# mode 755. Asks a TR-064 router (a FRITZ!Box, for one) whether the server
+# is on the network, and prints "online" or "offline". The gateway runs it
+# through one sudoers rule (CIRRUS_POWER_CHECK_CMD) but never sees the
+# router password: that's in a root-only file, read here.
+#
+# The file (root:root 600) holds:
+#   ROUTER_URL=http://fritz.box:49000
+#   ROUTER_USER=...
+#   ROUTER_PASSWORD=...
+#   SERVER_MAC=aa:bb:cc:dd:ee:ff
+set -eu
+
+SECRETS=${CIRRUS_ROUTER_ENV:-/etc/cirrusux/router.env}
+
+if [ "$#" -ne 0 ]; then
+	echo "cirrusux-router-check takes no arguments" >&2
+	exit 64
+fi
+# Owned by whoever runs this (root, through sudo) and readable by nobody else.
+if [ "$(stat -c '%u %a' "$SECRETS")" != "$(id -u) 600" ]; then
+	echo "$SECRETS must belong to $(id -un) with mode 600" >&2
+	exit 1
+fi
+# shellcheck disable=SC1090 # the settings file
+. "$SECRETS"
+: "${ROUTER_URL:=http://fritz.box:49000}" "${ROUTER_USER:?}" "${ROUTER_PASSWORD:?}" "${SERVER_MAC:?}"
+case "$SERVER_MAC" in
+*[!0-9A-Fa-f:]* | "") echo "SERVER_MAC must be a MAC address" >&2; exit 1 ;;
+esac
+
+body='<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+<s:Body><u:GetSpecificHostEntry xmlns:u="urn:dslforum-org:service:Hosts:1">
+<NewMACAddress>'"$SERVER_MAC"'</NewMACAddress>
+</u:GetSpecificHostEntry></s:Body></s:Envelope>'
+
+# The password goes to curl on stdin, never on its command line, where
+# other users could read it in the process list.
+reply=$(printf 'user = "%s:%s"\n' "$ROUTER_USER" "$ROUTER_PASSWORD" |
+	curl -sS --max-time 10 --anyauth -K - \
+		-H 'Content-Type: text/xml; charset="utf-8"' \
+		-H 'SoapAction: urn:dslforum-org:service:Hosts:1#GetSpecificHostEntry' \
+		--data "$body" "$ROUTER_URL/upnp/control/hosts")
+
+case "$reply" in
+*"<NewActive>1</NewActive>"*) echo online ;;
+*"<NewActive>0</NewActive>"*) echo offline ;;
+*NoSuchEntryInArray* | *714*) echo offline ;; # the router doesn't know it at all
+*)
+	echo "unexpected answer from the router" >&2
+	exit 1
+	;;
+esac

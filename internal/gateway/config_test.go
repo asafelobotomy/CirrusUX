@@ -2,9 +2,13 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -161,5 +165,58 @@ func TestMagicPacket(t *testing.T) {
 	}
 	if !bytes.Equal(buf[:n], want) {
 		t.Errorf("packet = %x", buf[:n])
+	}
+}
+
+// The router's answer is a second opinion: it fills in when Tailscale
+// can't be read, explains a server that's on the LAN but not the tailnet,
+// and shows a wake's progress before Tailscale or the agent are back.
+func TestRouterCheck(t *testing.T) {
+	answer := filepath.Join(t.TempDir(), "answer")
+	script := filepath.Join(t.TempDir(), "check")
+	os.WriteFile(script, []byte("#!/bin/sh\ncat "+answer+"\n"), 0o755)
+	say := func(s string) { os.WriteFile(answer, []byte(s), 0o644) }
+	p := NewPower(PowerOptions{Server: "atlas", Split: true, CheckCmd: []string{script}, CheckEvery: time.Minute})
+	now := time.Now()
+	fresh := &snapshot.Snapshot{TakenAt: now, Power: snapshot.Power{Since: now.Add(-time.Hour)}}
+	stale := &snapshot.Snapshot{TakenAt: now.Add(-time.Hour)}
+
+	say("offline\n")
+	p.pollRouter(context.Background())
+	if v := p.View(now, stale); v.State != "asleep" || v.Source != "router" {
+		t.Errorf("router offline, no Tailscale: %+v", v)
+	}
+	say("online\n")
+	p.pollRouter(context.Background())
+	if v := p.View(now, stale); v.State != "unreachable" || v.Source != "router" {
+		t.Errorf("router online, agent silent: %+v", v)
+	}
+	if v := p.View(now, fresh); v.State != "awake" || v.Source != "router+agent" {
+		t.Errorf("router online, agent fresh: %+v", v)
+	}
+
+	// Tailscale says offline while the router sees it.
+	p.tsKnown, p.online = true, false
+	if v := p.View(now, stale); v.State != "unreachable" || !strings.Contains(v.Notice, "router sees atlas") {
+		t.Errorf("on the LAN, not the tailnet: %+v", v)
+	}
+
+	// Garbage keeps the last good answer until it's too old.
+	say("Error: login failed")
+	p.pollRouter(context.Background())
+	if online, known := p.routerSays(now); !known || !online {
+		t.Error("an unreadable answer replaced a good one")
+	}
+	if _, known := p.routerSays(now.Add(4 * time.Minute)); known {
+		t.Error("an old answer still trusted")
+	}
+
+	// During a wake the router seeing the server is step 2.
+	p.tsKnown = false
+	p.waking = &wakeState{started: now, step: 1}
+	say("online")
+	p.pollRouter(context.Background())
+	if p.waking.step != 2 {
+		t.Errorf("wake step = %d", p.waking.step)
 	}
 }

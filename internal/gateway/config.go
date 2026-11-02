@@ -51,7 +51,11 @@ type Config struct {
 	WakeMAC       net.HardwareAddr
 	WakeBroadcast string   // host:port for the magic packet
 	WakeCmd       []string // argv, no shell
-	Changelog     string   // optional CHANGELOG.md to append to
+	// PowerCheckCmd asks the router whether the server is on the network
+	// (prints "online" or "offline"); a second opinion beside Tailscale.
+	PowerCheckCmd   []string
+	PowerCheckEvery time.Duration
+	Changelog       string // optional CHANGELOG.md to append to
 
 	Assistant            AssistantConfig
 	AssistantDailyTokens int
@@ -94,9 +98,11 @@ func ConfigFromEnv() (Config, error) {
 		AuthHeader:   env("CIRRUS_AUTH_HEADER", "Remote-User"),
 		AllowedUsers: splitList(os.Getenv("CIRRUS_ALLOWED_USERS")),
 
-		WakeBroadcast: env("CIRRUS_WAKE_BROADCAST", "255.255.255.255:9"),
-		WakeCmd:       strings.Fields(os.Getenv("CIRRUS_WAKE_CMD")),
-		Changelog:     os.Getenv("CIRRUS_CHANGELOG"),
+		WakeBroadcast:   env("CIRRUS_WAKE_BROADCAST", "255.255.255.255:9"),
+		WakeCmd:         strings.Fields(os.Getenv("CIRRUS_WAKE_CMD")),
+		PowerCheckCmd:   strings.Fields(os.Getenv("CIRRUS_POWER_CHECK_CMD")),
+		PowerCheckEvery: time.Duration(envInt("CIRRUS_POWER_CHECK_SECS", 60)) * time.Second,
+		Changelog:       os.Getenv("CIRRUS_CHANGELOG"),
 
 		AssistantDailyTokens: envInt("CIRRUS_ASSISTANT_DAILY_TOKENS", 200_000),
 		DigestAssistant:      os.Getenv("CIRRUS_DIGEST_ASSISTANT") == "1",

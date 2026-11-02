@@ -16,6 +16,7 @@ import ChangelogWidget from './ChangelogWidget.svelte';
 import UpdatesWidget from './UpdatesWidget.svelte';
 import NoteWidget from './NoteWidget.svelte';
 import DigestWidget from './DigestWidget.svelte';
+import CustomWidget from './CustomWidget.svelte';
 
 export interface WidgetMeta {
   title: string;
@@ -47,5 +48,6 @@ export const WIDGETS: Record<string, WidgetMeta> = {
   changelog: { title: 'Changelog', description: 'Recent actions with undo', component: ChangelogWidget, icon: I.History, size: [6, 3], min: [3, 2] },
   updates: { title: 'Updates', description: 'App updates found by the last check', component: UpdatesWidget, icon: I.RefreshCw, size: [4, 2], min: [3, 2], available: () => has('apps') },
   digest: { title: 'Daily digest', description: 'Morning summary built from cached data', component: DigestWidget, icon: I.Sunrise, size: [6, 3], min: [3, 2] },
+  custom: { title: 'Custom', description: 'Values you choose, as tiles or a list', component: CustomWidget, icon: I.LayoutDashboard, size: [4, 2], min: [2, 2], config: { title: '', metrics: 'power,containers,disk-free,cpu-temp', style: 'tiles' } },
   note: { title: 'Note', description: 'A short note of your own', component: NoteWidget, icon: I.FileText, size: [4, 2], min: [2, 2], config: { text: '' } },
 };

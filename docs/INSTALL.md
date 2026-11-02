@@ -109,6 +109,18 @@ to install CirrusUX as an app.
   the router to wake it. Run anything that needs a secret through a small
   root wrapper and one sudoers rule, so the gateway never sees the secret.
 
+### The router check (split setup, optional)
+
+`deploy/gateway/cirrusux-router-check` asks a TR-064 router (a FRITZ!Box,
+for one) whether the server is on the network. Install it like this:
+
+1. `sudo install -m 755 cirrusux-router-check /usr/local/sbin/`
+2. Put `ROUTER_URL`, `ROUTER_USER`, `ROUTER_PASSWORD` and `SERVER_MAC` in
+   `/etc/cirrusux/router.env` yourself (root:root 600). The panel never
+   handles the password.
+3. Add its sudoers rule, `sudoers-cirrusux-router-check`, and set
+   `CIRRUS_POWER_CHECK_CMD=sudo -n /usr/local/sbin/cirrusux-router-check`.
+
 ### The assistant and the daily digest
 
 The assistant is off until `ASSISTANT_MODEL` is set (plus

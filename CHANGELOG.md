@@ -9,6 +9,16 @@ gets a minor version.
 
 ### Added
 
+- A router power check for the split setup (Phase 6d, optional): the gateway
+  asks a TR-064 router (a FRITZ!Box, for one) whether it sees the server,
+  every `CIRRUS_POWER_CHECK_SECS` (60), through `cirrusux-router-check` and
+  one sudoers line. The router password stays in a root-only file and never
+  reaches the gateway. It makes the power state clearer when Tailscale
+  can't tell, and points at Tailscale when the router sees the server but
+  Tailscale doesn't.
+- Custom widgets: a title and up to six values from a fixed list, as tiles
+  or a list, set up in Edit layout.
+
 - The Storage page (Phase 6c): "Measure now" sizes the media, apps, backup
   and archive folders (and any `STORAGE_ROOTS`) as a job, with each disk's
   free space; the result is kept. The Storage widget shows it.
