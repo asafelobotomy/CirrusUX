@@ -29,7 +29,7 @@ export async function sendAction(req: ActionReq, label: string, quiet = false): 
   try {
     const { id } = await api<{ id: string }>('/api/actions', { method: 'POST', body: JSON.stringify(req) });
     if (!quiet) toast(`${label}: sent to cloud64…`, 'info');
-    const deadline = Date.now() + 4 * 60_000;
+    const deadline = Date.now() + 5 * 60_000;
     let c: Command;
     do {
       await new Promise((r) => setTimeout(r, 1000));

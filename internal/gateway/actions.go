@@ -126,7 +126,7 @@ type Command struct {
 const (
 	pollWait    = 25 * time.Second
 	pendingMax  = 2 * time.Minute // agent never asked: cloud64 asleep or agent down
-	sentMax     = 3 * time.Minute // agent took it but didn't report
+	sentMax     = 4 * time.Minute // agent took it but didn't report (egress report: up to 3 min)
 	keepHistory = 50
 )
 

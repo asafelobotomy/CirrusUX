@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -150,5 +151,78 @@ func TestCommandLoop(t *testing.T) {
 	case <-a.pushNow:
 	case <-time.After(time.Second):
 		t.Error("no immediate snapshot after the action")
+	}
+}
+
+// countingListener counts the connections a server accepts.
+type countingListener struct {
+	net.Listener
+	n atomic.Int32
+}
+
+func (l *countingListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err == nil {
+		l.n.Add(1)
+	}
+	return c, err
+}
+
+// Every collection used to build a new client and leave its connection
+// open; one client now serves them all over a reused connection.
+func TestDockerClientReused(t *testing.T) {
+	socket := filepath.Join(t.TempDir(), "docker.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := &countingListener{Listener: ln}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/containers/json" {
+			io.WriteString(w, `[{"Id":"0123456789abcdef","Names":["/kavita"],"Image":"kavita:1","State":"running","Status":"Up 1 hour"}]`)
+			return
+		}
+		io.WriteString(w, `{"State":{"StartedAt":"2026-11-01T20:20:00Z"}}`)
+	})}
+	go srv.Serve(cl)
+	defer srv.Close()
+
+	c := &Collector{DockerSocket: socket}
+	for range 5 {
+		if _, err := c.containers(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := cl.n.Load(); n != 1 {
+		t.Errorf("5 collections opened %d connections, want 1", n)
+	}
+}
+
+// A result that can't be reported at first is retried until it arrives.
+func TestResultReportRetried(t *testing.T) {
+	saved := resultRetries
+	resultRetries = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	defer func() { resultRetries = saved }()
+
+	var tries atomic.Int32
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if tries.Add(1) < 3 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer gw.Close()
+	a := New(Config{Token: "t", GatewayURL: gw.URL + "/agent/snapshot"}, &Collector{})
+	a.report(context.Background(), result{ID: "c1", OK: true})
+	if n := tries.Load(); n != 3 {
+		t.Errorf("tries = %d, want 3", n)
+	}
+
+	// It gives up after the last retry rather than looping forever.
+	tries.Store(-100)
+	a.report(context.Background(), result{ID: "c2", OK: true})
+	if n := tries.Load(); n != -100+int32(len(resultRetries))+1 {
+		t.Errorf("tries when the gateway never answers = %d", n+100)
 	}
 }

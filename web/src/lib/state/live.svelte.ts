@@ -1,6 +1,8 @@
 // Server data the widgets show. Starts as the sample data (demo mode) and
 // is replaced from the gateway's snapshot in live mode (lib/sync.svelte.ts).
-import * as data from '../fake/data';
+import * as data from '../demo/data';
+
+export type Health = 'healthy' | 'running' | 'starting' | 'unhealthy' | 'exited';
 
 export interface BackupRun { start: Date; end: Date; ok: boolean; sizeGb: number; running: boolean; summary?: string }
 export interface DiskInfo { totalGb: number; usedGb: number; linkMbps: number }

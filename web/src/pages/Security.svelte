@@ -6,7 +6,7 @@
   import { power } from '../lib/state/power.svelte';
   import { sendAction } from '../lib/state/actions';
   import { mode } from '../lib/api.svelte';
-  import { security as sample } from '../lib/fake/data';
+  import { security as sample } from '../lib/demo/data';
   import { fmtAgo, fmtDayTime } from '../lib/time.svelte';
   import { Lock, ShieldCheck, Activity, RefreshCw } from '../lib/icons';
 

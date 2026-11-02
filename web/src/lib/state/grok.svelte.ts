@@ -19,6 +19,8 @@ export interface Msg {
   tools?: string[];
   cached?: boolean;
   proposal?: Proposal;
+  /** The gateway or xAI failed; not sent back to Grok as history. */
+  error?: boolean;
 }
 
 export const grok = $state<{ messages: Msg[]; thinking: boolean }>({ messages: [], thinking: false });
@@ -38,7 +40,7 @@ function answer(q: string): Msg {
   }
   if (/wake|woke|18:16|why/.test(s)) {
     return {
-      role: 'grok', cached, tools: ['wake_history', 'awake_reasons'],
+      role: 'grok', cached, tools: ['wake_history', 'power_status'],
       text: 'At 18:16 the TV streamer sent traffic that woke the NIC. The idle check saw it was an ignored client with only a 2-minute playback blip (under 5 MB), so it gave a short grace and the server went back to sleep at 18:33. Nothing needs fixing.',
     };
   }
@@ -50,7 +52,7 @@ function answer(q: string): Msg {
   }
   if (/restart|jellyfin/.test(s)) {
     return {
-      role: 'grok', cached, tools: ['containers', 'container_logs_summary'],
+      role: 'grok', cached, tools: ['containers'],
       text: 'Jellyfin is up and healthy on 10.11.11. The only repeated log noise is the Trakt plugin hitting HTTP 420 rate limits hourly, which you chose to leave as is. If playback is misbehaving, a restart is safe and takes a few seconds.',
       proposal: asleep ? undefined : { label: 'Restart Jellyfin', run: () => confirmContainer('jf', 'restart', { source: 'grok' }) },
     };
@@ -63,7 +65,7 @@ function answer(q: string): Msg {
           proposal: { label: 'Wake cloud64', run: () => confirmWake({ source: 'grok' }) },
         }
       : {
-          role: 'grok', tools: ['power_status', 'awake_reasons'],
+          role: 'grok', tools: ['power_status'],
           text: 'cloud64 is awake with nothing holding it awake, so it will sleep after 30 idle minutes. If you’re about to watch something, playback counts as activity and keeps it up on its own.',
           proposal: { label: 'Keep awake for 2 h', run: () => confirmStayAwake(120, { source: 'grok' }) },
         };
@@ -78,9 +80,9 @@ interface LiveReply { text: string; tools?: string[]; cached: boolean; proposal?
 
 async function askLive(): Promise<Msg> {
   if (!mode.grok) {
-    return { role: 'grok', text: "Grok isn't set up on the gateway yet. Add XAI_API_KEY and XAI_MODEL to its environment file and restart it." };
+    return { role: 'grok', error: true, text: "Grok isn't set up on the gateway yet. Add XAI_API_KEY and XAI_MODEL to its environment file and restart it." };
   }
-  const history = grok.messages.map((m) => ({ role: m.role === 'grok' ? 'assistant' : 'user', text: m.text }));
+  const history = grok.messages.filter((m) => !m.error).map((m) => ({ role: m.role === 'grok' ? 'assistant' : 'user', text: m.text }));
   try {
     const r = await api<LiveReply>('/api/grok', { method: 'POST', body: JSON.stringify({ messages: history }) });
     return {
@@ -90,7 +92,7 @@ async function askLive(): Promise<Msg> {
         : undefined,
     };
   } catch (e) {
-    return { role: 'grok', text: (e as Error).message };
+    return { role: 'grok', text: (e as Error).message, error: true };
   }
 }
 

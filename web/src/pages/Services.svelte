@@ -22,7 +22,7 @@
       {#if unpinned}<Badge tone="warn">pin a version</Badge>{/if}
     </div>
   </div>
-  <Card title="Apps" subtitle="Opens on the LAN address at home, the MagicDNS name elsewhere.">
+  <Card title="Apps" subtitle="Opens on cloud64's MagicDNS name, at home and away.">
     <div class="apps"><AppsWidget /></div>
   </Card>
   <Card title="Containers" subtitle={power.state === 'awake' ? 'Live from the agent' : `As of ${fmtTime(power.lastSnapshot)} · actions need the server awake`}>

@@ -226,8 +226,9 @@ func nonZero(t time.Time) *time.Time {
 }
 
 // Wake runs the configured wake command (cloud64-wake on the admin box) in
-// the background. It reports false if a wake is already running.
-func (p *Power) Wake() bool {
+// the background. It reports false if a wake is already running. onFail, if
+// set, is called with the error when the command fails.
+func (p *Power) Wake(onFail func(error)) bool {
 	p.mu.Lock()
 	if p.waking != nil {
 		p.mu.Unlock()
@@ -252,14 +253,15 @@ func (p *Power) Wake() bool {
 		defer cancel()
 		out, err := exec.CommandContext(ctx, p.wakeCmd[0], p.wakeCmd[1:]...).CombinedOutput()
 		p.mu.Lock()
-		defer p.mu.Unlock()
 		if err != nil {
 			slog.Warn("wake command failed", "err", err, "output", strings.TrimSpace(string(out)))
 			w.err = "The wake command failed (" + err.Error() + ")"
-			return
-		}
-		if w.step < 2 {
+		} else if w.step < 2 {
 			w.step = 2
+		}
+		p.mu.Unlock()
+		if err != nil && onFail != nil {
+			onFail(err)
 		}
 	}()
 	return true

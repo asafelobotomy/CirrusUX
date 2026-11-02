@@ -84,7 +84,8 @@ func main() {
 		}
 		proxy.ServeHTTP(w, r)
 	})
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	// IdleTimeout closes keep-alive connections a client stopped using.
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	if err := srv.Serve(ln); err != nil {
 		slog.Error("serve", "err", err)
 		os.Exit(1)

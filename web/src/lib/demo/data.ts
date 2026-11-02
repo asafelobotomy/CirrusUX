@@ -1,7 +1,7 @@
-// Sample data for demo mode, shaped after the cloud64 brief (1 Nov 2026).
+// Sample data for demo mode (no gateway), shaped after the cloud64 brief (1 Nov 2026).
 import { at } from '../time.svelte';
 
-export type Health = 'healthy' | 'running' | 'starting' | 'unhealthy' | 'exited';
+import type { Health } from '../state/live.svelte';
 
 export interface Container {
   id: string;
@@ -26,27 +26,6 @@ export const containers: Container[] = [
   { id: 'pic', name: 'musicbrainz-picard-1', app: 'Picard', image: 'mikenye/picard', tag: '2.13.3', port: 5800, health: 'running', upSince: at('20:20'), restart: 'unless-stopped', memMb: 174 },
   { id: 'or', name: '1Panel-openresty-g7H8', app: 'OpenResty', image: '1panel/openresty', tag: '1.31.8.1-2-1-noble', port: null, health: 'running', upSince: at('20:20'), restart: 'always', memMb: 22 },
   { id: 'ng', name: 'nginx_server', app: 'nginx (leftover)', image: 'nginx', tag: 'latest', port: null, health: 'exited', upSince: null, restart: 'no', memMb: 0, leftover: true },
-];
-
-export interface AppTile {
-  id: string;
-  name: string;
-  port: number;
-  https?: boolean;
-  icon: string;
-  color: string;
-  container?: string;
-  group: 'Watch & listen' | 'Manage';
-}
-
-export const apps: AppTile[] = [
-  { id: 'jellyfin', name: 'Jellyfin', port: 8096, icon: 'Clapperboard', color: '#a35ee8', container: 'jf', group: 'Watch & listen' },
-  { id: 'navidrome', name: 'Navidrome', port: 40108, icon: 'Music', color: '#3fa7ff', container: 'nd', group: 'Watch & listen' },
-  { id: 'abs', name: 'Audiobookshelf', port: 40096, icon: 'Headphones', color: '#e9a23b', container: 'abs', group: 'Watch & listen' },
-  { id: 'kavita', name: 'Kavita', port: 5000, icon: 'BookOpen', color: '#4cc38a', container: 'kv', group: 'Watch & listen' },
-  { id: 'tmm', name: 'tinyMediaManager', port: 4000, icon: 'Film', color: '#e56b6f', container: 'tmm', group: 'Manage' },
-  { id: 'picard', name: 'Picard', port: 5800, https: true, icon: 'Tags', color: '#8d7cf6', container: 'pic', group: 'Manage' },
-  { id: '1panel', name: '1Panel', port: 10086, icon: 'LayoutPanelLeft', color: '#5b8def', group: 'Manage' },
 ];
 
 export interface Backup {

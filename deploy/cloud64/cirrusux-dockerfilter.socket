@@ -1,6 +1,6 @@
 # /etc/systemd/system/cirrusux-dockerfilter.socket on cloud64
 [Unit]
-Description=Read-only Docker API socket for the CirrusUX agent
+Description=Filtered Docker API socket for the CirrusUX agent
 
 [Socket]
 ListenStream=/run/cirrusux/docker.sock

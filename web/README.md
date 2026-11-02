@@ -45,12 +45,13 @@ src/
   lib/widgets/               dashboard widgets + registry
   lib/layout/                Board (grid, drag, resize), WidgetPicker
   lib/shell/                 Sidebar, TopBar, BottomBar, palette, Grok panel
-  lib/fake/                  sample data and the stand-in settings store
+  lib/apps.ts                app launcher tiles, container → app names
+  lib/demo/                  sample data and the browser-only settings store
 ```
 
 Demo mode only:
 
-- Settings and layouts persist in this browser (`lib/fake/store.ts`); live
+- Settings and layouts persist in this browser (`lib/demo/store.ts`); live
   mode stores them on the gateway.
 - Power state, actions and Grok answers are simulated.
 - The clock starts at 1 Nov 2026 20:40 GMT so the sample data lines up.

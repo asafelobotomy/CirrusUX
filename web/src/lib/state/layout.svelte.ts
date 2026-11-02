@@ -1,6 +1,6 @@
 // Boards and per-device widget layouts (PLAN §4.3). Order-based grid:
 // widgets flow in order and the grid packs them densely.
-import { load, save } from '../fake/store';
+import { load, save } from '../demo/store';
 import type { Device } from './ui.svelte';
 
 export interface Item {

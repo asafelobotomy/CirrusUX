@@ -7,8 +7,9 @@ import { settings } from './state/settings.svelte';
 import { boards } from './state/layout.svelte';
 import { toast } from './state/ui.svelte';
 import { fmtTime, useRealClock } from './time.svelte';
-import { setPersistence } from './fake/store';
-import type { Health } from './fake/data';
+import { setPersistence } from './demo/store';
+import { appName } from './apps';
+import type { Health } from './state/live.svelte';
 
 // ---- wire types (dates arrive as strings) ----
 
@@ -36,17 +37,6 @@ interface StateResp {
 }
 
 const d = (s?: string | null) => (s ? new Date(s) : null);
-
-const NAMES: Record<string, string> = {
-  jellyfin: 'Jellyfin', navidrome: 'Navidrome', audiobookshelf: 'Audiobookshelf', kavita: 'Kavita',
-  tinymediamanager: 'tinyMediaManager', 'musicbrainz-picard': 'Picard', openresty: 'OpenResty',
-};
-
-/** "1Panel-jellyfin-a1B2" → "Jellyfin". */
-function appName(container: string): string {
-  const base = container.replace(/^1Panel-/i, '').replace(/-[A-Za-z0-9]{4}$/, '').replace(/-\d+$/, '').toLowerCase();
-  return NAMES[base] ?? base.charAt(0).toUpperCase() + base.slice(1);
-}
 
 function clearSampleData(): void {
   Object.assign(live, {
@@ -158,12 +148,32 @@ function applyUI(doc: UIDoc): void {
   lastSaved = JSON.stringify(currentUI());
 }
 
+// A save that couldn't reach the gateway is retried every 30 s and when the
+// browser comes back online; the newest settings win.
+let unsaved: string | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
 async function saveUI(json: string): Promise<void> {
-  const res = await fetch('/api/ui', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'X-Cirrus-Request': '1' },
-    body: JSON.stringify({ baseVersion: uiVersion, data: JSON.parse(json) }),
-  });
+  clearTimeout(retryTimer);
+  let res: Response | null = null;
+  try {
+    res = await fetch('/api/ui', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Cirrus-Request': '1' },
+      body: JSON.stringify({ baseVersion: uiVersion, data: JSON.parse(json) }),
+    });
+  } catch {
+    /* offline */
+  }
+  // No answer, or tailscale serve answering for a gateway that's down.
+  if (!res || res.status >= 500) {
+    if (unsaved === null) toast("Can't reach the gateway. Your settings will be saved when it's back.", 'warn');
+    unsaved = json;
+    retryTimer = setTimeout(retrySave, 30_000);
+    return;
+  }
+  const retried = unsaved !== null;
+  unsaved = null;
   if (res.status === 409) {
     applyUI(await res.json());
     toast('Settings were changed on another device, so this one reloaded them', 'warn');
@@ -175,6 +185,11 @@ async function saveUI(json: string): Promise<void> {
   }
   uiVersion = (await res.json()).version;
   lastSaved = json;
+  if (retried) toast('Settings saved to the gateway', 'ok');
+}
+
+function retrySave(): void {
+  if (unsaved !== null) void saveUI(JSON.stringify(currentUI()));
 }
 
 export async function startLive(): Promise<void> {
@@ -190,6 +205,7 @@ export async function startLive(): Promise<void> {
   }
   await Promise.all([refresh(), loadChangelog()]);
   schedule();
+  window.addEventListener('online', retrySave);
   document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? refreshSoon() : clearTimeout(timer)));
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;

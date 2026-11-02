@@ -26,6 +26,9 @@ type Config struct {
 	XAIBase         string
 	XAIModel        string
 	GrokDailyTokens int
+	// DigestGrok lets the morning digest ask Grok for a written summary.
+	// Off by default: Grok is otherwise only called when you use it.
+	DigestGrok bool
 }
 
 func ConfigFromEnv() (Config, error) {
@@ -42,6 +45,7 @@ func ConfigFromEnv() (Config, error) {
 		XAIBase:         env("XAI_BASE_URL", "https://api.x.ai/v1"),
 		XAIModel:        os.Getenv("XAI_MODEL"),
 		GrokDailyTokens: envInt("CIRRUS_GROK_DAILY_TOKENS", 200_000),
+		DigestGrok:      os.Getenv("CIRRUS_DIGEST_GROK") == "1",
 	}
 	if len(c.AgentToken) < 32 {
 		return c, fmt.Errorf("CIRRUS_AGENT_TOKEN must be set to at least 32 random characters")

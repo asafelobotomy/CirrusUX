@@ -1,7 +1,7 @@
 // Appearance settings and theme resolution (PLAN §4.2, §4.5 levels 1, 3, 4).
 import { BUILT_IN_THEMES, TOKEN_NAMES, type Theme } from '../theme/themes';
 import { ensureContrast, onColor } from '../theme/contrast';
-import { load, save } from '../fake/store';
+import { load, save } from '../demo/store';
 
 export type Density = 'comfortable' | 'compact';
 

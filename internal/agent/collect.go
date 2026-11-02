@@ -30,7 +30,8 @@ type Collector struct {
 	// ["sudo", "-n", "/usr/local/sbin/cirrusux-helper"]. Empty skips it.
 	Helper []string
 
-	temps []float64
+	temps   []float64
+	dockerC *http.Client // one client, so its connections are reused
 }
 
 const maxTemps = 24
@@ -144,7 +145,7 @@ func (c *Collector) helper(ctx context.Context, sub string, out any, args ...str
 	if len(c.Helper) == 0 {
 		return fmt.Errorf("no helper configured")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, helperTimeout(sub))
 	defer cancel()
 	argv := append(append(append([]string{}, c.Helper...), sub), args...)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
@@ -170,17 +171,37 @@ type dockerContainer struct {
 	} `json:"Ports"`
 }
 
-func (c *Collector) docker(timeout time.Duration) *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", c.DockerSocket)
-		}},
+// helperTimeout leaves the helper time to finish its own work first: it
+// gives the egress report 150 s and everything else 30 s.
+func helperTimeout(sub string) time.Duration {
+	if sub == helperapi.CmdEgressReport {
+		return 3 * time.Minute
 	}
+	return 40 * time.Second
+}
+
+// docker returns the client for the filtered socket. It's created once:
+// a new Transport per call would leave its idle connections open for good.
+// Callers set deadlines through their context.
+func (c *Collector) docker() *http.Client {
+	if c.dockerC == nil {
+		c.dockerC = &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return (&net.Dialer{}).DialContext(ctx, "unix", c.DockerSocket)
+				},
+				MaxIdleConns:    2,
+				IdleConnTimeout: 30 * time.Second,
+			},
+		}
+	}
+	return c.dockerC
 }
 
 func (c *Collector) containers(ctx context.Context) ([]snapshot.Container, error) {
-	client := c.docker(10 * time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	client := c.docker()
 	var list []dockerContainer
 	if err := getJSON(ctx, client, "http://docker/containers/json?all=1", &list); err != nil {
 		return nil, err

@@ -117,10 +117,28 @@ CirrusUX as an app (it needs the HTTPS that `tailscale serve` provides).
 - Every action is logged with who asked, and with an Undo where there is a
   safe inverse (stay awake ↔ allow sleep, start ↔ stop).
 
-Upgrading from 0.1.x: install the new binaries on both machines, replace
+### Grok and the daily digest
+
+Grok is off until `XAI_API_KEY` and `XAI_MODEL` are set in `gateway.env`,
+and then it's only called when you ask it something. The 08:00 digest is
+built on cloud-box from cached data and sends nothing to xAI, unless you
+also set `CIRRUS_DIGEST_GROK=1` to have Grok write a short summary on top.
+
+### Upgrading
+
+From 0.2.0: install the new binaries and unit files on both machines, run
+`sudo systemctl daemon-reload`, then
+`sudo systemctl restart cirrusux-agent cirrusux-dockerfilter.socket` and
+`sudo systemctl stop cirrusux-dockerfilter.service` on cloud64 (the socket
+starts the new filter on the next request), and
+`sudo systemctl restart cirrusux-gateway` on cloud-box. A wallpaper set in
+0.2.0 still shows; uploading a new one moves it out of the settings.
+
+From 0.1.x: install the new binaries on both machines, replace
 `/etc/sudoers.d/cirrusux` (check with `sudo visudo -c`), then
-`sudo systemctl restart cirrusux-agent cirrusux-dockerfilter.socket` on
-cloud64 and `sudo systemctl restart cirrusux-gateway` on cloud-box.
+`sudo systemctl restart cirrusux-agent cirrusux-dockerfilter.socket` and
+`sudo systemctl stop cirrusux-dockerfilter.service` on cloud64, and
+`sudo systemctl restart cirrusux-gateway` on cloud-box.
 
 ## 4. After 24 hours
 

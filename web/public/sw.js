@@ -12,7 +12,7 @@ const DATA = 'cirrusux-data';
 const SHELL_URLS = ['/', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png', '/apple-touch-icon.png'];
 // GET endpoints worth showing offline. Everything else under /api is
 // network-only, and /agent is never touched.
-const SAVED_API = new Set(['/api/me', '/api/state', '/api/ui', '/api/changelog']);
+const SAVED_API = new Set(['/api/me', '/api/state', '/api/ui', '/api/changelog', '/api/digest', '/api/wallpaper']);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_URLS)).then(() => self.skipWaiting()));
@@ -30,7 +30,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin) return;
+  if (req.method === 'PUT' && url.pathname === '/api/ui') {
+    event.respondWith(saveUI(req));
+    return;
+  }
+  if (req.method !== 'GET') return;
 
   if (SAVED_API.has(url.pathname)) {
     event.respondWith(networkFirst(req, DATA, true));
@@ -57,6 +62,21 @@ async function networkFirst(req, cacheName, markOffline) {
     if (!saved) throw err;
     return markOffline ? marked(saved) : saved;
   }
+}
+
+// Keeps the saved copy of /api/ui in step with this device's own saves.
+// Otherwise a reload while offline starts from an older version, and the
+// first save once back online is refused as a conflict and lost.
+async function saveUI(req) {
+  const body = await req.clone().json().catch(() => null);
+  const res = await fetch(req);
+  if (res.ok && body) {
+    const { version } = await res.clone().json();
+    const doc = { version, savedAt: new Date().toISOString(), data: body.data };
+    const cache = await caches.open(DATA);
+    await cache.put('/api/ui', new Response(JSON.stringify(doc), { headers: { 'Content-Type': 'application/json' } }));
+  }
+  return res;
 }
 
 async function cacheFirst(req, cacheName) {

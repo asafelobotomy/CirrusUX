@@ -45,7 +45,7 @@ func main() {
 	} else if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutFor(os.Args[1]))
 	defer cancel()
 
 	var out any
@@ -56,7 +56,7 @@ func main() {
 	case helperapi.CmdIdleLog:
 		out, err = tailFile(idleLog, maxLines)
 	case helperapi.CmdBackupList:
-		out, err = backupList()
+		out, err = backupList(backupDir)
 	case helperapi.CmdBackupLast:
 		out, err = command(ctx, "journalctl", "-u", "cloud64-backup.service", "-n", "60", "-o", "short-iso", "--no-pager")
 	case helperapi.CmdAVLast:
@@ -85,6 +85,15 @@ func main() {
 	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
 		fail("encode: %v", err)
 	}
+}
+
+// timeoutFor gives the slow egress report longer than everything else. The
+// agent waits a little longer than this for each subcommand.
+func timeoutFor(sub string) time.Duration {
+	if sub == helperapi.CmdEgressReport {
+		return 150 * time.Second
+	}
+	return 30 * time.Second
 }
 
 func fail(format string, a ...any) {
@@ -133,9 +142,9 @@ func tailFile(path string, n int) (helperapi.Lines, error) {
 	return helperapi.Lines{Lines: ring}, sc.Err()
 }
 
-func backupList() (helperapi.BackupList, error) {
+func backupList(dir string) (helperapi.BackupList, error) {
 	var l helperapi.BackupList
-	entries, err := os.ReadDir(backupDir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return l, err
 	}

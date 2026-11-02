@@ -7,7 +7,7 @@
   import { activeTheme, allThemes, effectiveAccent, GRADIENTS, settings } from '../lib/state/settings.svelte';
   import { boards, resetBoards } from '../lib/state/layout.svelte';
   import { go, toast } from '../lib/state/ui.svelte';
-  import { mode } from '../lib/api.svelte';
+  import { api, mode } from '../lib/api.svelte';
   import { live } from '../lib/state/live.svelte';
 
   const uiVersion = __CIRRUSUX_VERSION__;
@@ -28,9 +28,21 @@
     const f = (e.currentTarget as HTMLInputElement).files?.[0];
     if (!f) return;
     if (f.size > 5 * 1024 * 1024) return toast('Images up to 5 MB, please', 'warn');
+    if (mode.live) return void uploadLive(f);
     const r = new FileReader();
     r.onload = () => (settings.wallpaper = { ...settings.wallpaper, kind: 'image', value: String(r.result) });
     r.readAsDataURL(f);
+    toast("Demo mode: the image isn't kept after a reload", 'info');
+  }
+
+  // Live, the image goes to the gateway on its own; settings keep only its URL.
+  async function uploadLive(f: File) {
+    try {
+      const { savedAt } = await api<{ savedAt: number }>('/api/wallpaper', { method: 'PUT', body: f, headers: { 'Content-Type': f.type || 'application/octet-stream' } });
+      settings.wallpaper = { ...settings.wallpaper, kind: 'image', value: `/api/wallpaper?v=${savedAt}` };
+    } catch (e) {
+      toast((e as Error).message, 'warn');
+    }
   }
 
   function exportUi() {
@@ -122,7 +134,7 @@
     {/if}
   </Card>
 
-  <Card title="Layouts and backup of your setup" subtitle="In the real panel this lives on the gateway, so it follows you between devices, with version history.">
+  <Card title="Layouts and backup of your setup" subtitle={mode.live ? 'Stored on the gateway, so it follows you between devices, with version history.' : 'Demo mode: kept in this browser. The real panel stores it on the gateway, with version history.'}>
     <div class="btns">
       <Button onclick={exportUi}>{#snippet icon()}<Download />{/snippet}Export</Button>
       <label class="filebtn"><Upload size={16} /> Import<input type="file" accept="application/json" onchange={importUi} /></label>

@@ -10,7 +10,7 @@
   import { BUILT_IN_THEMES } from '../lib/theme/themes';
   import { themeStyle } from '../lib/state/settings.svelte';
   import { ask, toast } from '../lib/state/ui.svelte';
-  import { temps } from '../lib/fake/data';
+  import { temps } from '../lib/demo/data';
   import { CircleCheck, Moon, Plus, Power, RotateCcw, Trash2 } from '../lib/icons';
 
   let on = $state(true);

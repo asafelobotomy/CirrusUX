@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -49,8 +50,13 @@ func main() {
 		Handler:           gw.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		// Requests end with the process, so the agent's long poll doesn't
+		// hold up a shutdown.
+		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -61,4 +67,7 @@ func main() {
 		slog.Error("serve", "err", err)
 		os.Exit(1)
 	}
+	// ListenAndServe returns as soon as Shutdown starts; let requests in
+	// flight (a snapshot or audit write) finish first.
+	<-stopped
 }

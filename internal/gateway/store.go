@@ -21,8 +21,9 @@ type Store struct {
 	dir string
 	mu  sync.Mutex
 
-	snap *snapshot.Snapshot
-	ui   UIDoc
+	snap  *snapshot.Snapshot
+	ui    UIDoc
+	audit []AuditEntry // the newest auditKeep entries, oldest first
 }
 
 // UIDoc is the browser's settings and boards (PLAN §4.5), versioned so two
@@ -43,7 +44,13 @@ type AuditEntry struct {
 	UndoAction *ActionReq `json:"undoAction,omitempty"`
 }
 
-const uiHistory = 20
+const (
+	uiHistory = 20
+	// The audit log's recent entries are kept in memory; the file is
+	// archived (renamed, never deleted) once it passes auditRotate bytes.
+	auditKeep   = 200
+	auditRotate = 5 << 20
+)
 
 var ErrConflict = errors.New("version conflict")
 
@@ -57,6 +64,7 @@ func OpenStore(dir string) (*Store, error) {
 		s.snap = &snap
 	}
 	_ = readFileJSON(filepath.Join(dir, "ui.json"), &s.ui)
+	s.audit = loadAudit(filepath.Join(dir, "audit.jsonl"))
 	return s, nil
 }
 
@@ -114,7 +122,18 @@ func (s *Store) pruneHistory() {
 func (s *Store) Audit(e AuditEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f, err := os.OpenFile(filepath.Join(s.dir, "audit.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	s.audit = append(s.audit, e)
+	if len(s.audit) > auditKeep {
+		s.audit = s.audit[len(s.audit)-auditKeep:]
+	}
+	path := filepath.Join(s.dir, "audit.jsonl")
+	if st, err := os.Stat(path); err == nil && st.Size() >= auditRotate {
+		archive := filepath.Join(s.dir, "audit-"+time.Now().In(london).Format("20060102-150405")+".jsonl")
+		if err := os.Rename(path, archive); err != nil {
+			return err
+		}
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -126,24 +145,36 @@ func (s *Store) Audit(e AuditEntry) error {
 func (s *Store) RecentAudit(n int) []AuditEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f, err := os.Open(filepath.Join(s.dir, "audit.jsonl"))
+	out := make([]AuditEntry, 0, min(n, len(s.audit)))
+	for i := len(s.audit) - 1; i >= 0 && len(out) < n; i-- {
+		out = append(out, s.audit[i])
+	}
+	return out
+}
+
+// loadAudit reads the last auditKeep entries of the current audit file.
+func loadAudit(path string) []AuditEntry {
+	f, err := os.Open(path)
 	if err != nil {
-		return []AuditEntry{}
+		return nil
 	}
 	defer f.Close()
 	var all []AuditEntry
 	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
 		var e AuditEntry
 		if json.Unmarshal(sc.Bytes(), &e) == nil {
 			all = append(all, e)
+			if len(all) > 2*auditKeep {
+				all = append(all[:0:0], all[len(all)-auditKeep:]...)
+			}
 		}
 	}
-	out := make([]AuditEntry, 0, n)
-	for i := len(all) - 1; i >= 0 && len(out) < n; i-- {
-		out = append(out, all[i])
+	if len(all) > auditKeep {
+		all = all[len(all)-auditKeep:]
 	}
-	return out
+	return all
 }
 
 // GrokUsage adds tokens to today's count and reports the new total.
@@ -200,6 +231,11 @@ func writeFileJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
+	return writeFileAtomic(path, b)
+}
+
+// writeFileAtomic writes b to path with mode 600, all or nothing.
+func writeFileAtomic(path string, b []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
 		return err

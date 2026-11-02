@@ -7,6 +7,74 @@ gets a minor version.
 
 ## [Unreleased]
 
+Fixes from the full code review of 0.2.0, and a new roadmap.
+
+### Fixed
+
+- The agent leaked a Docker connection on every collection: it built a new
+  HTTP client per call, and the Docker filter never closed idle connections.
+  It now reuses one client (idle connections close after 30 s), and the
+  filter closes connections idle for 60 s.
+- An action whose result report failed once was never logged. The agent now
+  retries the report for about a minute.
+- The egress report could be cut off by the helper's 30 s limit; it now gets
+  150 s. The gateway waits 4 minutes for a result, and the UI waits 5.
+- The gateway exited without waiting for requests in flight to finish, and
+  the agent's long poll could hold up a shutdown.
+- A wake is logged as "Sent a wake to cloud64" when asked for, plus a
+  "(failed)" entry with the error if the wake command fails, instead of
+  "Woke cloud64" whether or not it worked.
+- Grok's disk sizes are no longer rounded down to whole GB.
+- Settings changed while the gateway is unreachable are kept and saved when
+  it's back (retried every 30 s and when the browser comes online), instead
+  of being lost without a word. The service worker also updates its saved
+  copy of the settings after each save, so a reload while offline no longer
+  starts from an older version whose first save is then refused as a
+  conflict (found while testing this fix).
+- The accent contrast fix could push a colour the wrong way on mid-tone
+  backgrounds (possible in a custom theme) and never reach 4.5:1. It now
+  heads towards whichever of white or black can contrast more. Found by
+  the new contrast tests.
+- Settings → Layouts said "in the real panel" in live mode too.
+- Failed Grok replies are no longer sent back to Grok as its own answers.
+- The digest and the wallpaper now work offline.
+
+### Changed
+
+- The 08:00 digest only asks Grok for a summary when `CIRRUS_DIGEST_GROK=1`.
+  By default Grok is called only when you use it (PLAN §8 rule 5).
+- Wallpaper images are stored on the gateway on their own
+  (`GET`/`PUT /api/wallpaper`: PNG, JPEG, WebP, GIF or AVIF up to 5 MB,
+  checked from the bytes; no SVG), not inline in the settings, which every
+  change re-sent and the 20 kept versions each copied. Demo mode says the
+  image isn't kept after a reload.
+- The audit log keeps its last 200 entries in memory instead of re-reading
+  the whole file for every request. Past 5 MB, `audit.jsonl` is archived as
+  `audit-YYYYMMDD-HHMMSS.jsonl` (never deleted).
+- App tiles come from `web/src/lib/apps.ts`, matched to containers by app
+  name; `lib/fake` is now `lib/demo` and holds only demo data.
+- The CSP comes from the gateway's header only. The dev server sends its own,
+  with the websocket hot reload needs; the copy in `index.html` is gone.
+- PLAN, README, INSTALL and the Docker filter units no longer describe the
+  helper and filter as read-only or tell you to run
+  `cloud64-idle-check --dry-run`. INSTALL has upgrade steps from 0.2.0.
+
+### Added
+
+- `docs/ROADMAP.md`: CirrusUX becomes a general panel for any server, with
+  host setup modules, an app store for Docker and Podman, and a public
+  release; cloud64 becomes a private profile and is reinstalled from scratch.
+- Tests: Docker client reuse, result retries, audit memory and rotation,
+  UI-history pruning, the wallpaper endpoint, the helper's pure functions,
+  the digest opt-in, and (with Node's built-in runner, no new dependencies)
+  contrast maths and container-to-app names. `make test` runs them all.
+
+### Known
+
+- Dependabot reports a low-severity advisory in `deepmerge`, pulled in at
+  build time only by `@sveltejs/vite-plugin-svelte`. No fixed version exists
+  yet; nothing from it ships in the UI.
+
 ## [0.2.0] - 2026-11-01
 
 ### Added

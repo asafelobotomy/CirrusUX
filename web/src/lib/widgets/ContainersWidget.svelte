@@ -7,7 +7,7 @@
   import { confirmContainer } from '../state/actions';
   import { clock, fmtDuration } from '../time.svelte';
   import { Play, RotateCcw, Square } from '../icons';
-  import type { Health } from '../fake/data';
+  import type { Health } from '../state/live.svelte';
 
   let { full = false }: { full?: boolean } = $props();
 

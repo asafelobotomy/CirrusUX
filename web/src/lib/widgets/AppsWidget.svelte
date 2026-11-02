@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as Icons from '../icons';
   import StatusDot from '../components/StatusDot.svelte';
-  import { apps } from '../fake/data';
+  import { apps, type AppTile } from '../apps';
   import { live } from '../state/live.svelte';
   import { power } from '../state/power.svelte';
   import { confirmWake } from '../state/actions';
@@ -11,11 +11,10 @@
   let { config }: { config?: Record<string, string> } = $props();
   const shown = $derived(config?.group ? apps.filter((a) => a.group === config.group) : apps);
 
-  function status(containerId?: string) {
+  function status(app: AppTile) {
     if (power.state !== 'awake') return { tone: 'sleep' as const, word: 'asleep' };
-    if (!containerId) return { tone: 'ok' as const, word: 'up' };
-    const app = apps.find((a) => a.container === containerId)!;
-    const c = live.containers.find((x) => x.id === containerId || x.name.toLowerCase().includes(app.name.toLowerCase()));
+    if (!app.inContainer) return { tone: 'ok' as const, word: 'up' };
+    const c = live.containers.find((x) => x.app === app.name);
     if (!c || c.health === 'exited') return { tone: 'bad' as const, word: 'stopped' };
     if (c.health === 'starting') return { tone: 'warn' as const, word: 'starting' };
     return { tone: 'ok' as const, word: 'up' };
@@ -38,7 +37,7 @@
 <ul class="tiles">
   {#each shown as a (a.id)}
     {@const Icon = Icons[a.icon as keyof typeof Icons]}
-    {@const s = status(a.container)}
+    {@const s = status(a)}
     <li>
       <a
         href="{a.https ? 'https' : 'http'}://cloud64:{a.port}/"

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { power, setAwake, sleep, wake } from '../state/power.svelte';
-  import { clearAll } from '../fake/store';
+  import { clearAll } from '../demo/store';
   import { FlaskConical } from '../icons';
 
   let open = $state(false);

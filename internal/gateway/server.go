@@ -60,6 +60,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/actions", s.postAction)
 	api.HandleFunc("GET /api/actions/{id}", s.getAction)
 	api.HandleFunc("GET /api/digest", s.getDigest)
+	api.HandleFunc("GET /api/wallpaper", s.getWallpaper)
+	api.HandleFunc("PUT /api/wallpaper", s.putWallpaper)
 	api.HandleFunc("POST /api/grok", s.askGrok)
 	mux.Handle("/api/", s.auth(api))
 
@@ -174,11 +176,15 @@ func (s *Server) wake(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cloud64 is already awake", http.StatusConflict)
 		return
 	}
-	if !s.power.Wake() {
+	who := userOf(r)
+	failed := func(err error) {
+		s.record(AuditEntry{Who: who, What: "Wake of cloud64 (failed)", Result: err.Error()})
+	}
+	if !s.power.Wake(failed) {
 		http.Error(w, "a wake is already in progress", http.StatusConflict)
 		return
 	}
-	s.record(AuditEntry{Who: userOf(r), What: "Woke cloud64"})
+	s.record(AuditEntry{Who: who, What: "Sent a wake to cloud64"})
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -209,7 +215,8 @@ func (s *Server) putUI(w http.ResponseWriter, r *http.Request) {
 		BaseVersion int             `json:"baseVersion"`
 		Data        json.RawMessage `json:"data"`
 	}
-	// Wallpapers are stored inline (≤ 5 MB images, base64).
+	// Settings and boards only; the wallpaper image has its own endpoint.
+	// The limit still allows a wallpaper inlined by an older version.
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20)).Decode(&body); err != nil || !json.Valid(body.Data) {
 		http.Error(w, "bad body", http.StatusBadRequest)
 		return

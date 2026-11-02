@@ -35,7 +35,7 @@ test: web-stub
 	test -z "$$(gofmt -l .)" || { gofmt -l .; echo "run gofmt -w ."; exit 1; }
 	$(GO) vet ./...
 	$(GO) test ./...
-	cd web && npm run check
+	cd web && npm run check && npm test
 
 # Local run without cloud64 or Tailscale: the gateway in dev mode and an
 # agent pushing the recorded demo snapshot. Open http://127.0.0.1:8064

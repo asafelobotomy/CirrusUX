@@ -14,8 +14,9 @@ import (
 )
 
 // The daily digest (PLAN §3.6): a morning summary built on cloud-box from
-// the cached snapshot and the audit log, so it never wakes cloud64. Grok, if
-// configured, adds a short written summary on top of the plain facts.
+// the cached snapshot and the audit log, so it never wakes cloud64. With
+// CIRRUS_DIGEST_GROK=1, Grok adds a short written summary on top of the plain
+// facts; without it the digest sends nothing to xAI.
 
 const digestHour = 8 // UK time
 
@@ -135,7 +136,7 @@ func (s *Server) RunDigest(ctx context.Context) {
 
 func (s *Server) makeDigest(ctx context.Context, now time.Time) Digest {
 	d := buildDigest(now, s.store.Snapshot(), s.store.RecentAudit(100))
-	if s.grok != nil && s.store.GrokUsage(0) < s.cfg.GrokDailyTokens {
+	if s.cfg.DigestGrok && s.grok != nil && s.store.GrokUsage(0) < s.cfg.GrokDailyTokens {
 		gctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		reply, err := s.grok.Ask(gctx, systemPrompt, []grok.Turn{{Role: "user", Text: "Write this morning's digest for cloud64 in two or three sentences: anything that needs attention first, then what's fine. Use only these facts:\n- " + strings.Join(d.Lines, "\n- ")}}, nil)
 		cancel()

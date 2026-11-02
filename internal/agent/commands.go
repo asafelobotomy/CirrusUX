@@ -50,9 +50,7 @@ func (a *Agent) commandLoop(ctx context.Context) {
 		}
 		slog.Info("running action", "action", cmd.Action, "args", cmd.Args)
 		res := a.run(ctx, *cmd)
-		if err := a.postResult(ctx, res); err != nil {
-			slog.Warn("reporting result", "err", err)
-		}
+		a.report(ctx, res)
 		select {
 		case a.pushNow <- struct{}{}:
 		default:
@@ -79,6 +77,26 @@ func (a *Agent) nextCommand(ctx context.Context) (*command, error) {
 		return &c, json.NewDecoder(resp.Body).Decode(&c)
 	default:
 		return nil, fmt.Errorf("gateway: %s", resp.Status)
+	}
+}
+
+// resultRetries spaces out reports of a result. The action has already
+// run, so it must reach the gateway's audit log; the gateway gives up on a
+// command 4 minutes after sending it, and these tries end well before that.
+var resultRetries = []time.Duration{2 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second, 30 * time.Second}
+
+func (a *Agent) report(ctx context.Context, res result) {
+	for i := 0; ; i++ {
+		err := a.postResult(ctx, res)
+		if err == nil {
+			return
+		}
+		if i == len(resultRetries) || ctx.Err() != nil {
+			slog.Error("reporting result failed; the action ran but isn't logged", "action", res.ID, "err", err)
+			return
+		}
+		slog.Warn("reporting result, will retry", "err", err)
+		sleepCtx(ctx, resultRetries[i])
 	}
 }
 
@@ -171,7 +189,10 @@ func (c *Collector) containerAction(ctx context.Context, name, verb string) ([]s
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.docker(90 * time.Second).Do(req)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+	resp, err := c.docker().Do(req)
 	if err != nil {
 		return nil, err
 	}

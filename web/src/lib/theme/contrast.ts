@@ -60,7 +60,9 @@ function hslToRgb([h, s, l]: [number, number, number]): RGB {
 export function ensureContrast(color: string, bg: string, min = 4.5): { color: string; adjusted: boolean } {
   if (contrast(color, bg) >= min) return { color, adjusted: false };
   const [h, s, l0] = rgbToHsl(hexToRgb(color));
-  const lighter = luminance(hexToRgb(bg)) < 0.5;
+  // Go towards whichever end can contrast more with bg. (Luminance 0.5 is
+  // the wrong midpoint: on a mid grey only darkening can reach 4.5:1.)
+  const lighter = contrast('#ffffff', bg) >= contrast('#000000', bg);
   for (let i = 1; i <= 100; i++) {
     const l = Math.min(1, Math.max(0, l0 + (lighter ? i : -i) / 100));
     const c = rgbToHex(hslToRgb([h, s, l]));

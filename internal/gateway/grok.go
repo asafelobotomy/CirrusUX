@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -127,7 +128,7 @@ func (s *Server) grokTools(snap *snapshot.Snapshot, view PowerView) []grok.Tool 
 				return "no disk data"
 			}
 			d := snap.Disk
-			return map[string]any{"totalGB": d.TotalBytes / 1e9, "freeGB": d.FreeBytes / 1e9, "usbLinkMbps": d.LinkMbps}
+			return map[string]any{"totalGB": round1(float64(d.TotalBytes) / 1e9), "freeGB": round1(float64(d.FreeBytes) / 1e9), "usbLinkMbps": d.LinkMbps}
 		})},
 		{Name: "security_status", Description: "ClamAV last scan, firewall lockdown, fail2ban bans.", Run: none(func() any {
 			if snap.Security == nil {
@@ -199,6 +200,8 @@ func (s *Server) checkProposal(p *grok.Proposal, view PowerView, snap *snapshot.
 	p.Args = clean.Args
 	return p
 }
+
+func round1(f float64) float64 { return math.Round(f*10) / 10 }
 
 func uk(t *time.Time) string {
 	if t == nil || t.IsZero() {

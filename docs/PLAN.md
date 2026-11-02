@@ -1,7 +1,7 @@
 # CirrusUX — build plan
 
 Written 1 Nov 2026. Based on `cloud64-server-brief.pdf` (1 Nov 2026, 20:30 GMT).
-Section numbers like "brief §5.4" point into that brief. Status: **Phase 0.5 signed off. Phase 1 code built and tested locally; not installed yet (Phase 0 checks pending, see INSTALL.md).**
+Section numbers like "brief §5.4" point into that brief. Status: **Phase 0 checks done and Phase 0.5 signed off. Phases 1 and 2 released (v0.2.0) and tested locally; not installed on cloud64 or cloud-box yet (see INSTALL.md). Work after v0.2.0 follows [ROADMAP.md](ROADMAP.md): CirrusUX becomes a general panel for any server, and cloud64 a private profile.**
 
 ## 1. Goal
 
@@ -61,9 +61,8 @@ Why this shape:
 ### 3.2 panel-agent (cloud64)
 
 - Runs as a new system user `cirrusux` (no shell, no login), member of nothing privileged.
-- Listens on the **tailnet IP only** (`100.64.0.10`), on a new port (proposed 47064). It accepts only requests from the cloud-box node, checked with `tailscale whois` on the peer address, plus a shared token.
-- This port is **not** added to `HOST_PORTS` in `cloud64-idle.conf`. Viewing the panel never holds the server awake; the Stay-awake control does that on purpose (brief §11.2 option (b)).
-- Reads directly, without root: `/etc/cloud64-idle.conf`, `/var/log/cloud64-idle.log`, `/sys/class/thermal`, `/sys/power/mem_sleep`, systemd over D-Bus (timers, unit state), `tailscale status --json` (local socket).
+- **Opens no listening port** (decision D5 dropped). It pushes snapshots and fetches actions over its own outbound connections to the gateway, with a shared token. The idle check doesn't count outbound connections, so viewing the panel never holds the server awake; the Stay-awake control does that on purpose (brief §11.2 option (b)).
+- Reads directly, without root: `/etc/cloud64-idle.conf`, `/sys/class/thermal`, `/proc`, and `systemctl list-timers`. The idle log and the checker's state files are root-only and come through the helper.
 - Everything else goes through the helper or the Docker filter.
 - Pushes snapshots to the gateway over the tailnet (HTTPS, token).
 
@@ -73,12 +72,13 @@ A single binary called with `sudo /usr/local/sbin/cirrusux-helper <subcommand>`.
 
 | Subcommand | Does | Phase |
 |---|---|---|
-| `idle-status` | `cloud64-idle-check --dry-run` + `/run/cloud64-idle/*` → JSON | 1 |
-| `stay-awake <min\|forever>` / `allow-sleep` | runs the existing `stay-awake` / `allow-sleep` | 1 |
+| `idle-status` | `/run/cloud64-idle/*` and `/run/stay-awake` → JSON. Never runs `cloud64-idle-check`: its `--dry-run` writes state | 1 |
+| `idle-log` | last 400 lines of `/var/log/cloud64-idle.log` | 1 |
+| `stay-awake 30\|120\|forever` / `allow-sleep` / `nudge-awake` | runs the existing `stay-awake` / `allow-sleep`; `nudge-awake` holds ≥10 min after an action (D3) | 2 |
 | `backup-list` | names, sizes, encrypted yes/no, ages under `/mnt/media/BackUp/cloud64-system/` | 1 |
-| `journal <unit>` | last N lines for allow-listed units (`cloud64-backup`, `cloud64-idle`, …) | 1 |
-| `security-status` | fail2ban `sshd` jail, LOCKDOWN-PUBLISHED and 1PANEL_* chains present, sshd restriction file present | 2 |
-| `backup-run` | `systemctl start cloud64-backup.service` | 2 |
+| `backup-last` / `av-last` | the backup unit's last journal lines / the end of the weekly ClamAV log | 1 |
+| `security-status` | fail2ban `sshd` jail, LOCKDOWN-PUBLISHED and 1PANEL_* chains present | 1 |
+| `backup-run` | `systemctl start --no-block cloud64-backup.service` | 2 |
 | `egress-report` | `egress-report.sh -n 20` | 2 |
 | `compose-backup <app>` / `compose-set-tag <app> <tag>` / `compose-up <app>` / `compose-restore <app> <bak>` | the update workflow (§3.5) | 3 |
 | `apt-check` | `apt-get update` + `apt list --upgradable` (only on request: it contacts the mirrors) | 3 |
@@ -102,12 +102,12 @@ Follows brief §3.2 and §11.3 item 3. **The panel never upgrades App-Store apps
 
 - xAI API (OpenAI-compatible chat + tool calling). The model name lives in the config; nothing is hard-coded.
 - Runs on the gateway, so questions are answered from the cache **without waking the server**. A tool that needs live data says so ("cloud64 is asleep — wake it?") instead of waking it on its own.
-- **Read tools (run freely):** `power_status`, `awake_reasons`, `wake_history`, `containers`, `container_logs_summary`, `backups`, `timers`, `av_last_scan`, `egress_summary`, `disk_usage`, `pending_updates`, `changelog_recent`.
-- **Action tools (proposal only):** `wake`, `stay_awake`, `allow_sleep`, `restart_container`, `run_backup`, `propose_update`. Grok returns a proposal; the UI shows a confirm card; your click runs it through the normal action path (same audit and changelog as a button).
+- **Read tools (run freely):** built: `power_status` (includes what holds it awake and the next timer wakes), `wake_history`, `containers`, `backups`, `disk_usage`, `security_status` (includes the last ClamAV scan), `changelog_recent`. Not built yet: `container_logs_summary` and `egress_summary` (with the Logs page, Phase 3), `pending_updates` (Phase 3).
+- **Action tools (proposal only):** built: `propose_wake`, `propose_stay_awake`, `propose_allow_sleep`, `propose_restart_container`, `propose_start_container`, `propose_run_backup`. `propose_update` comes with Phase 3. Grok returns a proposal; the UI shows a confirm card; your click runs it through the normal action path (same audit and changelog as a button).
 - **Never available to Grok:** a shell, file reads, `.env` or any secrets, deletion, 1Panel, firewall or SSH changes.
 - **Redaction** on every tool result before it leaves for xAI: secrets patterns, MACs, public IPs, tokens, file contents. Tailnet and LAN IPs and paths are masked too under the default policy (decision D2).
 - Spending cap set in the xAI console; per-day token budget enforced in the gateway as well.
-- Phase 2 extras: "Explain this" on any log line; a daily digest written on cloud-box from the cache (no wake needed).
+- A daily digest written on cloud-box from the cache at 08:00 (no wake needed). It only asks Grok for a written summary when `CIRRUS_DIGEST_GROK=1`, so by default Grok is called only when you use it. "Explain this" on log lines moved to Phase 3 with the Logs page.
 
 ## 4. Web UI
 
@@ -140,7 +140,7 @@ The UI is a first-class part of the project, not a skin over an API. It gets its
 - **Dashboard grid** of widgets: drag to move, drag the corner to resize, add and remove from a widget picker. Snap-to-grid with sensible minimum sizes.
 - **Several boards**, e.g. "Home" (power, apps, backups), "Media", "Maintenance". Each board has its own name, icon and optional wallpaper (solid, gradient or an uploaded image with automatic blur and dim behind cards for readability).
 - **Per-device layouts:** separate saved layouts for phone, tablet and desktop, so the phone can be a single column with Power and Wake on top.
-- **App launcher tiles** (the CasaOS strength): logo, name, live status dot, group/folder, custom colour; opens the app on the right host (LAN IP or MagicDNS) depending on where you are.
+- **App launcher tiles** (the CasaOS strength): logo, name, live status dot, group/folder, custom colour; opens the app on cloud64's MagicDNS name, which works at home and away.
 - **Navigation:** sidebar on desktop, bottom bar on phone, and a command palette (Ctrl/⌘-K) that jumps to any page, container or action — and doubles as the entry point to Grok ("ask Grok…").
 - **Density:** comfortable / compact, plus a global text-size setting.
 
@@ -212,7 +212,7 @@ Pinned versions everywhere (Go toolchain, Node for the build only, every npm pac
 ## 6. Phases
 
 ### Phase 0 — prerequisites (no code on the server yet)
-- Confirm decisions D1–D5 (§9).
+- Confirm decisions D1–D7 (§9).
 - ~~Verify whether tailnet traffic to a new agent port passes the firewall.~~ Not needed: the agent never listens (Phase 2 uses an outbound long poll).
 - Check that cloud-box's userspace tailscaled works with `tailscale serve` (brief §10 item 19 notes that it sometimes loses the coordination server).
 - **Done when:** the decisions are recorded here and the firewall answer is known.
@@ -242,6 +242,8 @@ Stay-awake/Allow-sleep, start/stop/restart containers, Run backup now, Security 
 - **Done when:** every action leaves an audit row and a CHANGELOG entry with a working undo, and Grok can't run anything without a click.
 
 ### Phase 3 — maintenance
+*Superseded: these items are now Phase 6 in [ROADMAP.md](ROADMAP.md), after the core is generalised, the host modules and the app store.*
+
 Update workflow (images, then apt), Storage page, Media helpers, archive review with two-step delete, Logs page with "Explain this" on log lines, router (TR-064) power check. UI: declarative custom widgets (customisation level 5).
 - **Done when:** one image update (e.g. Navidrome) goes through backup → tag → pull → health → changelog, and the restore path is tested once.
 
@@ -253,7 +255,7 @@ WoL proxy on an always-on LAN device (brief §5.6); offsite backup status; AVI r
 - Unit tests for the redactor (it must never let a secret pattern through), helper argument validation, and the Docker filter allow-list.
 - A fake agent and a fake helper for UI work, so most development needs no access to cloud64.
 - Visual regression and accessibility checks (§4.6) run on every build: screenshots per page, theme and screen size, plus an automated a11y scan.
-- On cloud64: `cloud64-idle-check --dry-run` before and after each install to confirm the panel adds no activity reasons. Watch `cloud64-idle.log` for 24 h after each phase.
+- On cloud64: read `/run/cloud64-idle/last-msg` and the tail of `cloud64-idle.log` before and after each install to confirm the panel adds no activity reasons. Never run `cloud64-idle-check --dry-run`: it writes state. Watch `cloud64-idle.log` for 24 h after each phase.
 
 ## 8. How the owner's rules (brief §9) are met
 
