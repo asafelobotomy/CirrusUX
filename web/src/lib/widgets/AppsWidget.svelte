@@ -8,7 +8,7 @@
   import { power } from '../state/power.svelte';
   import { confirmWake } from '../state/actions';
   import { toast } from '../state/ui.svelte';
-  import { mode } from '../api.svelte';
+  import { has, mode } from '../api.svelte';
 
   let { config }: { config?: Record<string, string> } = $props();
   const tiles = $derived(tilesFor(live.containers, store.installed, store.catalogue));
@@ -38,6 +38,9 @@
   }
 </script>
 
+{#if !shown.length}
+  <p class="empty muted">{config?.group ? `No apps in ${config.group} yet.` : 'No apps yet.'} {#if has('apps')}<a href="#/apps">Open the app store</a>{/if}</p>
+{/if}
 <ul class="tiles">
   {#each shown as a (a.id)}
     {@const Icon = Icons[a.icon as keyof typeof Icons]}
@@ -57,6 +60,7 @@
 </ul>
 
 <style>
+  .empty { font-size: 0.9rem; }
   .tiles {
     list-style: none; margin: 0; padding: 0; height: 100%; overflow: auto;
     display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: var(--space-2);

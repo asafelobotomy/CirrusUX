@@ -126,6 +126,7 @@ both: the services start once no `<…>` placeholder is left. Open
 
 `deploy/host/cirrusux-setup` changes only what differs from your settings,
 one module at a time, and can be re-run whenever you change `host.env`.
+After the first run it's also on the PATH, as `sudo cirrusux-setup`.
 
 Every change goes to `/var/lib/cirrusux/setup.log` with its undo, and replaced
 files keep a dated `.bak-` copy. Config files are created once (with a shared
@@ -147,6 +148,10 @@ The modules:
 - **security:** fail2ban for SSH, and a weekly virus scan.
 - **apps:** the app store: Podman (or Docker), the apps' folders and user,
   and, with Podman, the Docker filter pointed at Podman's API socket.
+  Media folders you give apps must exist first, inside `APPS_MEDIA_ROOTS`;
+  one an app writes to (a sync or download folder) must belong to the
+  apps' user: `sudo install -d -o cirrusux-apps -g cirrusux-apps
+  /srv/media/sync`.
 - **sleep** (split setup, server only): CirrusUX's own sleep manager.
 - **firewall:** below.
 

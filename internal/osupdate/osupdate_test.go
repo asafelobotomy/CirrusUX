@@ -53,7 +53,16 @@ func TestCheckAndUpgrade(t *testing.T) {
 	if err != nil || len(res.Packages) != 2 || res.Upgraded != nil {
 		t.Fatalf("check = %+v, %v", res, err)
 	}
-	if got := Read(r.ResultFile); got == nil || len(got.Packages) != 2 {
+	// After a restart the file is gone, and the saved result stops asking for one.
+	os.WriteFile(r.RebootFile, nil, 0o644)
+	if got := Read(r.ResultFile, r.RebootFile); got == nil || !got.RebootRequired {
+		t.Error("restart needed, but Read says not")
+	}
+	os.Remove(r.RebootFile)
+	if got := Read(r.ResultFile, r.RebootFile); got == nil || got.RebootRequired {
+		t.Error("after a restart, Read still asks for one")
+	}
+	if got := Read(r.ResultFile, r.RebootFile); got == nil || len(got.Packages) != 2 {
 		t.Error("result not written")
 	}
 
@@ -63,7 +72,7 @@ func TestCheckAndUpgrade(t *testing.T) {
 	if err != nil || len(res.Packages) != 0 || res.UpgradedCount != 2 || !res.RebootRequired || res.Upgraded == nil {
 		t.Fatalf("upgrade = %+v, %v", res, err)
 	}
-	if !strings.Contains(strings.Join(ran, "|"), "apt-get upgrade -y -q -o Dpkg::Options::=--force-confold") || strings.Contains(strings.Join(ran, "|"), "dist-upgrade") {
+	if !strings.Contains(strings.Join(ran, "|"), "apt-get upgrade --with-new-pkgs -y -q -o Dpkg::Options::=--force-confold") || strings.Contains(strings.Join(ran, "|"), "dist-upgrade") {
 		t.Errorf("ran %v", ran)
 	}
 	if steps[len(steps)-2] != "Installing 2 packages" {

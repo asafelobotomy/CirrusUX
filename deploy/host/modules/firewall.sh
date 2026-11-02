@@ -98,7 +98,11 @@ joined() {
 fw_current() { nft list table inet cirrusux 2>/dev/null || true; }
 
 module_firewall() {
-	command -v nft >/dev/null || die "nft is not installed (apt install nftables)"
+	need_packages nftables
+	if ! command -v nft >/dev/null; then
+		[ "$MODE" = check ] && { say "  (the ruleset is worked out once nftables is installed)"; return 0; }
+		die "nft is not installed (apt install nftables)"
+	fi
 	[ -n "${FIREWALL_ALLOW:-}" ] || [ "${FIREWALL_TAILSCALE:-yes}" = yes ] ||
 		die "FIREWALL_ALLOW is empty and the tailnet is off: nothing could reach this machine"
 
@@ -113,6 +117,7 @@ module_firewall() {
 	if [ -f "$confirmed" ] && cmp -s "$want" "$confirmed" && [ -n "$(fw_current)" ]; then
 		ok "ruleset in place and confirmed"
 		_fw_boot_unit
+		_fw_panel_checks
 		rm -f "$want"
 		return 0
 	fi
@@ -216,6 +221,16 @@ firewall_confirm() {
 	change "confirm the ruleset from $pending" "cirrusux-setup firewall-rollback $FW_DIR/$pending-before.nft" \
 		_fw_keep "$ROOT$FW_DIR/$pending-candidate.nft"
 	_fw_boot_unit
+	_fw_panel_checks
+}
+
+# _fw_panel_checks tells the panel's Security page what to check: the
+# table's drop policy and the rule that closes published ports.
+_fw_panel_checks() {
+	helper_module firewall <<'EOF2'
+# Written by cirrusux-setup (firewall module), once the ruleset is confirmed.
+FIREWALL_CHECKS=inet/cirrusux/input:drop inet/cirrusux/forward:dnat
+EOF2
 }
 
 _fw_keep() {

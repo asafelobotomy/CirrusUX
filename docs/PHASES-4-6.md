@@ -178,8 +178,10 @@ In four parts, each its own commit.
   <unit>`, unit names checked against `cirrusux-….service`); "Follow"
   refreshes every 5 s and stops by itself after 5 minutes; "Explain this"
   sends the chosen lines (redacted) to the assistant.
-- An OS upgrade is `apt-get upgrade` with the old config files kept: it never
-  removes packages or adds new ones. It can't be undone from the panel, and
+- An OS upgrade is `apt-get upgrade --with-new-pkgs` with the old config
+  files kept: it never removes packages, and adds new ones only when an
+  upgrade needs them (a new kernel; the VM test found plain `upgrade` held
+  kernel security fixes back for ever). It can't be undone from the panel, and
   its confirmation says so; a restart that's needed afterwards is shown.
 
 ### 6c. Storage and archive review — done

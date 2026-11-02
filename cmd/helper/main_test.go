@@ -26,8 +26,9 @@ func TestTailFile(t *testing.T) {
 	if got, _ := tailFile(path, 50); len(got.Lines) != 10 {
 		t.Errorf("short file: %d lines", len(got.Lines))
 	}
-	if _, err := tailFile(filepath.Join(t.TempDir(), "missing"), 3); err == nil {
-		t.Error("missing file should fail")
+	// Before the first scan or check, there's no log yet: nothing to show.
+	if got, err := tailFile(filepath.Join(t.TempDir(), "missing"), 3); err != nil || got.Lines == nil || len(got.Lines) != 0 {
+		t.Errorf("missing log = %v, %v; want no lines", got.Lines, err)
 	}
 }
 
@@ -48,6 +49,10 @@ func TestBackupList(t *testing.T) {
 	l, err := backupList(dir, "atlas-system-")
 	if err != nil || len(l.Files) != 1 || l.Files[0].Name != "atlas-system-20261101.tar.zst.age" || l.Files[0].Bytes != 5 || l.Files[0].MTime == 0 {
 		t.Errorf("list = %+v, %v", l.Files, err)
+	}
+	// The folder is made by the first backup.
+	if l, err := backupList(filepath.Join(dir, "not-yet"), "atlas-system-"); err != nil || len(l.Files) != 0 {
+		t.Errorf("missing folder = %+v, %v", l.Files, err)
 	}
 }
 

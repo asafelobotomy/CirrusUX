@@ -29,6 +29,7 @@ echo "1 check reports, writes nothing"
 
 $H/cirrusux-setup apply cirrusux > $T/out 2>&1 || { cat $T/out; fail apply; }
 [ "$(stat -c %a $ROOT/etc/sudoers.d/cirrusux)" = 440 ] || fail "sudoers mode"
+[ "$(readlink $ROOT/usr/local/sbin/cirrusux-setup)" = "$T/rel/deploy/host/cirrusux-setup" ] || fail "cirrusux-setup not linked onto the PATH"
 t1=$(grep ^CIRRUS_AGENT_TOKEN= $E/gateway.env | cut -d= -f2); t2=$(grep ^CIRRUS_AGENT_TOKEN= $E/agent.env | cut -d= -f2)
 [ ${#t1} = 64 ] && [ "$t1" = "$t2" ] || fail "token not shared ($t1 / $t2)"
 grep -q "^CIRRUS_SETUP=single" $E/gateway.env && grep -q "^CIRRUS_SERVER_NAME=atlas" $E/gateway.env || fail "gateway.env values"

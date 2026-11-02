@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { mode } from '../api.svelte';
+  import { has, mode, sleeps } from '../api.svelte';
   import type { Component } from 'svelte';
   import * as I from '../icons';
   import { ALL_NAV, shown } from './nav';
@@ -23,12 +23,14 @@
     const list: Cmd[] = [];
     if (power.state === 'asleep') list.push({ id: 'wake', label: `Wake ${mode.server}`, group: 'Power', icon: I.Power, run: () => confirmWake() });
     if (awake) {
-      list.push(
-        { id: 'stay30', label: 'Stay awake for 30 min', group: 'Power', icon: I.Coffee, run: () => confirmStayAwake(30) },
-        { id: 'stay120', label: 'Stay awake for 2 h', group: 'Power', icon: I.Coffee, run: () => confirmStayAwake(120) },
-        { id: 'allow', label: 'Allow sleep', group: 'Power', icon: I.Moon, run: () => confirmAllowSleep() },
-        { id: 'backup', label: 'Run a backup now', group: 'Actions', icon: I.Archive, run: () => confirmBackup() },
-      );
+      // Only what this server has: no sleep controls on one that doesn't sleep.
+      if (sleeps() && has('stay-awake'))
+        list.push(
+          { id: 'stay30', label: 'Stay awake for 30 min', group: 'Power', icon: I.Coffee, run: () => confirmStayAwake(30) },
+          { id: 'stay120', label: 'Stay awake for 2 h', group: 'Power', icon: I.Coffee, run: () => confirmStayAwake(120) },
+          { id: 'allow', label: 'Allow sleep', group: 'Power', icon: I.Moon, run: () => confirmAllowSleep() },
+        );
+      if (has('backup')) list.push({ id: 'backup', label: 'Run a backup now', group: 'Actions', icon: I.Archive, run: () => confirmBackup() });
       for (const c of live.containers)
         list.push({ id: 'r-' + c.id, label: `${c.health === 'exited' ? 'Start' : 'Restart'} ${c.app}`, group: 'Containers', icon: c.health === 'exited' ? I.Play : I.RotateCcw, hint: c.tag, run: () => confirmContainer(c.id, c.health === 'exited' ? 'start' : 'restart') });
     }

@@ -22,6 +22,7 @@ grep -qx "$p" "$STUBDIR/installed" 2>/dev/null && printf 'install ok installed'
 S
 cat > $T/stub/apt-get <<'S'
 #!/bin/sh
+[ "$1" = update ] && { echo update >> "$STUBDIR/apt-updates"; exit 0; }
 for p; do case "$p" in -*|install) ;; *) echo "$p" >> "$STUBDIR/installed" ;; esac; done
 S
 cat > $T/stub/ethtool <<'S'
@@ -53,8 +54,10 @@ printf 'BACKUP_AGE_RECIPIENT=age-not-a-key\n' > $CONFIG
 $H/cirrusux-setup check backup > $T/out 2>&1 && fail "bad key accepted"
 mkdir -p $T/data/etc && echo "hello" > $T/data/etc/thing.conf
 printf 'BACKUP_AGE_RECIPIENT=%s\nBACKUP_DIR=%s\nBACKUP_PATHS="%s"\nBACKUP_KEEP=2\n' $KEY $T/backups $T/data > $CONFIG
+rm -f $T/apt-updates
 $H/cirrusux-setup apply backup > $T/out 2>&1 || { cat $T/out; fail "backup apply"; }
 grep -qx age $T/installed && grep -qx zstd $T/installed || fail "packages"
+[ "$(wc -l < $T/apt-updates)" = 1 ] || fail "package lists not refreshed once before installing"
 grep -q "WakeSystem=yes" $ROOT/etc/systemd/system/cirrusux-backup.timer || fail "timer doesn't wake"
 grep -qx cirrusux-backup.timer $T/enabled || fail "timer not on"
 grep -q "BACKUP_UNIT=cirrusux-backup.service" $ROOT/etc/cirrusux/helper.d/backup.env || fail "helper.d"
@@ -81,13 +84,12 @@ echo "backup: a failed encryption fails the run and never looks like a good back
 # security
 printf 'SEC_AV_PATHS="/srv"\n' > $CONFIG
 echo clamav-freshclam.service >> $T/enabled
-mkdir -p $ROOT/etc/cirrusux && touch $ROOT/etc/cirrusux/firewall.nft
 $H/cirrusux-setup apply security > $T/out 2>&1 || { cat $T/out; fail "security apply"; }
 grep -q "backend = systemd" $ROOT/etc/fail2ban/jail.d/cirrusux.local || fail "jail"
 grep -qx clamav-freshclam.service $T/enabled && fail "freshclam daemon left running"
 grep -q "clamscan .*--log=/var/log/cirrusux/av-scan.log /srv$" $ROOT/etc/systemd/system/cirrusux-av-scan.service || fail "scan unit"
 grep -q "AV_LOG=/var/log/cirrusux/av-scan.log" $ROOT/etc/cirrusux/helper.d/av.env || fail "av.env"
-grep -q "FIREWALL_CHECKS=inet/cirrusux/input:drop" $ROOT/etc/cirrusux/helper.d/security.env && grep -q "FAIL2BAN_JAIL=sshd" $ROOT/etc/cirrusux/helper.d/security.env || fail "security.env"
+grep -q "FAIL2BAN_JAIL=sshd" $ROOT/etc/cirrusux/helper.d/security.env || fail "security.env"
 printf 'NET_WOL_IFACE=eth0\nBACKUP_AGE_RECIPIENT=%s\nBACKUP_DIR=%s\nBACKUP_PATHS="%s"\nBACKUP_KEEP=2\nSEC_AV_PATHS="/srv"\n' $KEY $T/backups $T/data > $CONFIG
 $H/cirrusux-setup check network backup security > $T/out 2>&1; rc=$?
 [ $rc = 0 ] || { cat $T/out; fail "re-check $rc"; }
@@ -117,8 +119,10 @@ printf '#!/bin/sh\ntouch "$STUBDIR/appsuser"\n' > $T/stub/useradd
 printf '#!/bin/sh\nexec /usr/bin/mkdir "$@"\n' > $T/stub/mkdir
 chmod +x $T/stub/id $T/stub/useradd $T/stub/mkdir
 $H/cirrusux-setup apply apps > $T/out 2>&1 || { cat $T/out; fail "apps apply"; }
-grep -qx podman $T/installed && grep -qx podman.socket $T/enabled || fail "podman"
+grep -qx podman $T/installed && grep -qx nftables $T/installed && grep -qx podman.socket $T/enabled || fail "podman"
 grep -q "upstream /run/podman/podman.sock" $ROOT/etc/systemd/system/cirrusux-dockerfilter.service.d/podman.conf || fail "filter drop-in"
+grep -qx "ReadWritePaths=" $ROOT/etc/systemd/system/cirrusux-dockerfilter.service.d/podman.conf || fail "drop-in keeps Docker's socket path"
+grep -q "systemctl restart cirrusux-dockerfilter.socket" $T/calls || fail "filter not restarted after the drop-in"
 grep -q "CONTAINER_RUNTIME=podman" $ROOT/etc/cirrusux/helper.d/apps.env && grep -q "MEDIA_ROOTS=/srv/media /mnt/disk" $ROOT/etc/cirrusux/helper.d/apps.env || fail "apps.env"
 [ -d $ROOT/srv/cirrusux/apps ] && [ -d $ROOT/var/lib/cirrusux/apps ] || fail "folders"
 grep -q "media folder /srv/media doesn't exist yet" $T/out || fail "no warning for a missing media folder"

@@ -35,13 +35,17 @@ module_cirrusux() {
 		put_file /usr/local/bin/cirrusux-gateway 755 root:root <"$rel/bin/cirrusux-gateway"
 	fi
 	local binaries_changed=$((CHANGES - before))
+	# So `sudo cirrusux-setup …`, as setup's own messages say, works anywhere.
+	put_link /usr/local/sbin/cirrusux-setup "$rel/deploy/host/cirrusux-setup"
 
 	units_before=$CHANGES
 	local u
+	local filter_units=$CHANGES
 	if [ "$role" != gateway ]; then
 		for u in cirrusux-agent.service cirrusux-dockerfilter.service cirrusux-dockerfilter.socket; do
 			put_file "/etc/systemd/system/$u" 644 root:root <"$rel/deploy/server/$u"
 		done
+		filter_units=$((CHANGES - filter_units))
 		_cx_sudoers "$rel/deploy/server/sudoers-cirrusux"
 	fi
 	if [ "$role" != server ]; then
@@ -49,6 +53,11 @@ module_cirrusux() {
 	fi
 	if [ $((CHANGES - units_before)) -gt 0 ]; then
 		change "reload systemd units" "—" systemctl daemon-reload
+	fi
+	# Changed filter units take effect, and a failed socket recovers, only
+	# when the socket restarts.
+	if [ "$role" != gateway ] && [ "$filter_units" -gt 0 ] && unit_enabled cirrusux-dockerfilter.socket; then
+		change "restart cirrusux-dockerfilter.socket" "—" systemctl restart cirrusux-dockerfilter.socket
 	fi
 
 	_cx_configs "$role" "$rel" "$token"

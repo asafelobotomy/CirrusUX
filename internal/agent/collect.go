@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -105,6 +106,11 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 			errf("backup journal: %v", err)
 		}
 		s.Backups.LastRun = parseBackupJournal(bj.Lines, bj.Unit, now)
+		if bj.Unit != "" {
+			if w := nextWakes(ctx, []string{strings.TrimSuffix(bj.Unit, ".service") + ".timer"}, errf); len(w) > 0 {
+				s.Backups.NextRun = &w[0].At
+			}
+		}
 	}
 
 	if c.DiskMount != "" {
@@ -115,7 +121,9 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 		}
 	}
 
-	if t, err := cpuTemp(); err != nil {
+	if t, err := cpuTemp(); errors.Is(err, errNoSensor) {
+		// A VM or a board without sensors: nothing to show, nothing wrong.
+	} else if err != nil {
 		errf("temperature: %v", err)
 	} else {
 		if len(c.temps) == maxTemps {
@@ -152,7 +160,7 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 		s.Storage = storage.Read(helperapi.StorageFile)
 	}
 	if has(helperapi.ModOS) {
-		s.OSUpdates = osupdate.Read(helperapi.OSUpdatesFile)
+		s.OSUpdates = osupdate.Read(helperapi.OSUpdatesFile, helperapi.RebootRequiredFile)
 	}
 	if has(helperapi.ModApps) {
 		s.Apps = installedApps()
@@ -463,6 +471,8 @@ func usbSpeed(mount string) int {
 	return 0
 }
 
+var errNoSensor = errors.New("no thermal zones")
+
 // cpuTemp prefers the package sensor, else the first thermal zone.
 func cpuTemp() (float64, error) {
 	zones, _ := filepath.Glob("/sys/class/thermal/thermal_zone*")
@@ -478,7 +488,7 @@ func cpuTemp() (float64, error) {
 		}
 	}
 	if first == "" {
-		return 0, fmt.Errorf("no thermal zones")
+		return 0, errNoSensor
 	}
 	b, err := os.ReadFile(first + "/temp")
 	if err != nil {

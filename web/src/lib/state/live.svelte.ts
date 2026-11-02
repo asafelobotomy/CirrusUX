@@ -19,6 +19,8 @@ export const live = $state({
   changelog: data.changelog.map((c) => ({ ...c })),
   lastBackupRun: { ...data.lastBackupRun, running: false } as BackupRun | null,
   backups: data.backups.map((b) => ({ ...b })),
+  /** When the backup timer fires next; null when unknown. */
+  nextBackup: data.nextBackup as Date | null,
   nextWakes: [
     { at: data.nextBackup, unit: 'system-backup.timer' },
     { at: data.nextAvScan, unit: 'clamav-weekly-scan.timer' },

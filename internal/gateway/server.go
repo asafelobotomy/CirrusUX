@@ -193,7 +193,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"user": userOf(r), "dev": c.Dev, "version": version.String(),
 		"server": c.ServerName, "serverHost": c.ServerHost, "gateway": c.GatewayName,
-		"setup": c.Setup, "tz": c.TZName, "wake": s.power.CanWake(),
+		"setup": c.Setup, "tz": c.TZName, "wake": s.power.CanWake(), "wakeVia": c.Wake,
 		"assistant": map[string]any{"enabled": c.AssistantEnabled(), "name": c.Assistant.Name},
 	})
 }

@@ -24,7 +24,7 @@ interface Snap {
     nextWakes: { at: string; unit: string }[];
   };
   containers: { name: string; image: string; tag: string; state: string; health: string; status: string; ports: number[]; upSince?: string }[];
-  backups: { files: { name: string; at: string; bytes: number; encrypted: boolean }[]; lastRun?: { start: string; end: string; ok: boolean; summary: string } };
+  backups: { files: { name: string; at: string; bytes: number; encrypted: boolean }[]; lastRun?: { start: string; end: string; ok: boolean; summary: string }; nextRun?: string };
   disk?: { totalBytes: number; freeBytes: number; linkMbps: number };
   temps: number[];
   security?: { banned?: number; firewall: { chain: string; ok: boolean }[]; clamav?: { at: string; files: number; infected: number } };
@@ -46,6 +46,9 @@ interface StateResp {
 const d = (s?: string | null) => (s ? new Date(s) : null);
 
 function clearSampleData(): void {
+  // Nothing from the sample data may pass for this server's: no report yet.
+  power.since = new Date();
+  power.lastSnapshot = new Date(0);
   Object.assign(live, {
     containers: [], changelog: [], lastBackupRun: null, backups: [], nextWakes: [], disk: null,
     folders: [], temps: [], timeline: [], security: null, updates: [], problems: [],
@@ -82,7 +85,8 @@ function apply(st: StateResp): void {
     port: c.ports[0] ?? null, health: c.health as Health, upSince: d(c.upSince),
     restart: '', memMb: 0, leftover: c.tag === 'latest' && c.state !== 'running',
   }));
-  live.backups = s.backups.files.map((f) => ({ file: f.name, at: new Date(f.at), sizeGb: Math.round(f.bytes / 1e8) / 10, encrypted: f.encrypted }));
+  live.backups = s.backups.files.map((f) => ({ file: f.name, at: new Date(f.at), sizeGb: f.bytes / 1e9, encrypted: f.encrypted }));
+  live.nextBackup = d(s.backups.nextRun);
   const r = s.backups.lastRun;
   live.lastBackupRun = r
     ? { start: new Date(r.start), end: new Date(r.end), ok: r.ok, running: false, summary: r.summary, sizeGb: live.backups[0]?.sizeGb ?? 0 }

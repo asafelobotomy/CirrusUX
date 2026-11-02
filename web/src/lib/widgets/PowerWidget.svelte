@@ -10,6 +10,8 @@
   const LABEL = $derived({ awake: sleeps() ? 'Awake' : 'Online', asleep: 'Asleep', waking: 'Waking…', unreachable: 'No reports' });
 
   const sinceMs = $derived(clock.now - power.since.getTime());
+  /** False until the first report: a new gateway has nothing to show yet. */
+  const reported = $derived(power.lastSnapshot.getTime() > 0);
   const sleepsIn = $derived(sleepsInMs());
   const idleFrac = $derived(sleepsIn === null ? 0 : 1 - Math.min(1, sleepsIn / (live.idle.idleMin * 60_000)));
   const next = $derived(live.nextWakes[0] ?? null);
@@ -38,6 +40,8 @@
       <span class="since muted num">
         {#if power.state === 'waking'}
           usually 20–30 s
+        {:else if !reported}
+          no report yet
         {:else}
           since {fmtTime(power.since)} {tzLabel()} · {fmtDuration(sinceMs)}
         {/if}
@@ -111,7 +115,10 @@
     {/if}
   {:else if power.state === 'asleep'}
     <div class="status">
-      <p class="muted">Showing data from {fmtTime(power.lastSnapshot)}. Opening an app or a live view needs the server awake.</p>
+      <p class="muted">
+        {#if reported}Showing data from {fmtTime(power.lastSnapshot)}. Opening an app or a live view needs the server awake.
+        {:else}No report from {mode.server} yet. Once its agent sends one, its apps, containers and backups show here.{/if}
+      </p>
     </div>
     {#if mode.wake}
       <div class="actions">
@@ -123,7 +130,7 @@
   {:else if power.state === 'unreachable'}
     <div class="status">
       <p class="muted">
-        {mode.setup === 'split' ? `${mode.server} is on the tailnet, but its agent` : 'The agent'} hasn't reported since {fmtTime(power.lastSnapshot)}.
+        {mode.setup === 'split' ? `${mode.server} is on the tailnet, but its agent` : 'The agent'} {reported ? `hasn't reported since ${fmtTime(power.lastSnapshot)}.` : "hasn't reported yet."}
         Check <code>cirrusux-agent.service</code> on {mode.server}.
       </p>
     </div>

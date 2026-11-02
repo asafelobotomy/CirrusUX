@@ -47,7 +47,7 @@ func osRun(what, job string) (helperapi.Result, error) {
 	r := &osupdate.Runner{
 		Exec: aptExec, Now: time.Now,
 		Progress:   func(s string) { st.Step = s; save() },
-		ResultFile: helperapi.OSUpdatesFile, RebootFile: "/run/reboot-required",
+		ResultFile: helperapi.OSUpdatesFile, RebootFile: helperapi.RebootRequiredFile,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Minute)
 	defer cancel()

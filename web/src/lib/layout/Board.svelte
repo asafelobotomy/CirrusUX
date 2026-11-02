@@ -88,7 +88,7 @@
         {#if !meta.bare}
           <header>
             <h3><Icon size={15} />{item.config?.title || item.config?.group || meta.title}</h3>
-            {#if meta.live && (power.state !== 'awake' || mode.offline)}
+            {#if meta.live && (power.state !== 'awake' || mode.offline) && power.lastSnapshot.getTime() > 0}
               <span class="asof num">as of {fmtTime(power.lastSnapshot)}</span>
             {/if}
           </header>

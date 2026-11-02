@@ -23,7 +23,9 @@ module_apps() {
 	done
 
 	if [ "$rt" = podman ]; then
-		need_packages podman
+		# Installed without "recommends", so name what rootful Podman needs:
+		# netavark calls nft for container networking, aardvark-dns names.
+		need_packages podman nftables aardvark-dns
 		if unit_enabled podman.socket; then
 			ok "podman.socket on"
 		else
@@ -40,9 +42,16 @@ Wants=podman.socket
 [Service]
 ExecStart=
 ExecStart=/usr/local/sbin/cirrusux-dockerfilter -upstream /run/podman/podman.sock
+ReadWritePaths=
 ReadWritePaths=/run/podman/podman.sock
 EOF2
-		[ "$CHANGES" -eq "$before" ] || change "reload systemd units" "—" systemctl daemon-reload
+		if [ "$CHANGES" -ne "$before" ]; then
+			change "reload systemd units" "—" systemctl daemon-reload
+			# Restarting the socket stops the filter (the next connection starts
+			# it with the new settings) and clears a failed state.
+			change "restart cirrusux-dockerfilter.socket" "—" \
+				systemctl restart cirrusux-dockerfilter.socket
+		fi
 	else
 		if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
 			ok "docker with compose"

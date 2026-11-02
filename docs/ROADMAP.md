@@ -67,7 +67,9 @@ The build plan, part by part, is in [PHASES-4-6.md](PHASES-4-6.md).
 
 - **Phase 4, host modules** (`cirrusux-setup`): base, firewall, cirrusux
   (4a), network, backup, security (4b) and CirrusUX's own sleep manager
-  (4c) are built. Left: trying the whole set on a clean Debian VM.
+  (4c) are built, and the whole set was tried on clean Debian 13 VMs
+  (2 Nov): the single setup with every module, then a sleeping server and
+  a gateway. The problems it found are fixed (CHANGELOG, "Fixed").
 - **Phase 5, app store:** a catalogue of app definitions rendered to compose
   files or Quadlet units (5a, done), installs as background jobs on the server
   (5b, done), and the store in the UI (5c, done).

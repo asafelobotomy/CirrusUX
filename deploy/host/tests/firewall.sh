@@ -13,7 +13,9 @@ enable) echo "$2" >> "$f" ;;
 *) exit 0 ;;
 esac
 S
-chmod +x $T/stub/systemctl
+# nft itself is real here; the package is reported as installed.
+printf '#!/bin/sh\nprintf "install ok installed"\n' > $T/stub/dpkg-query
+chmod +x $T/stub/systemctl $T/stub/dpkg-query
 export STUBDIR=$T PATH=$T/stub:$PATH ROOT=$T/root NO_CHOWN=1 NO_SYSTEMD=1 CONFIG=$T/root/etc/cirrusux/host.env
 printf 'FIREWALL_ALLOW="192.168.1.0/24 fd00::/8"\nFIREWALL_CONFIRM_SECONDS=3\nFIREWALL_PUBLIC_TCP="80 443"\n' > $CONFIG
 fail() { echo "FAIL: $*"; exit 1; }
@@ -32,6 +34,7 @@ echo "3 unconfirmed: rolled back by itself"
 
 $H/cirrusux-setup apply firewall >/dev/null || fail apply2
 $H/cirrusux-setup firewall-confirm >/dev/null || fail confirm
+grep -q "FIREWALL_CHECKS=inet/cirrusux/input:drop" $ROOT/etc/cirrusux/helper.d/firewall.env || fail "panel checks not written on confirm"
 sleep 5; sleep 1
 nft list table inet cirrusux >/dev/null 2>&1 || fail "confirmed ruleset vanished"
 [ -f $ROOT/etc/cirrusux/firewall.nft ] || fail "not saved"

@@ -5,11 +5,12 @@
   import { power } from '../state/power.svelte';
   import { confirmBackup } from '../state/actions';
   import { fmtAgo, fmtDay, fmtDayTime } from '../time.svelte';
-  import { CircleCheck, Loader, Lock, TriangleAlert } from '../icons';
+  import { Archive, CircleCheck, Loader, Lock, TriangleAlert } from '../icons';
 
   let { full = false }: { full?: boolean } = $props();
   const run = $derived(live.lastBackupRun);
-  const next = $derived(live.nextWakes.find((w) => /backup/i.test(w.unit))?.at ?? null);
+  const next = $derived(live.nextBackup ?? live.nextWakes.find((w) => /backup/i.test(w.unit))?.at ?? null);
+  const size = (gb: number) => (gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.max(1, Math.round(gb * 1000))} MB`);
 </script>
 
 <div class="b">
@@ -20,11 +21,14 @@
       </span>
       <div>
         <strong>{run.running ? 'Backing up…' : run.ok ? 'Last backup OK' : 'Last backup failed'}</strong>
-        <p class="muted small num">{fmtAgo(run.end)}{run.sizeGb ? ` · ${run.sizeGb.toFixed(1)} GB` : ''}{live.backups[0]?.encrypted ? ' · encrypted' : ''}</p>
+        <p class="muted small num">{fmtAgo(run.end)}{run.sizeGb ? ` · ${size(run.sizeGb)}` : ''}{live.backups[0]?.encrypted ? ' · encrypted' : ''}</p>
       </div>
-    {:else}
+    {:else if live.backups.length}
       <span class="ic failed"><TriangleAlert size={22} /></span>
-      <div><strong>No backup run found</strong><p class="muted small">Nothing in the backup unit's journal yet.</p></div>
+      <div><strong>No backup run found</strong><p class="muted small">There are archives, but nothing in the backup unit's journal.</p></div>
+    {:else}
+      <span class="ic none"><Archive size={22} /></span>
+      <div><strong>No backups yet</strong><p class="muted small">{next ? `The first one runs ${fmtDayTime(next)}, or press Run now.` : 'Press Run now for the first one.'}</p></div>
     {/if}
   </div>
   <div class="foot">
@@ -37,8 +41,8 @@
         <li>
           <code>{f.file}</code>
           <span class="num muted">{fmtDay(f.at)}</span>
-          <span class="num muted">{f.sizeGb} GB</span>
-          {#if f.encrypted}<Badge tone="ok">{#snippet icon()}<Lock />{/snippet}encrypted</Badge>{:else}<Badge tone="warn">plain · ages out 13 Nov</Badge>{/if}
+          <span class="num muted">{size(f.sizeGb)}</span>
+          {#if f.encrypted}<Badge tone="ok">{#snippet icon()}<Lock />{/snippet}encrypted</Badge>{:else}<Badge tone="warn">not encrypted</Badge>{/if}
         </li>
       {/each}
     </ul>
@@ -50,6 +54,7 @@
   .hero { display: flex; gap: var(--space-3); align-items: center; }
   .ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--ok-soft); color: var(--ok); flex: none; }
   .ic.failed { background: var(--bad-soft); color: var(--bad); }
+  .ic.none { background: var(--surface-2); color: var(--text-muted); }
   .ic.running { background: color-mix(in oklab, var(--info) 16%, transparent); color: var(--info); }
   .ic.running :global(svg) { animation: spin 1.1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }

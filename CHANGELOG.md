@@ -21,6 +21,40 @@ gets a minor version.
   explains each `cirrusux-setup` module. `docs/CONFIG.md` adds `sleep.env`
   and `router.env`.
 
+### Fixed
+
+Found by installing on clean Debian 13 VMs, in both setups:
+
+- Setup refreshes the package lists before its first install: a fresh cloud
+  image has none, so every module that installs a package failed.
+- The agent couldn't reach the Docker filter: systemd made the socket's
+  folder `/run/cirrusux` root-only.
+- The Docker filter couldn't start on a Podman server (its sandbox named
+  `/run/docker.sock`). Setup now restarts the filter's socket after changing
+  it, which also clears a failed socket.
+- Podman apps couldn't start: Debian's Podman needs nftables, which setup
+  didn't install (it skips "recommends"). The apps module installs it and
+  aardvark-dns; the firewall module installs nftables itself.
+- OS updates held kernel security fixes back for ever: a new kernel is a new
+  package, and `apt-get upgrade` never adds one. Upgrades now use
+  `--with-new-pkgs` (still never removing anything).
+- "A restart is needed" stayed after the restart.
+- `cirrusux-setup` wasn't on the PATH, though its messages say
+  `sudo cirrusux-setup …`; the cirrusux module now links it there.
+- The firewall's checks reached the Security page only after a second setup
+  run; the firewall module now writes them when its ruleset is confirmed.
+- No backups yet, no virus scan yet and a machine without temperature
+  sensors were reported as errors.
+- Backups card: the next run was unknown on a server that doesn't sleep,
+  backups under 1 GB showed as "0 GB", a new server showed a red warning
+  before its first backup, and an unencrypted backup showed a leftover date.
+- A new gateway showed the demo's sample data until the server's first
+  report, with "as of 01:00" on its widgets.
+- The wake confirmation described a router and a command whatever the wake
+  driver was; Allow sleep always said "30-minute".
+- The command palette offered sleep controls on a server that doesn't sleep,
+  and the Apps widget was blank with no apps installed.
+
 ### Removed
 
 - A stray `helper` binary and the local `.claude/` preview config from the

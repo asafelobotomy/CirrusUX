@@ -13,7 +13,6 @@
 # (WakeSystem=yes). Infected files are reported, never deleted or moved.
 
 module_security() {
-	local checks=""
 	if [ "${SEC_FAIL2BAN:-yes}" = yes ]; then
 		# Debian logs to the journal, so the jail reads it there.
 		need_packages fail2ban python3-systemd
@@ -82,13 +81,11 @@ AV_LOG=/var/log/cirrusux/av-scan.log
 EOF
 	fi
 
-	# The panel checks what this machine has: the jail, and the firewall
-	# module's table if it's been confirmed.
-	[ -f "$ROOT/etc/cirrusux/firewall.nft" ] && checks="inet/cirrusux/input:drop inet/cirrusux/forward:dnat"
+	# The panel checks the jail; the firewall module adds its own checks
+	# once its ruleset is confirmed (helper.d/firewall.env).
 	{
 		echo "# Written by cirrusux-setup (security module)."
 		[ "${SEC_FAIL2BAN:-yes}" = yes ] && echo "FAIL2BAN_JAIL=sshd"
-		[ -n "$checks" ] && echo "FIREWALL_CHECKS=$checks"
 		true
 	} | helper_module security
 }

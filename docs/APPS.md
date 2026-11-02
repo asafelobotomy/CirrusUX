@@ -115,7 +115,9 @@ Each:
 | `media` | a folder the owner picks, inside `APPS_MEDIA_ROOTS` | no | untouched |
 
 Media is read-only unless the app has to write there (a sync folder, a
-download folder). Ask for `writable` only then.
+download folder). Ask for `writable` only then. The owner picks the folder,
+which must already exist; a writable one must belong to the apps' user
+(`cirrusux-apps`), and the app's `notes` should say so.
 
 ## Devices
 

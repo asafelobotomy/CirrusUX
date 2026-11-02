@@ -68,8 +68,11 @@ export function confirmWake(o: Opts = {}): void {
   ask({
     ...o,
     title: `Wake ${mode.server}?`,
-    body: 'Sends a magic packet through the router. The server is usually reachable in 20–30 seconds.',
-    command: 'cirrusux-wake',
+    body:
+      mode.wakeVia === 'command'
+        ? `Runs the gateway's wake command (CIRRUS_WAKE_CMD). ${mode.server} usually answers in 20–30 seconds.`
+        : `Sends a Wake-on-LAN magic packet from ${mode.gateway}. ${mode.server} usually answers in 20–30 seconds.`,
+    command: mode.wakeVia === 'command' ? 'CIRRUS_WAKE_CMD' : 'Wake-on-LAN magic packet',
     confirmLabel: 'Wake',
     changelog: `Woke ${mode.server}`,
     run: () => (mode.live ? void liveWake() : wake()),
@@ -99,7 +102,7 @@ export function confirmAllowSleep(o: Opts = {}): void {
   ask({
     ...o,
     title: `Allow ${mode.server} to sleep?`,
-    body: 'Removes the stay-awake hold. The normal 30-minute idle timer applies again.',
+    body: `Removes the stay-awake hold. The ${live.idle.idleMin}-minute idle timer applies again.`,
     command: 'cirrusux-helper allow-sleep',
     confirmLabel: 'Allow sleep',
     changelog: `Allowed ${mode.server} to sleep`,
@@ -285,9 +288,9 @@ export function confirmOSUpgrade(count: number): void {
   ask({
     title: `Install ${count} OS package update${count === 1 ? '' : 's'}?`,
     body:
-      `Runs apt-get upgrade on ${mode.server}: it updates installed packages only, never removes any or adds new ones, and keeps config files you changed. ` +
+      `Runs apt-get upgrade on ${mode.server}: it updates installed packages, adds a new one only when an update needs it (a new kernel, for one), never removes any, and keeps config files you changed. ` +
       `Package upgrades can't be undone from the panel; the nightly system backup is the way back.${d3()}`,
-    command: 'cirrusux-helper os-upgrade (apt-get upgrade)',
+    command: 'cirrusux-helper os-upgrade (apt-get upgrade --with-new-pkgs)',
     confirmLabel: 'Install updates',
     changelog: 'Started installing OS package updates',
     run: () => {

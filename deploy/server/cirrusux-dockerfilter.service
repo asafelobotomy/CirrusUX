@@ -11,6 +11,7 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 PrivateNetwork=yes
-ReadWritePaths=/run/docker.sock
+# "-": a server without Docker (Podman, or no containers yet) can still start it.
+ReadWritePaths=-/run/docker.sock
 CapabilityBoundingSet=
 RestrictAddressFamilies=AF_UNIX

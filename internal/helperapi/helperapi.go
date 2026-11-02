@@ -53,6 +53,10 @@ const StorageFile = "/var/lib/cirrusux/storage.json"
 // OSUpdatesFile holds the last OS update check, readable by the agent.
 const OSUpdatesFile = "/var/lib/cirrusux/os-updates.json"
 
+// RebootRequiredFile is Debian's sign that an upgrade needs a restart; a
+// restart clears it (it's in /run).
+const RebootRequiredFile = "/run/reboot-required"
+
 // App store paths shared by the agent and the helper.
 const (
 	// RequestsDir is the agent's own folder for job requests

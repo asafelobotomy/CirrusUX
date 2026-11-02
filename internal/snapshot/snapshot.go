@@ -75,6 +75,8 @@ type Container struct {
 type Backups struct {
 	Files   []BackupFile `json:"files"`
 	LastRun *BackupRun   `json:"lastRun,omitempty"`
+	// NextRun is when the backup unit's timer fires next.
+	NextRun *time.Time `json:"nextRun,omitempty"`
 }
 
 type BackupFile struct {

@@ -76,9 +76,11 @@ func (r *Runner) Check(ctx context.Context) (Result, error) {
 	return r.record(ctx, nil, 0)
 }
 
-// Upgrade installs the pending upgrades: `apt-get upgrade`, which never
-// removes packages or installs new ones, keeping changed config files as
-// they are. Then it checks again.
+// Upgrade installs the pending upgrades: `apt-get upgrade --with-new-pkgs`,
+// which never removes packages and installs new ones only when an upgrade
+// needs them (a new kernel arrives as a new package; without this, kernel
+// security fixes would wait forever). Changed config files are kept as they
+// are. Then it checks again.
 func (r *Runner) Upgrade(ctx context.Context) (Result, error) {
 	r.Progress("Refreshing the package lists")
 	if _, err := r.Exec(ctx, aptEnv, "apt-get", "update", "-qq"); err != nil {
@@ -87,7 +89,7 @@ func (r *Runner) Upgrade(ctx context.Context) (Result, error) {
 	before, _ := r.Exec(ctx, aptEnv, "apt", "list", "--upgradable")
 	n := len(ParseUpgradable(before))
 	r.Progress("Installing " + plural(n, "package"))
-	if _, err := r.Exec(ctx, aptEnv, "apt-get", "upgrade", "-y", "-q",
+	if _, err := r.Exec(ctx, aptEnv, "apt-get", "upgrade", "--with-new-pkgs", "-y", "-q",
 		"-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Options::=--force-confdef"); err != nil {
 		return Result{}, err
 	}
@@ -108,8 +110,10 @@ func (r *Runner) record(ctx context.Context, upgraded *time.Time, count int) (Re
 	return res, write(r.ResultFile, res)
 }
 
-// Read is the last result, or the zero value.
-func Read(path string) *Result {
+// Read is the last result, or nil. Whether a restart is needed is read
+// again from rebootFile, which a restart clears: the saved answer would
+// still ask for one after it.
+func Read(path, rebootFile string) *Result {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil
@@ -118,6 +122,8 @@ func Read(path string) *Result {
 	if json.Unmarshal(b, &r) != nil {
 		return nil
 	}
+	_, err = os.Stat(rebootFile)
+	r.RebootRequired = err == nil
 	return &r
 }
 

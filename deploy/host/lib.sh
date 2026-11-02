@@ -107,7 +107,10 @@ load_config() {
 }
 
 # need_packages PKG...: install the Debian packages a module needs. Only
-# missing ones; nothing is ever upgraded.
+# missing ones; nothing is ever upgraded. The package lists are refreshed
+# once per run, before the first install: a fresh machine (a cloud image,
+# for one) may have none at all.
+APT_REFRESHED=no
 need_packages() {
 	local p missing=()
 	for p in "$@"; do
@@ -116,6 +119,10 @@ need_packages() {
 	if [ ${#missing[@]} -eq 0 ]; then
 		ok "packages: $*"
 		return 0
+	fi
+	if [ "$APT_REFRESHED" = no ]; then
+		change "refresh the package lists" "—" apt-get update -qq
+		APT_REFRESHED=yes
 	fi
 	change "install packages: ${missing[*]}" "apt-get remove ${missing[*]}" \
 		env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing[@]}"

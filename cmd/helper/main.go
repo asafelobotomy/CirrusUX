@@ -9,7 +9,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -185,8 +187,13 @@ func idleStatus(c conf) (helperapi.IdleStatus, error) {
 	return st, nil
 }
 
+// tailFile is the last n lines of a log. A log that doesn't exist yet (the
+// first scan or check hasn't run) is empty, not an error.
 func tailFile(path string, n int) (helperapi.Lines, error) {
 	f, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return helperapi.Lines{Lines: []string{}}, nil
+	}
 	if err != nil {
 		return helperapi.Lines{}, err
 	}
@@ -209,6 +216,9 @@ func backupList(dir, prefix string) (helperapi.BackupList, error) {
 		return l, nil
 	}
 	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return l, nil // made by the first backup
+	}
 	if err != nil {
 		return l, err
 	}

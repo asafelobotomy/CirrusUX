@@ -17,6 +17,8 @@ export const mode = $state({
   tz: 'Europe/London',
   /** A wake method is set up. */
   wake: true,
+  /** How the gateway wakes the server: wol (a magic packet) or command. */
+  wakeVia: 'wol',
   assistant: { enabled: true, name: 'Assistant' },
   /** Modules the server has (sleep, stay-awake, backup, av, security, egress); demo has all. */
   features: ['sleep', 'stay-awake', 'backup', 'av', 'security', 'egress', 'apps', 'os', 'storage'] as string[],
@@ -52,7 +54,7 @@ export const sleeps = (): boolean => mode.setup === 'split' && has('sleep');
 
 interface Me {
   user: string; dev: boolean; version: string; server: string; serverHost: string; gateway: string;
-  setup: 'single' | 'split'; tz: string; wake: boolean; assistant: { enabled: boolean; name: string };
+  setup: 'single' | 'split'; tz: string; wake: boolean; wakeVia?: string; assistant: { enabled: boolean; name: string };
 }
 
 /** Looks for a gateway. Anything but a proper answer means demo mode. */
@@ -61,7 +63,7 @@ export async function detectGateway(): Promise<boolean> {
     const me = await api<Me>('/api/me');
     Object.assign(mode, {
       live: true, user: me.user, dev: me.dev, version: me.version, server: me.server, serverHost: me.serverHost,
-      gateway: me.gateway, setup: me.setup, tz: me.tz || 'UTC', wake: me.wake, assistant: me.assistant,
+      gateway: me.gateway, setup: me.setup, tz: me.tz || 'UTC', wake: me.wake, wakeVia: me.wakeVia ?? 'wol', assistant: me.assistant,
       features: [],
     });
     return true;
