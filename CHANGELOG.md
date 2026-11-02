@@ -13,6 +13,13 @@ gets a minor version.
 - CI on GitHub Actions: `make test`, the race detector, the host script
   tests and the build, on every push and pull request.
 - `SECURITY.md`, `CONTRIBUTING.md` and issue templates.
+- `docs/APPS.md`: how to write an app definition for the store.
+
+### Changed
+
+- `docs/INSTALL.md` walks through both setups from a fresh machine, and
+  explains each `cirrusux-setup` module. `docs/CONFIG.md` adds `sleep.env`
+  and `router.env`.
 
 ### Removed
 

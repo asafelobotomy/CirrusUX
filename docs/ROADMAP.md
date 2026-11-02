@@ -78,8 +78,10 @@ The build plan, part by part, is in [PHASES-4-6.md](PHASES-4-6.md).
 ### Phase 7 — public release
 
 - **Licence** (D10): AGPL-3.0-or-later, in `LICENSE`. Done.
-- **Docs:** a public install guide for both setups, a configuration reference
-  and an app-definition reference.
+- **Docs:** an install guide for both setups (`INSTALL.md`), a full
+  configuration reference (`CONFIG.md`) and an app-definition reference
+  (`APPS.md`). Done; the install guide builds from source until releases
+  ship binaries.
 - **History:** the public repository starts from a clean first commit of
   the scrubbed tree; this private repository keeps the full history.
   **Decided.**

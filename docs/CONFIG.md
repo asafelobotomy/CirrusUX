@@ -1,5 +1,8 @@
 # Configuration
 
+This page lists every setting. To install, start with `INSTALL.md`; app
+definitions are described in `APPS.md`.
+
 CirrusUX reads three small files, one per part. All of them use plain
 `NAME=value` lines, which systemd's `EnvironmentFile=` reads for the gateway
 and the agent. Secrets live only in these files (mode 600), never in the
@@ -10,6 +13,9 @@ browser, the logs or the repository (decision D12).
 | `/etc/cirrusux/gateway.env` | the gateway machine | `cirrusux-gateway` | cirrusux, 600 |
 | `/etc/cirrusux/agent.env` | the server | `cirrusux-agent` | cirrusux, 600 |
 | `/etc/cirrusux/helper.env` | the server | `cirrusux-helper` (root) | root, 644 or 600 |
+
+`cirrusux-setup` adds two more: `host.env` (its own settings) and, with the
+sleep module, `sleep.env`. The optional router check reads `router.env`.
 
 Examples: `deploy/gateway/gateway.env.example`,
 `deploy/server/agent.env.example`, `deploy/server/helper.env.example`.
@@ -91,8 +97,9 @@ The helper reads `helper.env`, then every `helper.d/*.env` in name order
 Paths must be absolute; unit and jail names may only use letters, digits and
 `- _ . @`. The helper refuses the file otherwise.
 
-Today the sleep, backup and egress modules wrap scripts you already have.
-CirrusUX's own versions of them are ROADMAP Phase 4.
+The `cirrusux-setup` modules fill these in for you. Without them, a
+module's settings can point at scripts and units of your own, as long as
+they behave the same way (see each module in `deploy/host/modules/`).
 
 ## host.env
 
@@ -149,3 +156,34 @@ writes nothing at all. Anything it can't read counts as activity.
 
 Modules that the panel shows (backup, virus scan, security) tell the helper
 about themselves in `/etc/cirrusux/helper.d/`, so `helper.env` stays yours.
+
+## sleep.env
+
+The sleep module writes `/etc/cirrusux/sleep.env` from the `SLEEP_*`
+settings above. `cirrusux-idle` reads it every minute, and the agent reads
+`IDLE_MIN`, `GRACE_MIN` and `WAKE_TIMERS` from it for the panel. Re-run
+`cirrusux-setup apply sleep` after changing host.env, rather than editing it.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `IDLE_MIN` | `30` | Quiet minutes before it suspends |
+| `GRACE_MIN` | `15` | Minutes after a wake before it may sleep again |
+| `WATCH_PORTS` | — (all) | Space-separated local ports whose inbound connections count |
+| `IGNORE_CLIENTS` | — | Addresses or networks whose connections don't count |
+| `BUSY_UNITS` | `cirrusux-backup.service cirrusux-av-scan.service cirrusux-job-*` | Units that keep it awake while active; globs allowed. The module doesn't set it, and the next `apply sleep` replaces a hand edit, so the default is what runs |
+| `MAX_LOAD` | `0` (off) | A 5-minute load above this counts as activity |
+| `COUNT_LOGINS` | `yes` | `no`: logged-in sessions don't count |
+| `WAKE_TIMERS` | `cirrusux-backup.timer cirrusux-av-scan.timer` | Timers that wake it, shown as the next wake |
+
+## router.env
+
+Read only by `cirrusux-router-check` (split setup, optional), as root. You
+write it yourself, owner root and mode 600; the script refuses it otherwise.
+The panel never sees it.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `ROUTER_URL` | `http://fritz.box:49000` | The router's TR-064 address |
+| `ROUTER_USER` | — (required) | A router user allowed to read the host list |
+| `ROUTER_PASSWORD` | — (required) | That user's password |
+| `SERVER_MAC` | — (required) | The server's MAC address, as the router lists it |
