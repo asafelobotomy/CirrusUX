@@ -5,7 +5,7 @@
 
   let { app }: { app?: string } = $props();
   const jobs = $derived(store.jobs.filter((j) => !app || j.app === app));
-  const verb = { install: 'Installing', remove: 'Removing', update: 'Updating', 'os-check': 'Checking', 'os-upgrade': 'Upgrading' };
+  const verb = { install: 'Installing', remove: 'Removing', update: 'Updating', 'os-check': 'Checking', 'os-upgrade': 'Upgrading', 'storage-scan': 'Measuring', 'archive-delete': 'Deleting' };
 </script>
 
 <ul class="jobs" aria-live="polite">

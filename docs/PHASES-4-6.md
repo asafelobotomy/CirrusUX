@@ -182,11 +182,17 @@ In four parts, each its own commit.
   removes packages or adds new ones. It can't be undone from the panel, and
   its confirmation says so; a restart that's needed afterwards is shown.
 
-### 6c. Storage and archive review
+### 6c. Storage and archive review — done
 
 - Folder sizes measured on request as a job and cached, with a note of when.
 - Archived app folders, pre-update backups and old system backups, with the
   only deletion in CirrusUX: two steps, the second showing exactly what goes.
+- Measured folders: the media roots, the apps folder, the backup folder, the
+  archive, and any `STORAGE_ROOTS` (`du -x`, with each disk's free space).
+- Deleting takes an entry's exact name: it must be in the archive the server
+  last reported (gateway and helper both check), the owner reviews it, then
+  types it. Only names directly inside the archive or backup folders, of the
+  kinds CirrusUX makes, can be deleted; a link goes as a link.
 
 ### 6d. Router power check and custom widgets
 

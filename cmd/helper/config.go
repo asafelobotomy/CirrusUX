@@ -66,6 +66,9 @@ type conf struct {
 	AppsUser         string
 	MediaRoots       []string
 	AppsBind         string // publish apps' ports on this address only
+	// StorageRoots are extra folders the Storage page measures, besides
+	// the apps, media, backup and archive folders.
+	StorageRoots []string
 }
 
 // firewallCheck passes when the chain's rules contain Pattern. Chain is an
@@ -121,6 +124,16 @@ var keys = map[string]func(c *conf, v string) error{
 			return fmt.Errorf("an IP address")
 		}
 		c.AppsBind = v
+		return nil
+	},
+	"STORAGE_ROOTS": func(c *conf, v string) error {
+		for _, f := range strings.Fields(v) {
+			var p string
+			if err := path(func(*conf) *string { return &p })(c, f); err != nil {
+				return err
+			}
+			c.StorageRoots = append(c.StorageRoots, p)
+		}
 		return nil
 	},
 	"MEDIA_ROOTS": func(c *conf, v string) error {
@@ -255,5 +268,6 @@ func (c conf) features() helperapi.Features {
 	add(c.EgressReport != "", helperapi.ModEgress)
 	add(c.ContainerRuntime != "" && c.AppsDir != "" && c.AppsUser != "", helperapi.ModApps)
 	add(hasApt(), helperapi.ModOS)
+	add(len(c.places().Roots) > 0, helperapi.ModStorage)
 	return f
 }

@@ -8,6 +8,7 @@ import (
 
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/osupdate"
+	"cirrusux/internal/storage"
 )
 
 type Snapshot struct {
@@ -34,6 +35,8 @@ type Snapshot struct {
 	AppsHost *helperapi.AppsInfo `json:"appsHost,omitempty"`
 	// OSUpdates is the last OS package check (os module).
 	OSUpdates *osupdate.Result `json:"osUpdates,omitempty"`
+	// Storage is the last measurement and the archive (storage module).
+	Storage *storage.Result `json:"storage,omitempty"`
 	// Problems collecting individual sections; the rest of the snapshot is
 	// still valid.
 	Errors []string `json:"errors,omitempty"`
@@ -115,7 +118,7 @@ type App struct {
 // Job is an app-store install or removal, running or recent.
 type Job struct {
 	ID       string     `json:"id"`
-	Action   string     `json:"action"` // install, remove, update, os-check, os-upgrade
+	Action   string     `json:"action"` // install, remove, update, os-check, os-upgrade, storage-scan, archive-delete
 	App      string     `json:"app"`
 	Name     string     `json:"name"`
 	State    string     `json:"state"` // running, done, failed

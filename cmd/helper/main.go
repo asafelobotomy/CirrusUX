@@ -39,6 +39,10 @@ func main() {
 		// started by systemd-run for a checked job; not in sudoers
 	} else if len(os.Args) == 4 && os.Args[1] == helperapi.CmdOSRun && (os.Args[2] == "check" || os.Args[2] == "upgrade") && jobRe.MatchString(os.Args[3]) {
 		// started by systemd-run; not in sudoers
+	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdArchiveDelete && entryRe.MatchString(os.Args[2]) {
+		// an archive entry's name, checked again before anything goes
+	} else if len(os.Args) == 5 && os.Args[1] == helperapi.CmdStorageRun && jobRe.MatchString(os.Args[3]) && entryRe.MatchString(os.Args[4]) {
+		// started by systemd-run; not in sudoers
 	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdJournal && unitRe.MatchString(os.Args[2]) {
 		// a CirrusUX unit, checked by pattern
 	} else if len(os.Args) != 2 {
@@ -111,6 +115,18 @@ func main() {
 	case helperapi.CmdOSRun:
 		need(helperapi.ModOS)
 		out, err = osRun(os.Args[2], os.Args[3])
+	case helperapi.CmdStorageScan:
+		need(helperapi.ModStorage)
+		out, err = startJob(ctx, "scan", "-")
+	case helperapi.CmdArchiveDelete:
+		need(helperapi.ModStorage)
+		if _, ok := archiveEntry(c, os.Args[2]); !ok {
+			fail("%s: %q isn't in the archive", sub, os.Args[2])
+		}
+		out, err = startJob(ctx, "delete", os.Args[2])
+	case helperapi.CmdStorageRun:
+		need(helperapi.ModStorage)
+		out, err = storageRun(c, os.Args[2], os.Args[3], os.Args[4])
 	case helperapi.CmdJournal:
 		out, err = command(ctx, "journalctl", "-u", os.Args[2], "-n", "300", "-o", "short-iso", "--no-pager")
 	case helperapi.CmdEgressReport:
@@ -222,6 +238,9 @@ var jobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
 
 // unitRe: the journal command reads only CirrusUX's own units, and app
 // units the app store made (cirrusux-<app>.service).
+// entryRe: an archive entry's name, or "-" for none.
+var entryRe = regexp.MustCompile(`^(-|[A-Za-z0-9][A-Za-z0-9._-]{0,200})$`)
+
 var unitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
 
 var bannedRe = regexp.MustCompile(`Currently banned:\s*(\d+)`)

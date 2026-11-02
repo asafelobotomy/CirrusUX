@@ -21,6 +21,7 @@ import (
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/osupdate"
 	"cirrusux/internal/snapshot"
+	"cirrusux/internal/storage"
 )
 
 // Collector gathers one snapshot. Every source is read locally: files,
@@ -144,8 +145,11 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 			}
 		}
 	}
-	if has(helperapi.ModApps) || has(helperapi.ModOS) {
+	if has(helperapi.ModApps) || has(helperapi.ModOS) || has(helperapi.ModStorage) {
 		s.Jobs = recentJobs(now)
+	}
+	if has(helperapi.ModStorage) {
+		s.Storage = storage.Read(helperapi.StorageFile)
 	}
 	if has(helperapi.ModOS) {
 		s.OSUpdates = osupdate.Read(helperapi.OSUpdatesFile)

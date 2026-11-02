@@ -19,7 +19,7 @@ export const mode = $state({
   wake: true,
   assistant: { enabled: true, name: 'Assistant' },
   /** Modules the server has (sleep, stay-awake, backup, av, security, egress); demo has all. */
-  features: ['sleep', 'stay-awake', 'backup', 'av', 'security', 'egress', 'apps', 'os'] as string[],
+  features: ['sleep', 'stay-awake', 'backup', 'av', 'security', 'egress', 'apps', 'os', 'storage'] as string[],
   /** The gateway's version, e.g. "0.1.0 (a1b2c3d)". */
   version: '',
   /** Showing answers the service worker saved, because the gateway is out of reach. */

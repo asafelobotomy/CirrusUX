@@ -9,6 +9,17 @@ gets a minor version.
 
 ### Added
 
+- The Storage page (Phase 6c): "Measure now" sizes the media, apps, backup
+  and archive folders (and any `STORAGE_ROOTS`) as a job, with each disk's
+  free space; the result is kept. The Storage widget shows it.
+- Archive review: removed apps' folders, backups taken before updates and
+  system backups, each with its size and date. Deleting one is the only
+  deletion in CirrusUX and takes two steps: a review of exactly what goes,
+  then typing its name. The gateway and the helper both check the name is
+  in the archive the server last reported.
+- Sudoers: `storage-scan` (read) and `archive-delete *` (action; the helper
+  checks the name).
+
 - OS updates, on request (Phase 6b): "Check now" refreshes the package
   lists and lists what's upgradable (security updates marked); "Install
   updates" runs `apt-get upgrade`, keeping changed config files and never
@@ -41,6 +52,7 @@ gets a minor version.
 ### Fixed
 
 - A finished update's status said the app was removed.
+- Confirmations for actions with no undo no longer mention an undo command.
 
 ### Changed
 

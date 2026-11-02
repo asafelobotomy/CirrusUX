@@ -5,7 +5,7 @@ import { live } from './state/live.svelte';
 import { power, type PowerState } from './state/power.svelte';
 import { settings } from './state/settings.svelte';
 import { boards, migrateBoards } from './state/layout.svelte';
-import { runningJob, store, type AppsHost } from './state/store.svelte';
+import { runningJob, store, type AppsHost, type ArchiveEntry, type StorageResult } from './state/store.svelte';
 import { toast } from './state/ui.svelte';
 import { fmtTime, useRealClock } from './time.svelte';
 import { setPersistence } from './demo/store';
@@ -32,8 +32,9 @@ interface Snap {
   timeline: { from: string; to?: string; state: 'awake' | 'asleep'; reason?: string }[];
   errors?: string[];
   apps?: { id: string; name: string; tag: string; digest?: string; previousTag?: string; previousDigest?: string; runtime: string; mainPort: number; https?: boolean; installed: string }[];
+  storage?: { measured: string; roots: StorageResult['roots']; archive: (Omit<ArchiveEntry, 'modified'> & { modified: string })[] };
   osUpdates?: { checked: string; packages: { name: string; from: string; to: string; security?: boolean }[]; rebootRequired?: boolean; upgraded?: string; upgradedCount?: number };
-  jobs?: { id: string; action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
+  jobs?: { id: string; action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
   appsHost?: AppsHost;
 }
 
@@ -101,6 +102,7 @@ function apply(st: StateResp): void {
   store.installed = (s.apps ?? []).map((a) => ({ ...a, installed: new Date(a.installed) }));
   store.jobs = (s.jobs ?? []).map((j) => ({ ...j, started: new Date(j.started), finished: d(j.finished) }));
   store.host = s.appsHost ?? null;
+  store.storage = s.storage ? { ...s.storage, measured: new Date(s.storage.measured), archive: (s.storage.archive ?? []).map((e) => ({ ...e, modified: new Date(e.modified) })) } : null;
   store.os = s.osUpdates ? { ...s.osUpdates, checked: new Date(s.osUpdates.checked), upgraded: d(s.osUpdates.upgraded) } : null;
 }
 

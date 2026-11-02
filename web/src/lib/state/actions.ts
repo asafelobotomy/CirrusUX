@@ -10,7 +10,7 @@ import { api, mode, sleeps } from '../api.svelte';
 import { loadChangelog, refreshSoon } from '../sync.svelte';
 import { toast } from './ui.svelte';
 import { cleanOptions, type AppOptions, type CatalogueApp } from '../catalogue';
-import { demoJob, findApp, store } from './store.svelte';
+import { demoJob, findApp, store, type ArchiveEntry } from './store.svelte';
 
 
 type Opts = { source?: 'assistant' };
@@ -219,6 +219,43 @@ export function confirmUpdate(app: CatalogueApp, from: string, tag: string, dige
   });
 }
 
+// ---- storage and the archive (PHASES-4-6 §6c) ----
+
+/** Measures the folders and lists the archive: a job, since it reads everything. */
+export async function measureStorage(): Promise<void> {
+  if (offline()) return;
+  if (!mode.live) {
+    const at = demoOSJob('storage-scan', ['Measuring folders (it takes a while on a big disk)'], 'Measured 2 folder(s); 3 item(s) in the archive');
+    setTimeout(() => store.storage && (store.storage.measured = now()), at);
+    return;
+  }
+  await sendAction({ action: 'storage_scan' }, 'Measured the storage', true);
+  refreshSoon();
+}
+
+/** The second step of deleting from the archive: type its name. The first
+ *  step, the review of exactly what goes, is on the Storage page. */
+export function confirmArchiveDelete(e: ArchiveEntry, what: string): void {
+  if (offline()) return;
+  ask({
+    title: `Delete ${what}?`,
+    body: `${e.name} goes for good: it can't be undone, and nothing else in CirrusUX deletes anything.${d3()}`,
+    command: `cirrusux-helper archive-delete ${e.name}`,
+    confirmLabel: 'Delete for good',
+    danger: true,
+    typed: e.name,
+    changelog: `Deleted ${e.name} from the archive`,
+    run: () => {
+      if (!mode.live) {
+        const at = demoOSJob('archive-delete', [`Deleting ${e.name}`], `${e.name} is deleted`);
+        setTimeout(() => store.storage && (store.storage.archive = store.storage.archive.filter((x) => x.name !== e.name)), at);
+        return;
+      }
+      void sendAction({ action: 'archive_delete', args: { name: e.name, confirm: e.name } }, `Deleted ${e.name} from the archive`).then(() => refreshSoon());
+    },
+  });
+}
+
 // ---- OS updates (PHASES-4-6 §6b) ----
 
 /** Refreshes the package lists and lists what's upgradable: a job on the server. */
@@ -265,8 +302,8 @@ export function confirmOSUpgrade(count: number): void {
   });
 }
 
-function demoOSJob(action: 'os-check' | 'os-upgrade', steps: string[], done: string): number {
-  const job = { id: Math.random().toString(16).slice(2, 10), action, app: 'os', name: 'Operating system', state: 'running' as const, step: steps[0], started: now(), finished: null };
+function demoOSJob(action: 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete', steps: string[], done: string): number {
+  const job = { id: Math.random().toString(16).slice(2, 10), action, app: action.startsWith('os') ? 'os' : 'storage', name: action.startsWith('os') ? 'Operating system' : 'Storage', state: 'running' as const, step: steps[0], started: now(), finished: null };
   store.jobs.unshift(job);
   steps.forEach((s, i) => setTimeout(() => (store.jobs.find((j) => j.id === job.id)!.step = s), i * 1000));
   const end = steps.length * 1000;

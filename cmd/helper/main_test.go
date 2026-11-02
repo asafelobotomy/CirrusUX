@@ -141,7 +141,7 @@ func TestShippedConfigs(t *testing.T) {
 		t.Skip("no cloud64 profile")
 	}
 	c, err := loadConf(p)
-	if err != nil || len(c.features().Modules) != 6 {
+	if err != nil || len(c.features().Modules) != 7 {
 		t.Errorf("cloud64: %v %v", c.features(), err)
 	}
 }
@@ -211,5 +211,23 @@ func TestAppsConfig(t *testing.T) {
 		if _, err := loadConf(writeConf(t, bad)); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+func TestPlaces(t *testing.T) {
+	c, err := loadConf(writeConf(t, "APPS_DIR=/srv/cirrusux/apps\nMEDIA_ROOTS=/srv/media\nBACKUP_UNIT=b.service\nBACKUP_DIR=/srv/backups\nBACKUP_PREFIX=atlas-system-\nSTORAGE_ROOTS=/home\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.places()
+	var got []string
+	for _, r := range p.Roots {
+		got = append(got, r.Label+"="+r.Path)
+	}
+	if strings.Join(got, ",") != "Media=/srv/media,Apps=/srv/cirrusux/apps,Backups=/srv/backups,Archive=/srv/cirrusux/archive,Folder=/home" || p.BackupPrefix != "atlas-system-" {
+		t.Errorf("places = %v %+v", got, p)
+	}
+	if !entryRe.MatchString("navidrome-20261101-120000") || entryRe.MatchString("../etc") || entryRe.MatchString("a b") {
+		t.Error("entry names")
 	}
 }

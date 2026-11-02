@@ -16,6 +16,7 @@ import (
 
 	"cirrusux/internal/catalogue"
 	"cirrusux/internal/snapshot"
+	"cirrusux/internal/storage"
 )
 
 // Phase 2 actions. The gateway never connects to the server: the agent asks for
@@ -109,6 +110,17 @@ var actionSpecs = map[string]actionSpec{
 	},
 	"os_upgrade": {
 		label: func(map[string]string) string { return "Started installing OS package updates" },
+	},
+	// Storage (Phase 6c): measuring reads; deleting from the archive is the
+	// only deletion in CirrusUX. It has no undo, and it takes the entry's
+	// name twice: once picked, once typed.
+	"storage_scan": {
+		label:    func(map[string]string) string { return "Measured the storage" },
+		readOnly: true,
+	},
+	"archive_delete": {
+		label: func(a map[string]string) string { return "Deleted " + a["name"] + " from the archive" },
+		check: checkArchiveDelete,
 	},
 	// Logs (Phase 6b): one recent window, never followed.
 	"logs": {
@@ -216,6 +228,16 @@ func (s *Server) previewApp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+func checkArchiveDelete(a map[string]string, snap *snapshot.Snapshot) error {
+	if snap == nil || snap.Storage == nil || !slices.ContainsFunc(snap.Storage.Archive, func(e storage.Entry) bool { return e.Name == a["name"] }) {
+		return fmt.Errorf("%q isn't in the archive the server last reported", a["name"])
+	}
+	if a["confirm"] != a["name"] {
+		return fmt.Errorf("type the name exactly to confirm")
+	}
+	return nil
+}
+
 var logUnitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
 
 // checkLogSource accepts a container the agent reported, or one of
@@ -259,7 +281,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 		return q, spec, fmt.Errorf("unknown action %q", q.Action)
 	}
 	clean := ActionReq{Action: q.Action}
-	for _, k := range []string{"minutes", "name", "app", "options", "tag", "digest", "source", "lines"} {
+	for _, k := range []string{"minutes", "name", "app", "options", "tag", "digest", "source", "lines", "confirm"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}

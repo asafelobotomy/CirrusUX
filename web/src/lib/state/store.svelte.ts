@@ -23,7 +23,7 @@ export interface InstalledApp {
 
 export interface Job {
   id: string;
-  action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade';
+  action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete';
   app: string;
   name: string;
   state: 'running' | 'done' | 'failed';
@@ -50,11 +50,29 @@ export const store = $state({
   host: null as AppsHost | null,
   /** The app whose page is open. */
   open: null as string | null,
+  /** The last measurement and the archive, from the server (storage module). */
+  storage: null as StorageResult | null,
   /** The last OS package check, from the server (os module). */
   os: null as OSUpdates | null,
   /** The last update check (gateway, on request). */
   updates: { checked: null as Date | null, apps: [] as AppUpdate[] },
 });
+
+/** One measurement (storage.Result). */
+export interface StorageResult {
+  measured: Date;
+  roots: { path: string; label: string; bytes: number; diskSize: number; diskFree: number; children: { name: string; bytes: number }[] }[];
+  archive: ArchiveEntry[];
+}
+
+export interface ArchiveEntry {
+  name: string;
+  kind: 'removed-app' | 'pre-update' | 'backup';
+  app?: string;
+  tag?: string;
+  bytes: number;
+  modified: Date;
+}
 
 /** The last OS package check (osupdate.Result). */
 export interface OSUpdates {
@@ -113,8 +131,28 @@ export async function checkUpdates(): Promise<void> {
 export const pendingUpdates = () =>
   store.updates.apps.filter((u) => u.latest && store.installed.find((a) => a.id === u.app)?.tag === u.current);
 
-/** Demo mode starts with two apps installed. */
+/** Demo mode starts with two apps installed, and a measured disk. */
 export function startDemoStore(): void {
+  const GB = 1e9;
+  const day = (n: number) => new Date(now().getTime() - n * 86400_000);
+  store.storage = {
+    measured: day(1),
+    roots: [
+      {
+        path: '/srv/media', label: 'Media', bytes: 1308 * GB, diskSize: 1862 * GB, diskFree: 554 * GB,
+        children: [
+          { name: 'TV Shows', bytes: 857 * GB }, { name: 'Movies', bytes: 371 * GB }, { name: 'Music', bytes: 36 * GB },
+          { name: 'Audiobooks', bytes: 24 * GB }, { name: 'Other video', bytes: 9.5 * GB }, { name: 'Books', bytes: 0.27 * GB },
+        ],
+      },
+      { path: '/srv/cirrusux/apps', label: 'Apps', bytes: 3.4 * GB, diskSize: 240 * GB, diskFree: 181 * GB, children: [{ name: 'jellyfin', bytes: 3.1 * GB }, { name: 'navidrome', bytes: 0.3 * GB }] },
+    ],
+    archive: [
+      { name: 'jellyfin-before-12.3.20261023-013714-20261026-210000', kind: 'pre-update', app: 'jellyfin', tag: '12.3.20261023-013714', bytes: 1.4 * GB, modified: day(7) },
+      { name: 'kavita-20261020-181500', kind: 'removed-app', app: 'kavita', bytes: 0.2 * GB, modified: day(13) },
+      { name: 'homeserver-system-2026-10-30_0935.tar.zst', kind: 'backup', bytes: 2.3 * GB, modified: day(3) },
+    ],
+  };
   store.catalogue = demoCatalogue;
   store.host = { runtime: 'podman', appsDir: '/srv/cirrusux/apps', mediaRoots: ['/srv/media'], tz: 'Europe/London' };
   store.installed = ['jellyfin', 'navidrome'].map((id) => {

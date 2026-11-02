@@ -1,5 +1,6 @@
 <script lang="ts">
   import { mode } from '../api.svelte';
+  import { store } from '../state/store.svelte';
   import Meter from '../components/Meter.svelte';
   import Badge from '../components/Badge.svelte';
   import { live } from '../state/live.svelte';
@@ -7,7 +8,13 @@
 
   const fmt = (gb: number) => (gb >= 1000 ? `${(gb / 1000).toFixed(1)} TB` : gb >= 1 ? `${Math.round(gb)} GB` : `${Math.round(gb * 1000)} MB`);
   const disk = $derived(live.disk);
-  const max = $derived(Math.max(1, ...live.folders.map((f) => f.gb)));
+  // The last measurement's biggest folders (Storage page), media first.
+  const folders = $derived.by(() => {
+    const roots = store.storage?.roots ?? [];
+    const root = roots.find((x) => x.label === 'Media') ?? roots[0];
+    return root ? root.children.map((c) => ({ name: c.name, gb: c.bytes / 1e9 })) : mode.live ? [] : live.folders;
+  });
+  const max = $derived(Math.max(1, ...folders.map((f) => f.gb)));
 </script>
 
 {#if disk}
@@ -22,9 +29,9 @@
       {/if}
     </div>
     <Meter value={disk.usedGb} max={disk.totalGb} label="Disk used" tone={disk.usedGb / disk.totalGb > 0.85 ? 'warn' : 'accent'} />
-    {#if live.folders.length}
+    {#if folders.length}
       <ul class="folders">
-        {#each live.folders as f}
+        {#each folders as f}
           <li>
             <span class="n">{f.name}</span>
             <span class="bar"><span style="width: {(f.gb / max) * 100}%"></span></span>
@@ -33,7 +40,7 @@
         {/each}
       </ul>
     {:else}
-      <p class="faint small">Sizes per folder come later. They're measured rarely, as scanning a large disk takes a while.</p>
+      <p class="faint small">Folder sizes come from the Storage page's “Measure now”: measuring reads every file, so it runs only when you ask.</p>
     {/if}
   </div>
 {:else}

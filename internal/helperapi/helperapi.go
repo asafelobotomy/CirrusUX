@@ -34,13 +34,21 @@ const (
 	CmdOSRun     = "os-run" // the job itself; systemd starts it, never sudo
 	// CmdJournal prints the recent journal of one CirrusUX unit.
 	CmdJournal = "journal"
+	// Storage (Phase 6c): measuring is a job; deleting takes the exact
+	// name of an archive entry and is the only deletion in CirrusUX.
+	CmdStorageScan   = "storage-scan"
+	CmdArchiveDelete = "archive-delete"
+	CmdStorageRun    = "storage-run" // the jobs themselves; never sudo
 )
 
 var Commands = []string{
 	CmdFeatures, CmdAppsInfo, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
-	CmdOSCheck, CmdOSUpgrade, CmdJournal,
+	CmdOSCheck, CmdOSUpgrade, CmdJournal, CmdStorageScan, CmdArchiveDelete,
 }
+
+// StorageFile holds the last measurement and the archive list.
+const StorageFile = "/var/lib/cirrusux/storage.json"
 
 // OSUpdatesFile holds the last OS update check, readable by the agent.
 const OSUpdatesFile = "/var/lib/cirrusux/os-updates.json"
@@ -70,6 +78,7 @@ const (
 	ModEgress    = "egress"     // the outbound-traffic report
 	ModApps      = "apps"       // the app store: a container runtime and an apps folder
 	ModOS        = "os"         // Debian package updates, on request
+	ModStorage   = "storage"    // folder sizes and the archive
 )
 
 // Features is what `features` prints.

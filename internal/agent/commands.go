@@ -163,6 +163,10 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		return helper(helperapi.CmdBackupRun)
 	case "egress_report":
 		return helper(helperapi.CmdEgressReport)
+	case "storage_scan":
+		return helper(helperapi.CmdStorageScan)
+	case "archive_delete":
+		return helper(helperapi.CmdArchiveDelete, c.Args["name"])
 	case "os_check":
 		return helper(helperapi.CmdOSCheck)
 	case "os_upgrade":

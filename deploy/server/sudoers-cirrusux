@@ -1,7 +1,7 @@
 # /etc/sudoers.d/cirrusux on the server (mode 440; check with `visudo -cf`).
 # The agent may run only these helper command lines as root, exactly as
-# written. The one wildcard, journal's unit name, is checked again by the
-# helper against cirrusux-<name>.service.
+# written. The wildcards are checked again by the helper: journal's unit
+# against cirrusux-<name>.service, archive-delete's name against the archive.
 
 Defaults:cirrusux !lecture, !requiretty, env_reset
 
@@ -9,6 +9,7 @@ Defaults:cirrusux !lecture, !requiretty, env_reset
 Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper features, \
                          /usr/local/sbin/cirrusux-helper apps-info, \
                          /usr/local/sbin/cirrusux-helper journal *, \
+                         /usr/local/sbin/cirrusux-helper storage-scan, \
                          /usr/local/sbin/cirrusux-helper idle-status, \
                          /usr/local/sbin/cirrusux-helper idle-log, \
                          /usr/local/sbin/cirrusux-helper backup-list, \
@@ -27,6 +28,7 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
                         /usr/local/sbin/cirrusux-helper backup-run, \
                         /usr/local/sbin/cirrusux-helper app-job, \
                         /usr/local/sbin/cirrusux-helper os-check, \
-                        /usr/local/sbin/cirrusux-helper os-upgrade
+                        /usr/local/sbin/cirrusux-helper os-upgrade, \
+                        /usr/local/sbin/cirrusux-helper archive-delete *
 
 cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT

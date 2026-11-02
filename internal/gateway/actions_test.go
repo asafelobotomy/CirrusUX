@@ -11,6 +11,7 @@ import (
 	"cirrusux/internal/assistant"
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/snapshot"
+	"cirrusux/internal/storage"
 )
 
 var actor = map[string]string{"Tailscale-User-Login": "owner@example.com", "X-Cirrus-Request": "1"}
@@ -271,5 +272,31 @@ func TestOSAndLogActions(t *testing.T) {
 	}
 	if !actionSpecs["os_check"].readOnly || !actionSpecs["logs"].readOnly || actionSpecs["os_upgrade"].readOnly || actionSpecs["os_upgrade"].undo != nil {
 		t.Error("audit and undo flags")
+	}
+}
+
+// Deleting from the archive needs the entry the server reported, and its
+// name typed again.
+func TestArchiveDelete(t *testing.T) {
+	snap := awakeSnap()
+	del := func(name, confirm string) error {
+		_, _, err := ActionReq{Action: "archive_delete", Args: map[string]string{"name": name, "confirm": confirm}}.Validate(&snap)
+		return err
+	}
+	if del("navidrome-20261101-120000", "navidrome-20261101-120000") == nil {
+		t.Error("deleted with no archive reported")
+	}
+	snap.Storage = &storage.Result{Archive: []storage.Entry{{Name: "navidrome-20261101-120000", Kind: "removed-app"}}}
+	if del("navidrome-20261101-120000", "") == nil || del("navidrome-20261101-120000", "navidrome") == nil {
+		t.Error("deleted without the name typed exactly")
+	}
+	if del("../../etc", "../../etc") == nil {
+		t.Error("deleted something not in the archive")
+	}
+	if err := del("navidrome-20261101-120000", "navidrome-20261101-120000"); err != nil {
+		t.Errorf("proper delete refused: %v", err)
+	}
+	if actionSpecs["archive_delete"].undo != nil || actionSpecs["archive_delete"].readOnly {
+		t.Error("a delete must be audited and has no undo")
 	}
 }

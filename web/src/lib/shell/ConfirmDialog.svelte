@@ -45,7 +45,7 @@
         <pre>{c.preview.content}</pre>
       </details>
     {/if}
-    <p class="faint note">Logged to CHANGELOG with the time, who and the undo command.</p>
+    <p class="faint note">Logged to CHANGELOG with the time and who{c.undo ? ', and the undo command' : ''}.{c.undo ? '' : ' There is no undo.'}</p>
 
     {#if c.typed}
       <label class="typed">
