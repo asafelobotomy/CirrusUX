@@ -169,14 +169,17 @@ func SealApp(source string, serial int64, expires time.Time, def []byte) ([]byte
 	if err := json.Compact(&compact, def); err != nil {
 		return nil, app, err
 	}
-	b, err := json.MarshalIndent(Envelope{Source: source, Serial: serial, Expires: expires.UTC(), App: compact.Bytes()}, "", "  ")
-	if err != nil {
+	var out bytes.Buffer
+	enc := json.NewEncoder(&out)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(Envelope{Source: source, Serial: serial, Expires: expires.UTC(), App: compact.Bytes()}); err != nil {
 		return nil, app, err
 	}
-	if len(b) > MaxApp {
+	if out.Len() > MaxApp {
 		return nil, app, fmt.Errorf("%s: envelope larger than %d bytes", app.ID, MaxApp)
 	}
-	return append(b, '\n'), app, nil
+	return out.Bytes(), app, nil
 }
 
 // strict decodes one JSON value, refusing unknown fields and trailing data.
