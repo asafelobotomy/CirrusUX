@@ -11,12 +11,23 @@ class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
         body = self.rfile.read(int(self.headers['Content-Length'])).decode()
+        path = self.path
+        # Asked as an HTTP proxy: the request names the router in full.
+        if path.startswith('http://'):
+            open(os.environ['T'] + '/proxied', 'a').write(path + '\n')
+            path = '/' + path.split('/', 3)[3]
         if self.headers.get('Authorization') != 'Basic ' + base64.b64encode(('admin:' + os.environ['PASS']).encode()).decode():
             self.send_response(401); self.send_header('WWW-Authenticate', 'Basic realm="router"'); self.end_headers(); return
-        if self.path != '/upnp/control/hosts' or 'GetSpecificHostEntry' not in self.headers.get('SoapAction', ''):
+        action = self.headers.get('SoapAction', '')
+        mac = body.split('<NewMACAddress>')[1].split('<')[0]
+        if path == '/upnp/control/hosts' and action.endswith('#X_AVM-DE_WakeOnLANByMACAddress'):
+            open(os.environ['T'] + '/woken', 'a').write(mac + '\n')
+            self.send_response(200); self.end_headers()
+            self.wfile.write(b'<u:X_AVM-DE_WakeOnLANByMACAddressResponse xmlns:u="urn:dslforum-org:service:Hosts:1"></u:X_AVM-DE_WakeOnLANByMACAddressResponse>')
+            return
+        if path != '/upnp/control/hosts' or 'GetSpecificHostEntry' not in action:
             self.send_response(500); self.end_headers(); return
         active = {'52:54:00:12:34:56': '1', '52:54:00:00:00:01': '0'}
-        mac = body.split('<NewMACAddress>')[1].split('<')[0]
         self.send_response(200 if mac in active else 500); self.end_headers()
         self.wfile.write(('<NewActive>%s</NewActive>' % active[mac] if mac in active else '<errorCode>714</errorCode><errorDescription>NoSuchEntryInArray</errorDescription>').encode())
 # Port 0: the kernel picks a free one, written where the test reads it.
@@ -27,7 +38,7 @@ PY
 # A password made now, so nothing else on the machine can contain it.
 # A quote and a backslash in it too: curl's config needs them escaped.
 PASS="pw\"q\\ $(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-export PASS
+export PASS T
 python3 -I $T/router.py $T/port & SRV=$!
 # Ready once it has a port: no fixed wait, which a busy machine can outrun.
 for _ in $(seq 100); do [ -s $T/port ] && break; sleep 0.1; done
@@ -59,3 +70,21 @@ for _ in 1 2 3 4 5; do run >/dev/null; done
 kill $PS
 grep -qF "${PASS##* }" $T/ps && fail "the password showed in the process list"
 echo "4 the password never shows in the process list"
+
+# The wake, under its own name.
+wake() { CIRRUS_ROUTER_ENV=$T/router.env $H/gateway/cirrusux-router-wake; }
+conf 52:54:00:12:34:56
+[ "$(wake)" = "wake sent" ] && grep -qx 52:54:00:12:34:56 $T/woken || fail "wake"
+sed -i "s/^ROUTER_PASSWORD=.*/ROUTER_PASSWORD=wrong/" $T/router.env
+wake >/dev/null 2>&1 && fail "a wake without the password reported sent"
+echo "5 cirrusux-router-wake asks the router to wake the server"
+
+# Through a proxy: the stand-in router is an HTTP proxy too.
+conf 52:54:00:12:34:56
+sed -i "s|^ROUTER_URL=.*|ROUTER_URL=http://router.invalid:49000|" $T/router.env
+echo "ROUTER_PROXY=http://127.0.0.1:$PORT" >> $T/router.env
+[ "$(run)" = online ] && [ "$(wake)" = "wake sent" ] || fail "through the proxy"
+grep -qx 'http://router.invalid:49000/upnp/control/hosts' $T/proxied || fail "the proxy wasn't used"
+sed -i "s|^ROUTER_PROXY=.*|ROUTER_PROXY=ftp://127.0.0.1:1|" $T/router.env
+run >/dev/null 2>&1 && fail "a proxy that isn't SOCKS5 or HTTP accepted"
+echo "6 ROUTER_PROXY: both calls go through it; other schemes refused"

@@ -49,7 +49,7 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `CIRRUS_WAKE` | `none` (`command` if a command is set) | Split only: `wol`, `command` or `none` |
 | `CIRRUS_WAKE_MAC` | — | `wol`: the server's MAC address |
 | `CIRRUS_WAKE_BROADCAST` | `255.255.255.255:9` | `wol`: where the magic packet goes |
-| `CIRRUS_WAKE_CMD` | — | `command`: argv to run, no shell |
+| `CIRRUS_WAKE_CMD` | — | `command`: argv to run, no shell. For a wake through a TR-064 router (when the gateway isn't on the server's LAN): `sudo -n /usr/local/sbin/cirrusux-router-wake` |
 | `CIRRUS_TAILSCALE_PEER` | the server name | Split only: the server's Tailscale name, for awake/asleep. `-` to rely on the agent's reports only |
 | `CIRRUS_POWER_CHECK_CMD` | — | Split only: a command that prints `online` or `offline` for the server, e.g. `sudo -n /usr/local/sbin/cirrusux-router-check` (TR-064). A second opinion beside Tailscale, the fallback when Tailscale can't be read, and a wake's "network up" step |
 | `CIRRUS_POWER_CHECK_SECS` | `60` | How often the power check runs |
@@ -186,7 +186,8 @@ settings above. `cirrusux-idle` reads it every minute, and the agent reads
 
 ## router.env
 
-Read only by `cirrusux-router-check` (split setup, optional), as root. You
+Read only by `cirrusux-router-check` and `cirrusux-router-wake` (split
+setup, optional), as root. You
 write it yourself, owner root and mode 600; the script refuses it otherwise.
 The panel never sees it.
 
@@ -196,3 +197,7 @@ The panel never sees it.
 | `ROUTER_USER` | — (required) | A router user allowed to read the host list |
 | `ROUTER_PASSWORD` | — (required) | That user's password |
 | `SERVER_MAC` | — (required) | The server's MAC address, as the router lists it |
+| `ROUTER_PROXY` | — (direct) | Reach the router through a proxy: `socks5h://localhost:1055` (a userspace-mode Tailscale's SOCKS5 server, or a wireproxy tunnel), `socks5://…` or `http://…`. Given to curl on stdin, so a password in it stays out of the process list |
+
+`cirrusux-router-wake` (a symlink to `cirrusux-router-check`) reads the same
+file and asks the router to send the server a magic packet.

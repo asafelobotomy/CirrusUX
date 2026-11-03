@@ -222,21 +222,33 @@ to install CirrusUX as an app.
 - `CIRRUS_WAKE=wol` sends a magic packet from the gateway. The gateway must
   be on the server's LAN, and Wake-on-LAN must be on in the server's network
   card (and its BIOS).
-- `CIRRUS_WAKE=command` runs a command of your own, e.g. a script that asks
-  the router to wake it. Run anything that needs a secret through a small
-  root wrapper and one sudoers rule, so the gateway never sees the secret.
+- `CIRRUS_WAKE=command` runs a command, with no shell. Run anything that
+  needs a secret through a small root wrapper and one sudoers rule, so the
+  gateway never sees the secret. For a TR-064 router, use
+  `cirrusux-router-wake` (below): the router sends the magic packet, so the
+  gateway doesn't need to be on the server's LAN.
 
-## The router check (split setup, optional)
+## The router check and wake (split setup, optional)
 
 `deploy/gateway/cirrusux-router-check` asks a TR-064 router (a FRITZ!Box,
-for one) whether the server is on the network. Install it like this:
+for one) whether the server is on the network; under the name
+`cirrusux-router-wake` it asks the router to wake the server. Install them
+like this:
 
-1. `sudo install -m 755 cirrusux-router-check /usr/local/sbin/`
+1. `sudo install -m 755 cirrusux-router-check /usr/local/sbin/` and
+   `sudo ln -s cirrusux-router-check /usr/local/sbin/cirrusux-router-wake`
 2. Put `ROUTER_URL`, `ROUTER_USER`, `ROUTER_PASSWORD` and `SERVER_MAC` in
    `/etc/cirrusux/router.env` yourself (root:root 600). The panel never
-   handles the password.
-3. Add its sudoers rule, `sudoers-cirrusux-router-check`, and set
-   `CIRRUS_POWER_CHECK_CMD=sudo -n /usr/local/sbin/cirrusux-router-check`.
+   handles the password. If the gateway reaches the router only through a
+   proxy (a userspace-mode Tailscale's SOCKS5 server, or a wireproxy
+   tunnel), add `ROUTER_PROXY=socks5h://localhost:1055`.
+3. Add the sudoers rules, `sudoers-cirrusux-router-check` and
+   `sudoers-cirrusux-router-wake` (check each with `sudo visudo -cf`), and
+   set `CIRRUS_POWER_CHECK_CMD=sudo -n /usr/local/sbin/cirrusux-router-check`,
+   `CIRRUS_WAKE=command` and
+   `CIRRUS_WAKE_CMD=sudo -n /usr/local/sbin/cirrusux-router-wake`.
+4. Test the wake while the server sleeps:
+   `sudo /usr/local/sbin/cirrusux-router-wake` prints `wake sent`.
 
 ## The assistant and the daily digest
 
