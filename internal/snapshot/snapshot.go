@@ -109,12 +109,16 @@ type App struct {
 	Tag    string `json:"tag"`
 	Digest string `json:"digest,omitempty"`
 	// The version before the last update, for rolling back.
-	PreviousTag    string    `json:"previousTag,omitempty"`
-	PreviousDigest string    `json:"previousDigest,omitempty"`
-	Runtime        string    `json:"runtime"`
-	MainPort       int       `json:"mainPort"`
-	HTTPS          bool      `json:"https,omitempty"`
-	Installed      time.Time `json:"installed"`
+	PreviousTag    string `json:"previousTag,omitempty"`
+	PreviousDigest string `json:"previousDigest,omitempty"`
+	Runtime        string `json:"runtime"`
+	// Source is the CirrusStore source it came from ("" for the built-in
+	// catalogue), and Serial its definition's.
+	Source    string    `json:"source,omitempty"`
+	Serial    int64     `json:"serial,omitempty"`
+	MainPort  int       `json:"mainPort"`
+	HTTPS     bool      `json:"https,omitempty"`
+	Installed time.Time `json:"installed"`
 }
 
 // Job is an app-store install or removal, running or recent.

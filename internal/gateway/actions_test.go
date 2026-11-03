@@ -198,7 +198,8 @@ func TestAppActions(t *testing.T) {
 		t.Errorf("install: %v", err)
 	}
 	for name, req := range map[string]ActionReq{
-		"unknown app":          {Action: "app_install", Args: map[string]string{"app": "bitcoin-miner"}},
+		"bad app id":           {Action: "app_install", Args: map[string]string{"app": "../etc"}},
+		"bad source":           {Action: "app_install", Args: map[string]string{"app": "navidrome", "store": "../x"}},
 		"unknown option field": {Action: "app_install", Args: map[string]string{"app": "navidrome", "options": `{"volumes":["/:/host"]}`}},
 		"remove not installed": {Action: "app_remove", Args: map[string]string{"app": "navidrome"}},
 		"options carry a key":  {Action: "app_install", Args: map[string]string{"app": "navidrome", "options": `{}, "action":"remove"`}},
@@ -216,7 +217,12 @@ func TestAppActions(t *testing.T) {
 		t.Errorf("remove: %v", err)
 	}
 
-	_, h := newTestServer(t)
+	s, h := newTestServer(t)
+	snap.Apps = nil
+	_ = s.store.SaveSnapshot(snap)
+	if w := do(h, "POST", "/api/actions", `{"action":"app_install","args":{"app":"bitcoin-miner"}}`, actor); w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "no app") {
+		t.Errorf("unknown app: %d %s", w.Code, w.Body)
+	}
 	w := do(h, "GET", "/api/catalogue", "", owner)
 	var apps []struct{ ID, Tag, Digest string }
 	_ = json.Unmarshal(w.Body.Bytes(), &apps)

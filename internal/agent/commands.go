@@ -18,6 +18,7 @@ import (
 	"cirrusux/internal/catalogue"
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/snapshot"
+	"cirrusux/internal/store"
 )
 
 // Phase 2: the agent asks the gateway for work over its own outbound
@@ -201,12 +202,24 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 // requestsDir is helperapi.RequestsDir; tests point it elsewhere.
 var requestsDir = helperapi.RequestsDir
 
-// writeRequest leaves an app-store request for the helper, which checks it
+// writeRequest leaves a CirrusStore request for the helper, which checks it
 // again in full: the agent can't pass free text to root on the command line.
 func writeRequest(c command) error {
 	req := appjob.Request{Job: c.ID, Action: strings.TrimPrefix(c.Action, "app_"), App: c.Args["app"]}
 	if req.Action == "update" {
 		req.Tag, req.Digest = c.Args["tag"], c.Args["digest"]
+	}
+	// The source and its signed definition go on as they came; the helper
+	// verifies the signature itself.
+	if req.Action != "remove" {
+		req.Source = c.Args["store"]
+		if signed := c.Args["signed"]; signed != "" {
+			var f store.Signed
+			if err := json.Unmarshal([]byte(signed), &f); err != nil {
+				return fmt.Errorf("app definition: %v", err)
+			}
+			req.Definition = &f
+		}
 	}
 	if opts := c.Args["options"]; opts != "" && req.Action == "install" {
 		o, err := catalogue.ParseOptions(opts)

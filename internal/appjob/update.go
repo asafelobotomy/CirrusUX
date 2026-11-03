@@ -13,16 +13,23 @@ import (
 // update moves an installed app to another version: back up its own
 // folders, start the new version, and if it doesn't answer, put the folders
 // and the previous version back by itself.
-func (e *Env) update(ctx context.Context, st *Status, app catalogue.App, tag, digest string) error {
+//
+// app is the definition to move to: the installed one with another pin, a
+// newer signed definition (from), or the previous one, to roll back.
+func (e *Env) update(ctx context.Context, st *Status, app catalogue.App, tag, digest string, from origin) error {
 	rec, err := e.record(app.ID)
 	if err != nil {
 		return err
 	}
-	prevDigest := rec.Digest
-	if prevDigest == "" && rec.Tag == app.Tag {
-		prevDigest = app.Digest // installed before records kept the digest
+	current, err := e.installedApp(rec)
+	if err != nil {
+		current = app // its definition is gone from the catalogue: the best guess
 	}
-	old, next := app.WithPin(rec.Tag, prevDigest), app.WithPin(tag, digest)
+	prevDigest := rec.Digest
+	if prevDigest == "" && rec.Tag == current.Tag {
+		prevDigest = current.Digest // installed before records kept the digest
+	}
+	old, next := current.WithPin(rec.Tag, prevDigest), app.WithPin(tag, digest)
 	oldPlan, err := catalogue.Resolve(old, rec.Options, e.Host)
 	if err != nil {
 		return err
@@ -42,7 +49,7 @@ func (e *Env) update(ctx context.Context, st *Status, app catalogue.App, tag, di
 	backup := filepath.Join(e.ArchiveDir, fmt.Sprintf("%s-before-%s-%s", app.ID, rec.Tag, e.Now().Format("20060102-150405")))
 	e.step(st, "Backing up "+app.Name+"'s settings and data", backup)
 	var saved []string
-	for _, v := range app.Volumes {
+	for _, v := range current.Volumes {
 		if v.Kind != catalogue.KindConfig && v.Kind != catalogue.KindData {
 			continue
 		}
@@ -102,7 +109,10 @@ func (e *Env) update(ctx context.Context, st *Status, app catalogue.App, tag, di
 		e.dropImage(ctx, app, d)
 	}
 	rec.PreviousTag, rec.PreviousDigest = rec.Tag, prevDigest
+	rec.PreviousSource, rec.PreviousSerial, rec.PreviousDefinition = rec.Source, rec.Serial, rec.Definition
 	rec.Tag, rec.Digest, rec.Updated = tag, digest, e.Now()
+	rec.Source, rec.Serial, rec.Definition = from.Source, from.Serial, from.Signed
+	rec.Name, rec.MainPort, rec.HTTPS = app.Name, hostPortOf(newPlan, app.MainPort()), app.MainPort().HTTPS
 	st.Detail = "backup in " + backup
 	return writeJSON(filepath.Join(e.RecordsDir, app.ID+".json"), rec, 0o644)
 }

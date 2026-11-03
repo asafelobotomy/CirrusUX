@@ -38,10 +38,12 @@ type Server struct {
 	queue     *Queue
 	// registry answers update checks; tests replace it.
 	registry *registry.Client
+	// storeClient fetches CirrusStore catalogues; tests replace it.
+	storeClient *http.Client
 }
 
 func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
-	s := &Server{cfg: cfg, store: store, power: power, web: web, queue: NewQueue(), registry: &registry.Client{}}
+	s := &Server{cfg: cfg, store: store, power: power, web: web, queue: NewQueue(), registry: &registry.Client{}, storeClient: newStoreClient()}
 	if cfg.TZ != nil {
 		zone = cfg.TZ
 	}
@@ -72,6 +74,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("PUT /api/wallpaper", s.putWallpaper)
 	api.HandleFunc("POST /api/assistant", s.askAssistant)
 	api.HandleFunc("GET /api/catalogue", s.getCatalogue)
+	api.HandleFunc("GET /api/store", s.getStore)
+	api.HandleFunc("POST /api/store/refresh", s.refreshStore)
 	api.HandleFunc("POST /api/apps/preview", s.previewApp)
 	api.HandleFunc("GET /api/updates", s.getUpdates)
 	api.HandleFunc("POST /api/updates/check", s.checkUpdates)
@@ -245,11 +249,6 @@ func (s *Server) record(e AuditEntry) {
 
 func (s *Server) changelog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.store.RecentAudit(100))
-}
-
-// getCatalogue lists the app store's apps: the built-in catalogue.
-func (s *Server) getCatalogue(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, catalogueApps)
 }
 
 func (s *Server) getUI(w http.ResponseWriter, r *http.Request) {

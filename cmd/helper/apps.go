@@ -42,8 +42,9 @@ func appEnv(c conf) (*appjob.Env, error) {
 		rt = appjob.Podman{Exec: appjob.RunCommand, UnitDir: "/etc/containers/systemd"}
 	}
 	archive := c.archiveDir()
+	sources, _ := storeSources(c)
 	return &appjob.Env{
-		Runtime: rt, Catalogue: cat, Now: time.Now,
+		Runtime: rt, Catalogue: cat, Sources: sources, Now: time.Now,
 		Host: catalogue.Host{
 			AppsDir: c.AppsDir, TZ: localZone(), UID: uid, GID: gid,
 			Groups: hostGroups("/etc/group"), MediaRoots: c.MediaRoots, BindAddress: c.AppsBind,

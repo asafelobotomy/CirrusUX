@@ -1,7 +1,8 @@
-// Package appjob installs and removes app-store apps (PHASES-4-6 §5b). It
+// Package appjob installs and removes CirrusStore apps (PHASES-4-6 §5b). It
 // runs as root inside the helper, as a background job: every request is
-// checked again here against the built-in catalogue, whatever the agent
-// sent, and each step is written to a status file the agent reports.
+// checked again here, whatever the agent sent: against the built-in
+// catalogue, or a signed definition verified against the sources root
+// trusts. Each step is written to a status file the agent reports.
 package appjob
 
 import (
@@ -17,6 +18,7 @@ import (
 
 	"cirrusux/internal/catalogue"
 	"cirrusux/internal/helperapi"
+	"cirrusux/internal/store"
 )
 
 // Request is what the agent asks for: one file per job.
@@ -29,6 +31,11 @@ type Request struct {
 	// image. Rolling back is an update to the previous version.
 	Tag    string `json:"tag,omitempty"`
 	Digest string `json:"digest,omitempty"`
+	// Source is the CirrusStore source the app comes from ("" or built-in
+	// for the built-in catalogue). Definition is its signed envelope, for an
+	// install or a definition update; built-in apps have none.
+	Source     string        `json:"source,omitempty"`
+	Definition *store.Signed `json:"definition,omitempty"`
 }
 
 // ParseRequest reads a request strictly: unknown fields and actions refused.
@@ -44,6 +51,15 @@ func ParseRequest(b []byte) (Request, error) {
 	}
 	if !helperapi.JobRe.MatchString(r.Job) {
 		return r, fmt.Errorf("bad job id %q", r.Job)
+	}
+	if !store.ValidName(r.App) {
+		return r, fmt.Errorf("bad app id %q", r.App)
+	}
+	if r.Source != "" && r.Source != store.BuiltIn && !store.ValidName(r.Source) {
+		return r, fmt.Errorf("bad source %q", r.Source)
+	}
+	if r.Definition != nil && (r.Source == "" || r.Source == store.BuiltIn || r.Action == "remove") {
+		return r, errors.New("a signed definition comes with an install or update from a CirrusStore source")
 	}
 	switch r.Action {
 	case "install", "remove":
@@ -89,6 +105,16 @@ type Record struct {
 	HTTPS          bool              `json:"https,omitempty"`
 	Options        catalogue.Options `json:"options"`
 	Installed      time.Time         `json:"installed"`
+	// Where the definition came from: Source "" is the built-in catalogue;
+	// otherwise Definition is the exact signed envelope installed, which
+	// updates, rollbacks and removal use from then on.
+	Source     string        `json:"source,omitempty"`
+	Serial     int64         `json:"serial,omitempty"`
+	Definition *store.Signed `json:"definition,omitempty"`
+	// The same for the version before the last update.
+	PreviousSource     string        `json:"previousSource,omitempty"`
+	PreviousSerial     int64         `json:"previousSerial,omitempty"`
+	PreviousDefinition *store.Signed `json:"previousDefinition,omitempty"`
 }
 
 // Runtime starts and stops an app on Docker or Podman.
@@ -110,7 +136,9 @@ type Env struct {
 	RecordsDir string         // installed apps
 	StatusDir  string         // job status files (readable by the agent)
 	Catalogue  []catalogue.App
-	Now        func() time.Time
+	// Sources are the CirrusStore sources root trusts, for signed apps.
+	Sources []store.Source
+	Now     func() time.Time
 	// PortFree reports whether nothing listens on the host port yet.
 	PortFree func(port int, proto string) bool
 	// Healthy checks the app's health URL once.
@@ -126,62 +154,74 @@ type Env struct {
 // runs it before starting the background job, so a bad request fails at
 // once with a clear error.
 func (e *Env) Check(r Request) (catalogue.App, error) {
-	app, ok := e.find(r.App)
-	if !ok {
-		return app, fmt.Errorf("no app %q in the catalogue", r.App)
+	app, _, err := e.check(r)
+	return app, err
+}
+
+func (e *Env) check(r Request) (catalogue.App, origin, error) {
+	app, o, err := e.resolve(r)
+	if err != nil {
+		return app, o, err
 	}
 	installed := e.installed(r.App)
 	switch r.Action {
 	case "install":
 		if installed {
-			return app, fmt.Errorf("%s is already installed", app.Name)
+			return app, o, fmt.Errorf("%s is already installed", app.Name)
 		}
 		p, err := catalogue.Resolve(app, r.Options, e.Host)
 		if err != nil {
-			return app, err
+			return app, o, err
 		}
 		for _, pm := range p.Ports {
 			if !e.PortFree(pm.Host, pm.Protocol) {
-				return app, fmt.Errorf("port %d/%s is already in use on the server", pm.Host, pm.Protocol)
+				return app, o, fmt.Errorf("port %d/%s is already in use on the server", pm.Host, pm.Protocol)
 			}
 		}
 		for _, m := range p.Mounts {
 			if m.ReadOnly || !strings.HasPrefix(m.Host, e.Host.AppsDir+"/") {
 				if fi, err := os.Stat(m.Host); err != nil || !fi.IsDir() {
-					return app, fmt.Errorf("the folder %s doesn't exist on the server", m.Host)
+					return app, o, fmt.Errorf("the folder %s doesn't exist on the server", m.Host)
 				}
 			}
 		}
 	case "remove", "update":
 		if !installed {
-			return app, fmt.Errorf("%s isn't installed from CirrusStore", app.Name)
+			return app, o, fmt.Errorf("%s isn't installed from CirrusStore", app.Name)
 		}
 		if !emptyOptions(r.Options) {
-			return app, fmt.Errorf("%s takes no options", r.Action)
+			return app, o, fmt.Errorf("%s takes no options", r.Action)
 		}
 		if r.Action == "update" {
 			rec, err := e.record(app.ID)
 			if err != nil {
-				return app, err
+				return app, o, err
 			}
-			if rec.Tag == r.Tag && (rec.Digest == "" || rec.Digest == r.Digest) {
-				return app, fmt.Errorf("%s is already at %s", app.Name, r.Tag)
+			if r.Definition != nil {
+				if app.Tag != r.Tag || app.Digest != r.Digest {
+					return app, o, fmt.Errorf("the definition pins %s, not %s", app.Tag, r.Tag)
+				}
+				if o.Source == rec.Source && o.Serial == rec.Serial {
+					return app, o, fmt.Errorf("%s already has that definition", app.Name)
+				}
+			} else if rec.Tag == r.Tag && (rec.Digest == "" || rec.Digest == r.Digest) {
+				return app, o, fmt.Errorf("%s is already at %s", app.Name, r.Tag)
 			}
 		}
 	}
-	return app, nil
+	return app, o, nil
 }
 
 // Run carries out a checked request, writing its status as it goes.
 func (e *Env) Run(ctx context.Context, r Request) error {
 	// One job per app at a time: a second one waits, then is checked
 	// against what the first left (removed, or already on that version).
-	if _, known := e.find(r.App); known { // a catalogue id: safe in a path
+	if store.ValidName(r.App) { // an app id: safe in a path
 		if unlock, err := e.lockApp(r.App); err == nil {
 			defer unlock()
 		}
 	}
-	app, err := e.Check(r)
+	app, o, err := e.check(r)
 	st := Status{Job: r.Job, Action: r.Action, App: r.App, Name: app.Name, State: "running", Started: e.Now()}
 	if err != nil {
 		return e.finish(&st, err)
@@ -190,12 +230,12 @@ func (e *Env) Run(ctx context.Context, r Request) error {
 	case "remove":
 		return e.finish(&st, e.remove(ctx, &st, app))
 	case "update":
-		return e.finish(&st, e.update(ctx, &st, app, r.Tag, r.Digest))
+		return e.finish(&st, e.update(ctx, &st, app, r.Tag, r.Digest, o))
 	}
-	return e.finish(&st, e.install(ctx, &st, app, r.Options))
+	return e.finish(&st, e.install(ctx, &st, app, r.Options, o))
 }
 
-func (e *Env) install(ctx context.Context, st *Status, app catalogue.App, o catalogue.Options) error {
+func (e *Env) install(ctx context.Context, st *Status, app catalogue.App, o catalogue.Options, from origin) error {
 	p, err := catalogue.Resolve(app, o, e.Host)
 	if err != nil {
 		return err
@@ -251,7 +291,8 @@ func (e *Env) install(ctx context.Context, st *Status, app catalogue.App, o cata
 	}
 
 	e.step(st, "Recording the install", "")
-	rec := Record{App: app.ID, Name: app.Name, Tag: app.Tag, Digest: app.Digest, Runtime: e.Runtime.Name(), MainPort: hostPortOf(p, app.MainPort()), HTTPS: app.MainPort().HTTPS, Options: o, Installed: e.Now()}
+	rec := Record{App: app.ID, Name: app.Name, Tag: app.Tag, Digest: app.Digest, Runtime: e.Runtime.Name(), MainPort: hostPortOf(p, app.MainPort()), HTTPS: app.MainPort().HTTPS, Options: o, Installed: e.Now(),
+		Source: from.Source, Serial: from.Serial, Definition: from.Signed}
 	return writeJSON(filepath.Join(e.RecordsDir, app.ID+".json"), rec, 0o644)
 }
 

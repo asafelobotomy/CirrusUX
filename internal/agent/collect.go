@@ -227,7 +227,7 @@ func (c *Collector) collectSleep(ctx context.Context, s *snapshot.Snapshot, errf
 func installedApps() []snapshot.App {
 	var apps []snapshot.App
 	for _, r := range appjob.Records(helperapi.AppRecordsDir) {
-		apps = append(apps, snapshot.App{ID: r.App, Name: r.Name, Tag: r.Tag, Digest: r.Digest, PreviousTag: r.PreviousTag, PreviousDigest: r.PreviousDigest, Runtime: r.Runtime, MainPort: r.MainPort, HTTPS: r.HTTPS, Installed: r.Installed})
+		apps = append(apps, snapshot.App{ID: r.App, Name: r.Name, Tag: r.Tag, Digest: r.Digest, PreviousTag: r.PreviousTag, PreviousDigest: r.PreviousDigest, Runtime: r.Runtime, MainPort: r.MainPort, HTTPS: r.HTTPS, Installed: r.Installed, Source: r.Source, Serial: r.Serial})
 	}
 	return apps
 }

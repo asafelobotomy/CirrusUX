@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -35,6 +36,11 @@ type AppUpdate struct {
 	Latest string `json:"latest,omitempty"`
 	Digest string `json:"digest,omitempty"`
 	Error  string `json:"error,omitempty"`
+	// Definition: the update is a newer signed definition from Source
+	// (new ports, settings or version), at Serial.
+	Definition bool   `json:"definition,omitempty"`
+	Source     string `json:"source,omitempty"`
+	Serial     int64  `json:"serial,omitempty"`
 }
 
 var checking sync.Mutex
@@ -65,14 +71,14 @@ func (s *Server) checkUpdates(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SaveUpdates(u); err != nil {
 		slog.Error("save updates", "err", err)
 	}
-	writeJSON(w, u)
+	writeJSON(w, s.withDefinitionUpdates(u, snap))
 }
 
 func (s *Server) checkApp(ctx context.Context, a snapshot.App) AppUpdate {
 	res := AppUpdate{App: a.ID, Name: a.Name, Current: a.Tag}
-	cat, ok := findApp(a.ID)
+	cat, ok := s.findStoreApp("", a.ID)
 	if !ok {
-		res.Error = "not in this version's catalogue"
+		res.Error = "not in CirrusStore's catalogue"
 		return res
 	}
 	tags, err := s.registry.Tags(ctx, cat.Image)
@@ -90,11 +96,35 @@ func (s *Server) checkApp(ctx context.Context, a snapshot.App) AppUpdate {
 }
 
 func (s *Server) getUpdates(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.store.Updates())
+	writeJSON(w, s.withDefinitionUpdates(s.store.Updates(), s.store.Snapshot()))
+}
+
+// withDefinitionUpdates adds the newer signed definitions CirrusStore's
+// last check fetched, which need no registry check: one replaces a
+// version-only update for the same app.
+func (s *Server) withDefinitionUpdates(u Updates, snap *snapshot.Snapshot) Updates {
+	if snap == nil {
+		return u
+	}
+	for _, a := range snap.Apps {
+		c, ok := s.definitionUpdate(a)
+		if !ok {
+			continue
+		}
+		up := AppUpdate{App: a.ID, Name: a.Name, Current: a.Tag, Latest: c.Tag, Digest: c.Digest, Definition: true, Source: c.Source, Serial: c.Serial}
+		i := slices.IndexFunc(u.Apps, func(x AppUpdate) bool { return x.App == a.ID })
+		if i < 0 {
+			u.Apps = append(u.Apps, up)
+		} else {
+			u.Apps[i] = up
+		}
+	}
+	return u
 }
 
 // checkUpdate lets an update through only to the version the last check
-// found for that app, or back to its previous version.
+// found for that app, back to its previous version, or (naming its store)
+// to the newer signed definition CirrusStore offers, which it attaches.
 func (s *Server) checkUpdate(a map[string]string, snap *snapshot.Snapshot) error {
 	if err := checkInstalled(a, snap); err != nil {
 		return err
@@ -106,6 +136,15 @@ func (s *Server) checkUpdate(a map[string]string, snap *snapshot.Snapshot) error
 		if x.ID == a["app"] && x.PreviousTag == a["tag"] && x.PreviousDigest == a["digest"] {
 			return nil // rolling back
 		}
+	}
+	if a["store"] != "" {
+		for _, x := range snap.Apps {
+			if c, ok := s.definitionUpdate(x); ok && x.ID == a["app"] && c.Source == a["store"] && c.Tag == a["tag"] && c.Digest == a["digest"] {
+				a["signed"] = encodeSigned(c.signed)
+				return nil
+			}
+		}
+		return errNotOffered
 	}
 	for _, u := range s.store.Updates().Apps {
 		if u.App == a["app"] && u.Latest == a["tag"] && u.Digest == a["digest"] {

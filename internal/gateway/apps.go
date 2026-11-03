@@ -8,36 +8,17 @@ import (
 
 	"cirrusux/internal/catalogue"
 	"cirrusux/internal/snapshot"
+	"cirrusux/internal/store"
 )
 
-// catalogueApps is the built-in catalogue, loaded once.
-var catalogueApps = func() []catalogue.App {
-	apps, err := catalogue.Load()
-	if err != nil {
-		panic("built-in catalogue: " + err.Error())
-	}
-	return apps
-}()
-
-func findApp(id string) (catalogue.App, bool) {
-	for _, a := range catalogueApps {
-		if a.ID == id {
-			return a, true
-		}
-	}
-	return catalogue.App{}, false
-}
-
-func appName(id string) string {
-	if a, ok := findApp(id); ok {
-		return a.Name
-	}
-	return id
-}
-
+// checkInstall checks the shape of an install; which app it is, and from
+// which source, is looked up by postAction (installApp).
 func checkInstall(a map[string]string, snap *snapshot.Snapshot) error {
-	if _, ok := findApp(a["app"]); !ok {
+	if !store.ValidName(a["app"]) {
 		return fmt.Errorf("no app %q in the catalogue", a["app"])
+	}
+	if src := a["store"]; src != "" && src != store.BuiltIn && !store.ValidName(src) {
+		return fmt.Errorf("no source %q", src)
 	}
 	if len(a["options"]) > 4096 {
 		return fmt.Errorf("options too long")
@@ -53,12 +34,27 @@ func checkInstall(a map[string]string, snap *snapshot.Snapshot) error {
 	return nil
 }
 
+// installApp picks the app an install names from the merged catalogue and,
+// for a signed one, hands its envelope on for the helper to verify.
+func (s *Server) installApp(args map[string]string) error {
+	app, ok := s.findStoreApp(args["store"], args["app"])
+	if !ok {
+		return fmt.Errorf("no app %q in the catalogue", args["app"])
+	}
+	args["store"] = app.Source
+	if app.signed != nil {
+		args["signed"] = encodeSigned(app.signed)
+	}
+	return nil
+}
+
 // previewApp renders the file an install would write, with the facts the
 // server reported: the same code and inputs as the job itself. A problem
 // with the options comes back as a message to show, not an HTTP error.
 func (s *Server) previewApp(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		App     string            `json:"app"`
+		Store   string            `json:"store,omitempty"`
 		Options catalogue.Options `json:"options"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
@@ -67,7 +63,8 @@ func (s *Server) previewApp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body", http.StatusBadRequest)
 		return
 	}
-	app, ok := findApp(body.App)
+	found, ok := s.findStoreApp(body.Store, body.App)
+	app := found.App
 	if !ok {
 		http.Error(w, "no such app", http.StatusNotFound)
 		return

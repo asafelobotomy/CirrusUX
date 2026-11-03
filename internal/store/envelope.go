@@ -194,3 +194,22 @@ func strict(b []byte, v any) error {
 	}
 	return nil
 }
+
+// Recorded reads an envelope an install's record kept. The helper verified
+// it when it installed the app and root wrote the record, so neither the
+// signature nor the expiry is checked again: an installed app keeps
+// working when its source drops it or goes away.
+func Recorded(id string, f Signed) (App, error) {
+	var env Envelope
+	if err := strict(f.Data, &env); err != nil {
+		return App{}, fmt.Errorf("%s: recorded definition: %v", id, err)
+	}
+	def, err := catalogue.Parse(env.App)
+	if err != nil {
+		return App{}, fmt.Errorf("%s: recorded definition: %v", id, err)
+	}
+	if def.ID != id {
+		return App{}, fmt.Errorf("%s: the recorded definition holds %q", id, def.ID)
+	}
+	return App{Source: env.Source, Serial: env.Serial, Expires: env.Expires, Def: def}, nil
+}

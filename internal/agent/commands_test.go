@@ -283,6 +283,21 @@ func TestAppRequest(t *testing.T) {
 			t.Errorf("options %s accepted", opts)
 		}
 	}
+
+	// A CirrusStore app's source and signed definition go on unchanged.
+	signed := `{"data":"eyJzb3VyY2UiOiJleHRyYSJ9","sig":"c2ln"}`
+	c = command{ID: "0123456789abcdea", Action: "app_install", Args: map[string]string{"app": "music-box", "store": "extra", "signed": signed}}
+	if res := a.run(context.Background(), c); !res.OK {
+		t.Fatalf("signed install: %s", res.Error)
+	}
+	b, _ = os.ReadFile(filepath.Join(filepath.Dir(a.collector.Helper[0]), "request"))
+	if !strings.Contains(string(b), `"source":"extra","definition":`+signed) {
+		t.Errorf("request file = %s", b)
+	}
+	bad := command{ID: "0123456789abcdeb", Action: "app_install", Args: map[string]string{"app": "music-box", "store": "extra", "signed": "not json"}}
+	if res := a.run(context.Background(), bad); res.OK {
+		t.Error("a damaged definition was passed on")
+	}
 }
 
 func TestLogs(t *testing.T) {

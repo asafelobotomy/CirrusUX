@@ -181,7 +181,9 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 		return q, spec, fmt.Errorf("unknown action %q", q.Action)
 	}
 	clean := ActionReq{Action: q.Action}
-	for _, k := range []string{"minutes", "name", "app", "options", "tag", "digest", "source", "lines", "confirm"} {
+	// "signed" is never taken from the panel: postAction adds it from the
+	// verified cache.
+	for _, k := range []string{"minutes", "name", "app", "store", "options", "tag", "digest", "source", "lines", "confirm"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}
@@ -224,15 +226,23 @@ func (s *Server) postAction(w http.ResponseWriter, r *http.Request) {
 	if spec.undo != nil {
 		c.Undo = spec.undo(clean.Args)
 	}
+	if clean.Action == "app_install" {
+		if err := s.installApp(clean.Args); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	if clean.Action == "app_update" {
-		// Only versions the last check found, or back to the previous one.
+		// Only versions the last check found, a newer signed definition, or
+		// back to the previous one.
 		if err := s.checkUpdate(clean.Args, snap); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		// Its undo goes back to what runs now.
 		for _, x := range snap.Apps {
-			if x.ID == clean.Args["app"] && catalogue.ValidPin(x.Tag, x.Digest) {
+			// A definition update on the same version can't be undone this way.
+			if x.ID == clean.Args["app"] && catalogue.ValidPin(x.Tag, x.Digest) && (x.Tag != clean.Args["tag"] || x.Digest != clean.Args["digest"]) {
 				c.Undo = &ActionReq{Action: "app_update", Args: map[string]string{"app": x.ID, "tag": x.Tag, "digest": x.Digest}}
 			}
 		}
