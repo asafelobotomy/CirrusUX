@@ -132,7 +132,17 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `BACKUP_SCHEDULE` | `*-*-* 03:30` | backup: systemd `OnCalendar`; the timer wakes a sleeping server |
 | `BACKUP_KEEP` | `7` | backup: newest archives kept, e.g. `14` for two weeks of nightly backups; `0` keeps all (the only automatic deletion) |
 | `BACKUP_REQUIRE_MOUNT` | — | backup: a mount point `BACKUP_DIR` must be on (an external disk's `/mnt/media`). Without the disk mounted, the backup fails instead of filling the system disk. The unit also gets `RequiresMountsFor=` on `BACKUP_DIR`, so systemd mounts it first when it's in fstab |
-| `SEC_FAIL2BAN` | `yes` | security: fail2ban `sshd` jail, reading the journal |
+| `SEC_FAIL2BAN` | `yes` | security: fail2ban `sshd` jail, reading the journal, banning through nftables |
+| `SEC_FAIL2BAN_IGNOREIP` | `127.0.0.1/8 ::1` | security: addresses and networks never banned, e.g. add the tailnet, `100.64.0.0/10` |
+| `SEC_FAIL2BAN_BANTIME` | `600` | security: how long a ban lasts, in seconds or with `s`, `m`, `h`, `d`, `w`; `-1` forever |
+| `SEC_FAIL2BAN_FINDTIME` | `600` | security: failures count within this window |
+| `SEC_FAIL2BAN_MAXRETRY` | `5` | security: failures before a ban |
+| `SSH_ALLOW` | — (no restriction) | ssh: who may log in over SSH and from where, as sshd's `AllowUsers`: `USER@NETWORK`, or a `NETWORK` alone for anyone there. Written to `sshd_config.d/50-restrict-sources.conf`, checked with `sshd -t`; password logins are left alone. Refused if it would shut out the SSH session running setup |
+| `SSH_CONFIRM_SECONDS` | `120` | ssh: a change rolls back by itself unless `cirrusux-setup ssh-confirm` runs within this time |
+| `FTPS_USER` | `media` | ftps: the one login, a pure-ftpd virtual user. Its password is set with `sudo cirrusux-setup ftps-passwd`, which asks for it; it's never in a file of ours |
+| `FTPS_HOME` | `/mnt/media` | ftps: where the user lands, and all it can see |
+| `FTPS_PASSIVE_PORTS` | `39000 40000` | ftps: the passive data ports, first and last. The firewall module already allows every port from the LAN and the tailnet. If `SLEEP_WATCH_PORTS` is set, add `21` to it |
+| `FTPS_UID`, `FTPS_GID` | `APPS_MEDIA_UID`, `APPS_MEDIA_GID` | ftps: the IDs files uploaded over FTPS get |
 | `SEC_AV` | `yes` | security: weekly ClamAV scan; signatures update just before it |
 | `SEC_AV_PATHS` | `/home /srv /usr/local /tmp /var/tmp` | security: what the scan covers |
 | `SEC_AV_SCHEDULE` | `Sun *-*-* 04:00` | security: when it runs |
@@ -151,6 +161,8 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `SLEEP_MAX_LOAD` | `0` (off) | sleep: a 5-minute load above this counts as activity |
 | `SLEEP_COUNT_LOGINS` | `yes` | sleep: logged-in sessions count |
 | `SLEEP_WAKE_TIMERS` | backup and scan timers | sleep: timers that wake it, shown as the next wake |
+| `SLEEP_RESUME_FIXES` | `no` | sleep: `yes` adds `cirrusux-resume.service`, run after each resume: Wake-on-LAN set again on `NET_WOL_IFACE`, timesyncd restarted, and Tailscale's state written to the journal |
+| `SLEEP_NO_WAKEUP_DEVICES` | — | sleep: PCI addresses (`lspci -D`) that may not wake the server, e.g. a USB controller that wakes it for nothing. A udev rule keeps them off at every boot |
 
 The sleep module installs `cirrusux-idle`, CirrusUX's own sleep manager. A
 timer runs `cirrusux-idle check` every minute: inbound connections (to the

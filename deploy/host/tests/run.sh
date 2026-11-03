@@ -17,7 +17,7 @@ failed() {
 	echo "FAILED: the $1 test (exit $2)" >&2
 	exit 1
 }
-for t in base cirrusux modules runit; do
+for t in base cirrusux modules runit extras; do
 	echo "$t:"
 	unshare -r bash "tests/$t.sh" 2> >(grep -v 'sudo.conf' >&2) || failed "$t" $?
 done

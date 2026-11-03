@@ -7,6 +7,8 @@
 #   cirrusux-setup apply [MODULE...]   make the changes, logged with their undo
 #   cirrusux-setup list                the modules and what they do
 #   cirrusux-setup firewall-confirm    keep a new firewall (see the firewall module)
+#   cirrusux-setup ssh-confirm         keep a new SSH restriction (the ssh module)
+#   cirrusux-setup ftps-passwd         set the FTPS user's password (the ftps module)
 #
 # Without MODULE it runs the modules in HOST_MODULES. Changes are logged to
 # /var/lib/cirrusux/setup.log; replaced files keep a .bak-YYYYMMDD-HHMM copy
@@ -47,7 +49,7 @@ list)
 	exit 0
 	;;
 check | apply) MODE=$cmd ;;
-firewall-confirm | firewall-rollback) ;;
+firewall-confirm | firewall-rollback | ssh-confirm | ssh-rollback | ftps-passwd) ;;
 -h | --help | help | "")
 	usage
 	exit 0
@@ -64,11 +66,11 @@ fi
 load_config "$CONFIG"
 
 case "$cmd" in
-firewall-confirm | firewall-rollback)
-	MODULE=firewall
+firewall-confirm | firewall-rollback | ssh-confirm | ssh-rollback | ftps-passwd)
+	MODULE=${cmd%%-*}
 	MODE=apply
-	# shellcheck source=modules/firewall.sh
-	. "$(module_file firewall)"
+	# shellcheck source=/dev/null
+	. "$(module_file "$MODULE")"
 	"${cmd//-/_}" "$@"
 	exit 0
 	;;

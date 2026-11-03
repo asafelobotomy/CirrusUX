@@ -218,20 +218,7 @@ fw_try() {
 }
 
 fw_schedule_rollback() {
-	local prev=$1 secs=${FIREWALL_CONFIRM_SECONDS:-120} self
-	self=$(readlink -f "$0")
-	if command -v systemd-run >/dev/null && [ -z "${NO_SYSTEMD:-}" ]; then
-		systemctl stop "$FW_TIMER.timer" 2>/dev/null || true
-		systemctl reset-failed "$FW_TIMER.timer" "$FW_TIMER.service" 2>/dev/null || true
-		systemd-run --quiet --unit="$FW_TIMER" --on-active="$secs" "$self" firewall-rollback "$prev"
-	else
-		# Without systemd (tests, containers): a detached sleeper.
-		(
-			sleep "$secs"
-			ROOT=$ROOT NO_CHOWN=${NO_CHOWN:-} "$self" firewall-rollback "$prev"
-		) >/dev/null 2>&1 &
-		echo $! >"$ROOT$FW_DIR/rollback.pid"
-	fi
+	schedule_rollback "$FW_TIMER" "${FIREWALL_CONFIRM_SECONDS:-120}" "$ROOT$FW_DIR/rollback.pid" firewall-rollback "$1"
 }
 
 # firewall_confirm keeps the loaded ruleset: it cancels the rollback and
@@ -239,13 +226,7 @@ fw_schedule_rollback() {
 firewall_confirm() {
 	local pending
 	pending=$(cat "$ROOT$FW_DIR/pending" 2>/dev/null) || die "no new ruleset is waiting for confirmation"
-	if command -v systemd-run >/dev/null && [ -z "${NO_SYSTEMD:-}" ]; then
-		systemctl stop "$FW_TIMER.timer" 2>/dev/null || true
-	elif [ -f "$ROOT$FW_DIR/rollback.pid" ]; then
-		pkill -P "$(cat "$ROOT$FW_DIR/rollback.pid")" sleep 2>/dev/null || true
-		kill "$(cat "$ROOT$FW_DIR/rollback.pid")" 2>/dev/null || true
-		rm -f "$ROOT$FW_DIR/rollback.pid"
-	fi
+	cancel_rollback "$FW_TIMER" "$ROOT$FW_DIR/rollback.pid"
 	change "confirm the ruleset from $pending" "cirrusux-setup firewall-rollback $FW_DIR/$pending-before.nft" \
 		_fw_keep "$ROOT$FW_DIR/$pending-candidate.nft"
 	_fw_boot_unit

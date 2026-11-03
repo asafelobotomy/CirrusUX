@@ -255,6 +255,38 @@ need_packages() {
 helper_module() { put_file "/etc/cirrusux/helper.d/$1.env" 644 root:root; }
 
 # put_link LINK TARGET — a symlink, replaced if it points elsewhere.
+# schedule_rollback UNIT SECS PIDFILE ARGS...: in SECS seconds, run
+# `cirrusux-setup ARGS...`, unless cancel_rollback runs first. For changes
+# that could lock people out (the firewall, SSH): undone unless confirmed.
+schedule_rollback() {
+	local unit=$1 secs=$2 pidfile=$3 self
+	shift 3
+	self=$(readlink -f "$0")
+	if command -v systemd-run >/dev/null && [ -z "${NO_SYSTEMD:-}" ]; then
+		systemctl stop "$unit.timer" 2>/dev/null || true
+		systemctl reset-failed "$unit.timer" "$unit.service" 2>/dev/null || true
+		systemd-run --quiet --unit="$unit" --on-active="$secs" "$self" "$@"
+	else
+		# Without systemd (tests, containers): a detached sleeper.
+		(
+			sleep "$secs"
+			ROOT=$ROOT NO_CHOWN=${NO_CHOWN:-} CONFIG=$CONFIG "$self" "$@"
+		) >/dev/null 2>&1 &
+		echo $! >"$pidfile"
+	fi
+}
+
+# cancel_rollback UNIT PIDFILE
+cancel_rollback() {
+	if command -v systemd-run >/dev/null && [ -z "${NO_SYSTEMD:-}" ]; then
+		systemctl stop "$1.timer" 2>/dev/null || true
+	elif [ -f "$2" ]; then
+		pkill -P "$(cat "$2")" sleep 2>/dev/null || true
+		kill "$(cat "$2")" 2>/dev/null || true
+		rm -f "$2"
+	fi
+}
+
 put_link() {
 	local link=$1 target=$2
 	if [ "$(readlink "$ROOT$link" 2>/dev/null)" = "$target" ]; then

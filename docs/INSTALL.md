@@ -182,8 +182,16 @@ The modules:
   one an app writes to (a sync or download folder) must belong to the
   apps' user: `sudo install -d -o cirrusux-apps -g cirrusux-apps
   /srv/media/sync`.
-- **sleep** (split setup, server only): CirrusUX's own sleep manager.
+- **sleep** (split setup, server only): CirrusUX's own sleep manager, with
+  optional fixes after each resume and devices kept from waking it.
 - **firewall:** below.
+- **ssh** (opt-in): who may log in over SSH, and from where. Like the
+  firewall, a change rolls back unless you run `sudo cirrusux-setup
+  ssh-confirm`, and setup refuses one that would shut out your own session.
+  Password logins are left as they are.
+- **ftps** (opt-in): pure-ftpd with TLS required and one virtual user kept
+  inside `FTPS_HOME`. Set its password with `sudo cirrusux-setup
+  ftps-passwd`, which asks for it; it's never written to a file of ours.
 
 Each module switches its page on in the panel by itself. Every setting is
 in `CONFIG.md`.

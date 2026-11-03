@@ -8,7 +8,8 @@
 # Without systemd (runit), the zone is set through /etc/localtime and
 # /etc/timezone, and there are no apt timers to switch off.
 #
-# SSH is never touched: how people log in stays the owner's business.
+# SSH is left alone here: how people log in stays the owner's business. The
+# opt-in ssh module can restrict who logs in from where, and nothing more.
 
 module_base() {
 	if id cirrusux >/dev/null 2>&1; then

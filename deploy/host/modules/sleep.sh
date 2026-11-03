@@ -14,6 +14,11 @@
 #   SLEEP_MAX_LOAD=0             a 5-minute load above this counts; 0 off
 #   SLEEP_COUNT_LOGINS=yes       logged-in sessions count
 #   SLEEP_WAKE_TIMERS="cirrusux-backup.timer cirrusux-av-scan.timer"
+#   SLEEP_RESUME_FIXES=no        yes: after each resume, set Wake-on-LAN on
+#                                NET_WOL_IFACE again, restart timesyncd and
+#                                log Tailscale's state (cirrusux-resume.service)
+#   SLEEP_NO_WAKEUP_DEVICES=""   PCI addresses (lspci -D) that may not wake
+#                                the server, e.g. a USB controller
 #
 # Activity is inbound connections (to the machine and, through conntrack,
 # to containers' published ports), logins, busy units (backups, scans, app
@@ -93,8 +98,11 @@ EOF2
 # Written by cirrusux-setup (sleep module): records suspends and wakes.
 exec /usr/local/sbin/cirrusux-idle sleep-hook "$1"
 EOF2
+	_sleep_resume
 	[ $((CHANGES - units_before)) -eq 0 ] || change "reload systemd units" "—" systemctl daemon-reload
 	start_unit cirrusux-idle.timer "the idle check (cirrusux-idle.timer)"
+	[ "${SLEEP_RESUME_FIXES:-no}" = no ] || start_unit cirrusux-resume.service "the after-resume fixes (cirrusux-resume.service)"
+	_sleep_no_wakeup
 
 	helper_module sleep <<'EOF2'
 # Written by cirrusux-setup (sleep module).
@@ -105,3 +113,58 @@ STAY_AWAKE_BIN=/usr/local/sbin/cirrusux-stay-awake
 ALLOW_SLEEP_BIN=/usr/local/sbin/cirrusux-allow-sleep
 EOF2
 }
+
+# _sleep_resume: with SLEEP_RESUME_FIXES=yes, a unit run after each resume:
+# Wake-on-LAN set again (some cards forget it), the clock synced again, and
+# Tailscale's state written to the journal. Each step may fail alone.
+_sleep_resume() {
+	[ "${SLEEP_RESUME_FIXES:-no}" != no ] || return 0
+	local wol=""
+	[ -z "${NET_WOL_IFACE:-}" ] || wol="ExecStart=-/usr/sbin/ethtool -s ${NET_WOL_IFACE} wol g"
+	put_file /etc/systemd/system/cirrusux-resume.service 644 root:root <<EOF2
+# Written by cirrusux-setup (sleep module): fixes after a resume.
+[Unit]
+Description=CirrusUX after-resume fixes
+After=suspend.target
+
+[Service]
+Type=oneshot
+$wol
+ExecStart=-/usr/bin/systemctl restart systemd-timesyncd.service
+ExecStart=-/usr/bin/tailscale status --peers=false
+
+[Install]
+WantedBy=suspend.target
+EOF2
+}
+
+# _sleep_no_wakeup: devices in SLEEP_NO_WAKEUP_DEVICES (PCI addresses, e.g.
+# a USB controller that wakes the server for nothing) may not wake it: a
+# udev rule at every boot, and the setting itself now.
+_sleep_no_wakeup() {
+	local d rules="" rule=/etc/udev/rules.d/60-cirrusux-no-wakeup.rules
+	for d in ${SLEEP_NO_WAKEUP_DEVICES:-}; do
+		[[ $d =~ ^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$ ]] || die "SLEEP_NO_WAKEUP_DEVICES: $d isn't a PCI address like 0000:00:14.0 (lspci -D lists them)"
+		rules+="ACTION==\"add|change\", SUBSYSTEM==\"pci\", KERNEL==\"$d\", ATTR{power/wakeup}=\"disabled\""$'\n'
+	done
+	if [ -z "$rules" ]; then
+		[ ! -f "$ROOT$rule" ] || change "remove $rule (SLEEP_NO_WAKEUP_DEVICES is empty)" "cirrusux-setup apply sleep" rm -f "$ROOT$rule"
+		return 0
+	fi
+	put_file $rule 644 root:root <<EOF2
+# Written by cirrusux-setup (sleep module): these devices may not wake the server.
+${rules%$'\n'}
+EOF2
+	for d in ${SLEEP_NO_WAKEUP_DEVICES}; do
+		local f=$ROOT/sys/bus/pci/devices/$d/power/wakeup
+		if [ ! -f "$f" ]; then
+			warn "no PCI device $d"
+		elif [ "$(cat "$f")" = disabled ]; then
+			ok "$d may not wake the server"
+		else
+			change "stop $d waking the server" "echo enabled > /sys/bus/pci/devices/$d/power/wakeup" _sleep_write "$f" disabled
+		fi
+	done
+}
+
+_sleep_write() { echo "$2" >"$1"; }

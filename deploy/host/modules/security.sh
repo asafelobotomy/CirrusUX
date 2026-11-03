@@ -3,6 +3,11 @@
 #
 # Settings (host.env):
 #   SEC_FAIL2BAN=yes                 ban addresses that keep failing SSH logins
+#   SEC_FAIL2BAN_IGNOREIP="127.0.0.1/8 ::1"   never banned (add the tailnet:
+#                                    100.64.0.0/10)
+#   SEC_FAIL2BAN_BANTIME=600         seconds banned (or 10m, 1h…; -1 forever)
+#   SEC_FAIL2BAN_FINDTIME=600        failures count within this window
+#   SEC_FAIL2BAN_MAXRETRY=5          failures before a ban
 #   SEC_AV=yes                       weekly virus scan
 #   SEC_AV_PATHS="/home /srv /usr/local /tmp /var/tmp"
 #   SEC_AV_SCHEDULE="Sun *-*-* 04:00"
@@ -16,9 +21,27 @@ module_security() {
 	if [ "${SEC_FAIL2BAN:-yes}" = yes ]; then
 		# Debian logs to the journal, so the jail reads it there.
 		need_packages fail2ban python3-systemd
+		local ignore=${SEC_FAIL2BAN_IGNOREIP:-127.0.0.1/8 ::1} bantime=${SEC_FAIL2BAN_BANTIME:-600}
+		local findtime=${SEC_FAIL2BAN_FINDTIME:-600} maxretry=${SEC_FAIL2BAN_MAXRETRY:-5} w
+		for w in $ignore; do
+			[[ $w =~ ^[0-9a-fA-F.:]+(/[0-9]+)?$ ]] || die "SEC_FAIL2BAN_IGNOREIP: $w isn't an address or network"
+		done
+		[[ $bantime =~ ^-?[0-9]+[smhdw]?$ && $findtime =~ ^[0-9]+[smhdw]?$ ]] ||
+			die "SEC_FAIL2BAN_BANTIME and _FINDTIME are seconds, or a number with s, m, h, d or w"
+		[[ $maxretry =~ ^[1-9][0-9]*$ ]] || die "SEC_FAIL2BAN_MAXRETRY must be a whole number"
 		local jail_before=$CHANGES
-		put_file /etc/fail2ban/jail.d/cirrusux.local 644 root:root <<'EOF'
+		# nftables bans: the firewall module's table is nftables too, and
+		# Debian 13 has no iptables by default.
+		put_file /etc/fail2ban/jail.d/cirrusux.local 644 root:root <<EOF
 # Written by cirrusux-setup (security module).
+[DEFAULT]
+banaction = nftables-multiport
+banaction_allports = nftables-allports
+ignoreip = $ignore
+bantime = $bantime
+findtime = $findtime
+maxretry = $maxretry
+
 [sshd]
 enabled = true
 backend = systemd
