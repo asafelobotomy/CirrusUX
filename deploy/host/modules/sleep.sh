@@ -23,7 +23,7 @@ module_sleep() {
 	[ "${CIRRUS_ROLE:-single}" != single ] ||
 		die "the sleep module is for a split setup (CIRRUS_ROLE=server): in the single setup the panel runs here and must stay up"
 	local rel
-	rel=${CIRRUS_RELEASE:-$(cd "$HERE/../.." && pwd)}
+	rel=$(release_dir)
 	[ -f "$rel/bin/cirrusux-idle" ] || die "no $rel/bin/cirrusux-idle: run make build, or set CIRRUS_RELEASE"
 	[[ ${SLEEP_IDLE_MIN:-30} =~ ^[1-9][0-9]*$ ]] || die "SLEEP_IDLE_MIN must be a whole number of minutes"
 
@@ -74,12 +74,7 @@ EOF2
 exec /usr/local/sbin/cirrusux-idle sleep-hook "$1"
 EOF2
 	[ $((CHANGES - units_before)) -eq 0 ] || change "reload systemd units" "—" systemctl daemon-reload
-	if unit_enabled cirrusux-idle.timer; then
-		ok "cirrusux-idle.timer on"
-	else
-		change "start the idle check (cirrusux-idle.timer)" "systemctl disable --now cirrusux-idle.timer" \
-			systemctl enable --now cirrusux-idle.timer
-	fi
+	start_unit cirrusux-idle.timer "the idle check (cirrusux-idle.timer)"
 
 	helper_module sleep <<'EOF2'
 # Written by cirrusux-setup (sleep module).

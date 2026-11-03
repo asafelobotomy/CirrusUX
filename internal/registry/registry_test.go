@@ -90,3 +90,20 @@ func TestClient(t *testing.T) {
 		t.Errorf("split = %s %s", h, r)
 	}
 }
+
+// The next page stays on the registry: the token goes with that request.
+func TestNextLink(t *testing.T) {
+	base := "https://registry-1.docker.io"
+	for link, want := range map[string]string{
+		`</v2/a/tags/list?last=x>; rel="next"`:                          base + "/v2/a/tags/list?last=x",
+		`<https://registry-1.docker.io/v2/a/tags/list?n=2>; rel="next"`: base + "/v2/a/tags/list?n=2",
+		`<https://evil.example/v2/a/tags/list>; rel="next"`:             "",
+		`<https://registry-1.docker.io.evil.example/v2/x>; rel="next"`:  "",
+		`<//evil.example/v2/a/tags/list>; rel="next"`:                   "",
+		`</v2/a/tags/list?last=x>; rel="prev"`:                          "",
+	} {
+		if got := nextLink(base, link); got != want {
+			t.Errorf("nextLink(%s) = %q, want %q", link, got, want)
+		}
+	}
+}

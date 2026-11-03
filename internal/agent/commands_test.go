@@ -24,7 +24,10 @@ func fakeHelper(t *testing.T) (argv []string, calls func() []string) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "calls")
 	script := filepath.Join(dir, "helper")
-	os.WriteFile(script, []byte("#!/bin/sh\necho \"$*\" >> "+log+"\necho '{\"output\":[\"ok\"]}'\n"), 0o755)
+	// It keeps a copy of an app request, as the real helper reads it then.
+	os.WriteFile(script, []byte("#!/bin/sh\necho \"$*\" >> "+log+"\n"+
+		"[ \"$1\" = app-job ] && cp \"$REQS/$2.json\" "+filepath.Join(dir, "request")+"\n"+
+		"echo '{\"output\":[\"ok\"]}'\n"), 0o755)
 	return []string{script}, func() []string {
 		b, _ := os.ReadFile(log)
 		return strings.Fields(strings.ReplaceAll(strings.TrimSpace(string(b)), " ", "_"))
@@ -257,17 +260,21 @@ func TestNoNudgeWithoutSleep(t *testing.T) {
 func TestAppRequest(t *testing.T) {
 	a, calls, _ := testAgent(t)
 	requestsDir = t.TempDir()
+	t.Setenv("REQS", requestsDir)
 	t.Cleanup(func() { requestsDir = helperapi.RequestsDir })
 	c := command{ID: "0123456789abcdef", Action: "app_install", Args: map[string]string{
 		"app": "kavita", "options": `{"media":{"books":"/srv/media/books"}}`}}
 	if res := a.run(context.Background(), c); !res.OK {
 		t.Fatalf("install: %s", res.Error)
 	}
-	b, err := os.ReadFile(filepath.Join(requestsDir, "0123456789abcdef.json"))
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(a.collector.Helper[0]), "request"))
 	if err != nil || !strings.Contains(string(b), `"books":"/srv/media/books"`) {
 		t.Errorf("request file = %s, %v", b, err)
 	}
-	if got := calls(); len(got) != 1 || got[0] != "app-job" {
+	if _, err := os.Stat(filepath.Join(requestsDir, "0123456789abcdef.json")); err == nil {
+		t.Error("request left behind for a later job")
+	}
+	if got := calls(); len(got) != 1 || got[0] != "app-job_0123456789abcdef" {
 		t.Errorf("helper calls = %v", got)
 	}
 	for _, opts := range []string{`{"privileged":true}`, `{}} {"job":"x"`, `{}, "action":"remove"`} {

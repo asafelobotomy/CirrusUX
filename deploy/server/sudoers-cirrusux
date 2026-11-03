@@ -26,7 +26,7 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
                         /usr/local/sbin/cirrusux-helper allow-sleep, \
                         /usr/local/sbin/cirrusux-helper nudge-awake, \
                         /usr/local/sbin/cirrusux-helper backup-run, \
-                        /usr/local/sbin/cirrusux-helper app-job, \
+                        /usr/local/sbin/cirrusux-helper app-job *, \
                         /usr/local/sbin/cirrusux-helper os-check, \
                         /usr/local/sbin/cirrusux-helper os-upgrade, \
                         /usr/local/sbin/cirrusux-helper archive-delete *

@@ -7,6 +7,12 @@ import { mode, sleeps } from '../api.svelte';
 /** unreachable: the server isn't asleep, but its agent isn't reporting. */
 export type PowerState = 'awake' | 'waking' | 'asleep' | 'unreachable';
 
+/** What each state is called, everywhere it's shown. An always-on server is
+ *  "Online": it has no sleep to be awake from. */
+export function powerLabel(state: PowerState): string {
+  return { awake: sleeps() ? 'Awake' : 'Online', asleep: 'Asleep', waking: 'Waking', unreachable: 'No reports' }[state];
+}
+
 export const WAKE_STEPS = [
   'Wake signal sent',
   'Network link up',

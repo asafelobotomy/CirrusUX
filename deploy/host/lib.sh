@@ -65,7 +65,9 @@ put_file() {
 	local dest=$1 mode=$2 owner=$3 tmp
 	tmp=$(mktemp)
 	cat >"$tmp"
-	if [ -f "$ROOT$dest" ] && cmp -s "$tmp" "$ROOT$dest" && [ "$(file_mode "$ROOT$dest")" = "$mode" ]; then
+	# The owner counts too: sudo ignores a sudoers file root doesn't own.
+	if [ -f "$ROOT$dest" ] && cmp -s "$tmp" "$ROOT$dest" && [ "$(file_mode "$ROOT$dest")" = "$mode" ] &&
+		{ [ -n "${NO_CHOWN:-}" ] || [ "$(stat -c '%U:%G' "$ROOT$dest")" = "$owner" ]; }; then
 		ok "$dest"
 		rm -f "$tmp"
 		return 0
@@ -99,11 +101,64 @@ put_once() {
 
 file_mode() { stat -c '%a' "$1"; }
 
+# valid_path PATH: an absolute, clean path of plain characters, as the
+# helper requires (cmd/helper/config.go): no "//", "." or ".." parts and no
+# trailing "/". The helper refuses its whole config otherwise.
+valid_path() {
+	[[ $1 =~ ^(/[A-Za-z0-9_@+-][A-Za-z0-9._@+-]*)+$ ]] || return 1
+	[[ /$1/ != */./* && /$1/ != */../* ]]
+}
+
+# valid_ip ADDRESS: an IPv4 address, or an IPv6 one (checked loosely).
+valid_ip() {
+	local IFS=. a b c d
+	if [[ $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		read -r a b c d <<<"$1"
+		[ "$a" -le 255 ] && [ "$b" -le 255 ] && [ "$c" -le 255 ] && [ "$d" -le 255 ]
+		return
+	fi
+	[[ $1 =~ ^[0-9a-fA-F:]+$ && $1 == *:*:* ]]
+}
+
+# fill_values KEY=VALUE... < example: the example with each KEY's line set
+# to VALUE. Done in the shell itself, so values (a token) never appear on a
+# command line, where any user could read them in the process list.
+fill_values() {
+	local line kv
+	while IFS= read -r line || [ -n "$line" ]; do
+		for kv; do
+			if [[ $line == "${kv%%=*}="* ]]; then
+				line=$kv
+				break
+			fi
+		done
+		printf '%s\n' "$line"
+	done
+}
+
 # placeholders FILE: lists values still to fill in, e.g. "<set in env>".
 placeholders() { { grep -nE '^[A-Z_]+=.*<[^>]+>' "$1" 2>/dev/null || true; } | cut -d= -f1 | cut -d: -f2 | tr '\n' ' '; }
 
 # unit_enabled UNIT: whether systemd starts it at boot.
 unit_enabled() { systemctl is-enabled --quiet "$1" 2>/dev/null; }
+
+# release_dir: the folder holding CirrusUX's bin/ and deploy/
+# (CIRRUS_RELEASE, or this checkout).
+release_dir() { echo "${CIRRUS_RELEASE:-$(cd "$HERE/../.." && pwd)}"; }
+
+# short_host: this machine's short host name.
+short_host() { hostname -s 2>/dev/null || echo server; }
+
+# start_unit UNIT [WHAT]: enable and start UNIT unless it already is. WHAT
+# names it in the report (default: the unit's own name).
+start_unit() {
+	local what=${2:-$1}
+	if unit_enabled "$1"; then
+		ok "$what on"
+	else
+		change "start $what" "systemctl disable --now $1" systemctl enable --now "$1"
+	fi
+}
 unit_active() { systemctl is-active --quiet "$1" 2>/dev/null; }
 
 # load_config FILE: source the host settings, refusing a file that anyone

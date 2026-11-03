@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"cirrusux/internal/catalogue"
 )
 
 // Client lists tags and reads digests.
@@ -97,13 +99,11 @@ func (c *Client) Digest(ctx context.Context, image, tag string) (string, error) 
 	}
 	resp.Body.Close()
 	d := resp.Header.Get("Docker-Content-Digest")
-	if !digestRe.MatchString(d) {
+	if !catalogue.ValidDigest(d) {
 		return "", fmt.Errorf("%s:%s: the registry sent no digest", image, tag)
 	}
 	return d, nil
 }
-
-var digestRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 // get does one request, fetching an anonymous token when the registry asks
 // for one. It returns the token so the next page can reuse it.
@@ -187,7 +187,8 @@ func (c *Client) token(ctx context.Context, challenge string) (string, error) {
 	return body.AccessToken, nil
 }
 
-// nextLink follows a `Link: </v2/…?last=x>; rel="next"` header.
+// nextLink follows a `Link: </v2/…?last=x>; rel="next"` header, staying
+// on the registry's own host: the token goes with the next request.
 func nextLink(base, link string) string {
 	if !strings.Contains(link, `rel="next"`) {
 		return ""
@@ -197,8 +198,11 @@ func nextLink(base, link string) string {
 		return ""
 	}
 	u := link[start+1 : end]
-	if strings.HasPrefix(u, "/") {
+	if strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "//") {
 		return base + u
 	}
-	return u
+	if next, err := url.Parse(u); err == nil && strings.HasPrefix(u, base+"/") && next.Host != "" {
+		return u
+	}
+	return ""
 }

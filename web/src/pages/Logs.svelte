@@ -65,7 +65,7 @@
     followUntil = Date.now() + 5 * 60_000;
     void load();
     timer = setInterval(() => {
-      if (Date.now() > followUntil) return stop();
+      if (Date.now() > followUntil || !awake) return stop();
       if (!loading) void load();
     }, 5000);
   }
@@ -74,6 +74,10 @@
     followUntil = 0;
   }
   onDestroy(stop);
+  // Following stops when the server leaves 'awake': there's nothing to read.
+  $effect(() => {
+    if (!awake) stop();
+  });
   $effect(() => {
     void source;
     stop();

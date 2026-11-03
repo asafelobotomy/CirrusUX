@@ -177,7 +177,11 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		if err := writeRequest(c); err != nil {
 			return nil, err
 		}
-		return helper(helperapi.CmdAppJob)
+		out, err := helper(helperapi.CmdAppJob, c.ID)
+		// The helper removes a request it read; one it never got to (sudo
+		// refused, a timeout) mustn't wait for a later job.
+		os.Remove(filepath.Join(requestsDir, c.ID+".json"))
+		return out, err
 	}
 	if verb, ok := containerVerbs[c.Action]; ok {
 		name := c.Args["name"]

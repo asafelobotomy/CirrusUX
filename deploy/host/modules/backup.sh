@@ -5,7 +5,7 @@
 #   BACKUP_AGE_RECIPIENT=age1…   public key(s) to encrypt to (required); keep
 #                                the private key off this machine
 #   BACKUP_DIR=/srv/backups      where archives go
-#   BACKUP_PATHS="/etc /root /home /usr/local /var/lib/cirrusux /srv/cirrusux"
+#   BACKUP_PATHS="/etc /root /home /usr/local /var/lib/cirrusux /var/lib/cirrusux-gateway /srv/cirrusux"
 #   BACKUP_EXCLUDE=""            paths or patterns to leave out
 #   BACKUP_SCHEDULE="*-*-* 03:30"   systemd OnCalendar
 #   BACKUP_KEEP=7                newest archives to keep; 0 keeps all
@@ -22,9 +22,9 @@ module_backup() {
 	done
 	local dir=${BACKUP_DIR:-/srv/backups} keep=${BACKUP_KEEP:-7}
 	[[ $keep =~ ^[0-9]+$ ]] || die "BACKUP_KEEP must be a number"
-	case "$dir" in /*) ;; *) die "BACKUP_DIR must be an absolute path" ;; esac
+	valid_path "$dir" || die "BACKUP_DIR must be an absolute path without spaces, special characters, \"..\" or a trailing /"
 	local prefix
-	prefix="$(hostname -s 2>/dev/null || echo server)-system-"
+	prefix="$(short_host)-system-"
 
 	need_packages age zstd
 
@@ -34,7 +34,7 @@ module_backup() {
 BACKUP_DIR="$dir"
 BACKUP_PREFIX="$prefix"
 BACKUP_AGE_RECIPIENT="$rcpt"
-BACKUP_PATHS="${BACKUP_PATHS:-/etc /root /home /usr/local /var/lib/cirrusux /srv/cirrusux}"
+BACKUP_PATHS="${BACKUP_PATHS:-/etc /root /home /usr/local /var/lib/cirrusux /var/lib/cirrusux-gateway /srv/cirrusux}"
 BACKUP_EXCLUDE="${BACKUP_EXCLUDE:-}"
 BACKUP_KEEP=$keep
 EOF
@@ -66,12 +66,7 @@ WakeSystem=yes
 WantedBy=timers.target
 EOF
 	[ $((CHANGES - units_before)) -eq 0 ] || change "reload systemd units" "—" systemctl daemon-reload
-	if unit_enabled cirrusux-backup.timer; then
-		ok "cirrusux-backup.timer on"
-	else
-		change "start cirrusux-backup.timer" "systemctl disable --now cirrusux-backup.timer" \
-			systemctl enable --now cirrusux-backup.timer
-	fi
+	start_unit cirrusux-backup.timer
 
 	# Tell the panel's helper where to look.
 	helper_module backup <<EOF

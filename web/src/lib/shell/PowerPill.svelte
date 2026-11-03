@@ -1,20 +1,23 @@
 <script lang="ts">
   import { mode, sleeps } from '../api.svelte';
   import StatusDot from '../components/StatusDot.svelte';
-  import { power, sleepsInMs } from '../state/power.svelte';
+  import { power, powerLabel, sleepsInMs } from '../state/power.svelte';
   import { confirmWake } from '../state/actions';
   import { fmtDuration } from '../time.svelte';
   import { go } from '../state/ui.svelte';
 
   const s = $derived(sleepsInMs());
   const label = $derived(
-    power.state === 'awake'
-      ? !sleeps() ? 'Online' : s === null ? 'Awake' : `Awake · sleeps in ${fmtDuration(s)}`
-      : power.state === 'asleep' ? 'Asleep · Wake' : power.state === 'unreachable' ? 'No reports' : 'Waking…',
+    power.state === 'awake' && sleeps() && s !== null
+      ? `${powerLabel('awake')} · sleeps in ${fmtDuration(s)}`
+      : power.state === 'asleep' && mode.wake ? `${powerLabel('asleep')} · Wake`
+      : power.state === 'waking' ? `${powerLabel('waking')}…` : powerLabel(power.state),
   );
+  // Without a wake method, an asleep pill just goes home like the others.
+  const wakes = $derived(power.state === 'asleep' && mode.wake);
 </script>
 
-<button class="pill {power.state}" onclick={() => (power.state === 'asleep' ? confirmWake() : go('home'))} aria-label="{mode.server} is {label}">
+<button class="pill {power.state}" onclick={() => (wakes ? confirmWake() : go('home'))} aria-label="{mode.server} is {label}">
   <StatusDot tone={power.state === 'awake' ? 'ok' : power.state === 'asleep' ? 'sleep' : power.state === 'unreachable' ? 'warn' : 'info'} pulse={power.state === 'waking'} />
   <span class="num">{label}</span>
 </button>

@@ -16,16 +16,20 @@ module_security() {
 	if [ "${SEC_FAIL2BAN:-yes}" = yes ]; then
 		# Debian logs to the journal, so the jail reads it there.
 		need_packages fail2ban python3-systemd
+		local jail_before=$CHANGES
 		put_file /etc/fail2ban/jail.d/cirrusux.local 644 root:root <<'EOF'
 # Written by cirrusux-setup (security module).
 [sshd]
 enabled = true
 backend = systemd
 EOF
-		if unit_enabled fail2ban.service; then
-			ok "fail2ban on"
-		else
+		if ! unit_enabled fail2ban.service; then
 			change "start fail2ban" "systemctl disable --now fail2ban" systemctl enable --now fail2ban.service
+		elif [ "$CHANGES" -ne "$jail_before" ] || ! unit_active fail2ban.service; then
+			# A changed jail only counts once fail2ban reads it again.
+			change "restart fail2ban with the jail" "—" systemctl reload-or-restart fail2ban.service
+		else
+			ok "fail2ban on"
 		fi
 	fi
 
@@ -69,12 +73,7 @@ WakeSystem=yes
 WantedBy=timers.target
 EOF
 		[ $((CHANGES - units_before)) -eq 0 ] || change "reload systemd units" "—" systemctl daemon-reload
-		if unit_enabled cirrusux-av-scan.timer; then
-			ok "cirrusux-av-scan.timer on"
-		else
-			change "start cirrusux-av-scan.timer" "systemctl disable --now cirrusux-av-scan.timer" \
-				systemctl enable --now cirrusux-av-scan.timer
-		fi
+		start_unit cirrusux-av-scan.timer
 		helper_module av <<'EOF'
 # Written by cirrusux-setup (security module).
 AV_LOG=/var/log/cirrusux/av-scan.log

@@ -6,11 +6,11 @@
   import { confirmBackup } from '../state/actions';
   import { fmtAgo, fmtDay, fmtDayTime } from '../time.svelte';
   import { Archive, CircleCheck, Loader, Lock, TriangleAlert } from '../icons';
+  import { fmtGb } from '../format';
 
   let { full = false }: { full?: boolean } = $props();
   const run = $derived(live.lastBackupRun);
   const next = $derived(live.nextBackup ?? live.nextWakes.find((w) => /backup/i.test(w.unit))?.at ?? null);
-  const size = (gb: number) => (gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.max(1, Math.round(gb * 1000))} MB`);
 </script>
 
 <div class="b">
@@ -21,7 +21,7 @@
       </span>
       <div>
         <strong>{run.running ? 'Backing up…' : run.ok ? 'Last backup OK' : 'Last backup failed'}</strong>
-        <p class="muted small num">{fmtAgo(run.end)}{run.sizeGb ? ` · ${size(run.sizeGb)}` : ''}{live.backups[0]?.encrypted ? ' · encrypted' : ''}</p>
+        <p class="muted small num">{fmtAgo(run.end)}{run.sizeGb ? ` · ${fmtGb(run.sizeGb, true)}` : ''}{live.backups[0]?.encrypted ? ' · encrypted' : ''}</p>
       </div>
     {:else if live.backups.length}
       <span class="ic failed"><TriangleAlert size={22} /></span>
@@ -41,7 +41,7 @@
         <li>
           <code>{f.file}</code>
           <span class="num muted">{fmtDay(f.at)}</span>
-          <span class="num muted">{size(f.sizeGb)}</span>
+          <span class="num muted">{fmtGb(f.sizeGb, true)}</span>
           {#if f.encrypted}<Badge tone="ok">{#snippet icon()}<Lock />{/snippet}encrypted</Badge>{:else}<Badge tone="warn">not encrypted</Badge>{/if}
         </li>
       {/each}

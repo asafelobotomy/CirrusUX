@@ -37,6 +37,18 @@ var allowedLogs = regexp.MustCompile(`^(/v[0-9.]+)?/containers/[A-Za-z0-9_.-]+/l
 
 var allowedPost = regexp.MustCompile(`^(/v[0-9.]+)?/containers/[A-Za-z0-9_.-]+/(start|stop|restart)$`)
 
+var apiVersion = regexp.MustCompile(`^/v1\.([0-9]+)/`)
+
+// oldAPI reports a path naming an API version before 1.24.
+func oldAPI(path string) bool {
+	m := apiVersion.FindStringSubmatch(path)
+	if m == nil {
+		return false
+	}
+	n, err := strconv.Atoi(m[1])
+	return err != nil || n < 24
+}
+
 func allow(r *http.Request) bool {
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
@@ -50,6 +62,11 @@ func allow(r *http.Request) bool {
 			}
 		}
 	case http.MethodPost:
+		// No body: an old API version (before 1.24) took a container's
+		// settings (mounts, privileges) in the body of a start.
+		if r.ContentLength != 0 || len(r.TransferEncoding) > 0 || oldAPI(r.URL.Path) {
+			return false
+		}
 		// Only the stop timeout may ride along; no other options.
 		for k := range r.URL.Query() {
 			if k != "t" {

@@ -56,6 +56,11 @@ async function networkFirst(req, cacheName, markOffline) {
   try {
     const res = await fetch(req);
     if (res.ok) await cache.put(req, res.clone());
+    // A gateway that's down behind a proxy answers 5xx: like no answer at all.
+    if (res.status >= 500) {
+      const saved = await cache.match(req);
+      if (saved) return markOffline ? marked(saved) : saved;
+    }
     return res;
   } catch (err) {
     const saved = await cache.match(req);

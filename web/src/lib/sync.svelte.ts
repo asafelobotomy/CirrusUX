@@ -115,6 +115,11 @@ export async function refresh(): Promise<void> {
     apply(await api<StateResp>('/api/state'));
   } catch (e) {
     if (e instanceof ApiError && e.status === 403) toast('The gateway refused this login', 'warn');
+    // Say so, rather than keep showing the last answer as if it were current.
+    else {
+      const asOf = power.lastSnapshot.getTime() > 0 ? `, so this is ${mode.server} as of ${fmtTime(power.lastSnapshot)}` : '';
+      power.notice = `The gateway isn't answering${asOf}. Retrying…`;
+    }
   }
 }
 
@@ -182,8 +187,9 @@ async function saveUI(json: string): Promise<void> {
   } catch {
     /* offline */
   }
-  // No answer, or tailscale serve answering for a gateway that's down.
-  if (!res || res.status >= 500) {
+  // No answer, or tailscale serve answering for a gateway that's down. A 500
+  // is the gateway itself refusing the save: that's handled below.
+  if (!res || [502, 503, 504].includes(res.status)) {
     if (unsaved === null) toast("Can't reach the gateway. Your settings will be saved when it's back.", 'warn');
     unsaved = json;
     retryTimer = setTimeout(retrySave, 30_000);

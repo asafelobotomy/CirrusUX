@@ -2,13 +2,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"cirrusux/internal/appjob"
@@ -30,10 +25,7 @@ func (c conf) places() storage.Places {
 	add(c.AppsDir, "Apps")
 	add(c.BackupDir, "Backups")
 	if c.AppsDir != "" {
-		p.ArchiveDir = c.AppsArchive
-		if p.ArchiveDir == "" {
-			p.ArchiveDir = filepath.Join(filepath.Dir(c.AppsDir), "archive")
-		}
+		p.ArchiveDir = c.archiveDir()
 		add(p.ArchiveDir, "Archive")
 	}
 	for _, r := range c.StorageRoots {
@@ -58,15 +50,11 @@ func archiveEntry(c conf, name string) (storage.Entry, bool) {
 // startJob runs a measurement or a deletion as a background job
 // (cirrusux-job-<id>.service), which keeps a sleeping server awake.
 func startJob(ctx context.Context, what, name string) (helperapi.Result, error) {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	job := hex.EncodeToString(b)
-	self, _ := os.Executable()
-	unit := "cirrusux-job-" + job
-	if out, err := exec.CommandContext(ctx, "systemd-run", "--quiet", "--collect", "--unit="+unit,
-		"--property=TimeoutStartSec=4h", "--property=Nice=10", "--property=IOSchedulingClass=idle",
-		self, helperapi.CmdStorageRun, what, job, name).CombinedOutput(); err != nil {
-		return helperapi.Result{}, fmt.Errorf("starting the job: %v: %s", err, strings.TrimSpace(string(out)))
+	job := newJobID()
+	unit, err := launchJob(ctx, job, []string{"RuntimeMaxSec=4h", "Nice=10", "IOSchedulingClass=idle"},
+		helperapi.CmdStorageRun, what, job, name)
+	if err != nil {
+		return helperapi.Result{}, err
 	}
 	return helperapi.Result{Output: []string{what + ": started as " + unit}}, nil
 }
@@ -79,14 +67,7 @@ func storageRun(c conf, what, job, name string) (helperapi.Result, error) {
 	} else {
 		st.Action, st.Name = "storage-scan", "Storage"
 	}
-	save := func() {
-		b, _ := jsonMarshal(st)
-		_ = os.MkdirAll(helperapi.JobsDir, 0o755)
-		tmp := filepath.Join(helperapi.JobsDir, "."+job)
-		if os.WriteFile(tmp, b, 0o644) == nil {
-			_ = os.Rename(tmp, filepath.Join(helperapi.JobsDir, job+".json"))
-		}
-	}
+	save := func() { saveStatus(st) }
 	p := c.places()
 	var err error
 	switch what {

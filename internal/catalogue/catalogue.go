@@ -259,6 +259,9 @@ func (a App) Validate() error {
 	return nil
 }
 
+// ValidDigest reports whether d is an image digest: sha256 and 64 hex digits.
+func ValidDigest(d string) bool { return digestRe.MatchString(d) }
+
 // ValidPin reports whether a tag and digest could pin this image: an exact
 // tag, never latest, and a sha256 digest. Updates move the pin with these.
 func ValidPin(tag, digest string) bool {

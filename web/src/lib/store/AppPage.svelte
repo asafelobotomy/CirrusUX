@@ -2,6 +2,7 @@
   // One app's page: what it can reach, the owner's choices, the exact file
   // an install writes (from the gateway, with the server's own settings),
   // then Install or Remove. Everything is checked again on the server.
+  import { untrack } from 'svelte';
   import Dialog from '../components/Dialog.svelte';
   import Button from '../components/Button.svelte';
   import Badge from '../components/Badge.svelte';
@@ -32,12 +33,15 @@
   $effect(() => {
     if (!open) store.open = null;
   });
-  // A fresh page starts from the app's suggestions, before it's drawn.
+  // A fresh page starts from the app's suggestions, before it's drawn. Only
+  // a different app resets them: each poll brings a new store.host.
+  let lastId = '';
   $effect.pre(() => {
-    if (app) {
-      options = defaultOptions(app, store.host?.mediaRoots[0]);
+    if (app && app.id !== lastId) {
+      lastId = app.id;
+      options = defaultOptions(app, untrack(() => store.host?.mediaRoots[0]));
       preview = null;
-    }
+    } else if (!app) lastId = '';
   });
 
   // Live, the gateway renders the file with the server's settings, a

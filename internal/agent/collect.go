@@ -5,17 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"cirrusux/internal/appjob"
@@ -41,8 +37,9 @@ type Collector struct {
 	// ["sudo", "-n", "/usr/local/sbin/cirrusux-helper"]. Empty skips it.
 	Helper []string
 
-	temps   []float64
-	dockerC *http.Client // one client, so its connections are reused
+	temps      []float64
+	dockerC    *http.Client // one client, so its connections are reused
+	dockerOnce sync.Once    // collection and actions ask for it at once
 
 	mu       sync.Mutex
 	features []string // from the last collection, for the command loop
@@ -154,7 +151,7 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 		}
 	}
 	if has(helperapi.ModApps) || has(helperapi.ModOS) || has(helperapi.ModStorage) {
-		s.Jobs = recentJobs(now)
+		s.Jobs = recentJobs(helperapi.JobsDir, now)
 	}
 	if has(helperapi.ModStorage) {
 		s.Storage = storage.Read(helperapi.StorageFile)
@@ -236,15 +233,26 @@ func installedApps() []snapshot.App {
 }
 
 // recentJobs: running ones, and the last day's (app store and OS updates).
-func recentJobs(now time.Time) []snapshot.Job {
+func recentJobs(dir string, now time.Time) []snapshot.Job {
 	var jobs []snapshot.Job
-	for _, j := range appjob.Statuses(helperapi.JobsDir) {
+	for _, j := range appjob.Statuses(dir) {
 		if j.State != "running" && now.Sub(j.Started) > 24*time.Hour || len(jobs) == 10 {
 			continue
+		}
+		// A job killed on the way (out of memory, stopped, past its time
+		// limit) never writes its end: once its unit is gone, it failed.
+		if j.State == "running" && now.Sub(j.Started) > time.Minute && !jobUnitActive(j.Job) {
+			j.State, j.Error = "failed", "the job stopped before it finished"
 		}
 		jobs = append(jobs, snapshot.Job{ID: j.Job, Action: j.Action, App: j.App, Name: j.Name, State: j.State, Step: j.Step, Detail: j.Detail, Error: j.Error, Started: j.Started, Finished: j.Finished})
 	}
 	return jobs
+}
+
+// jobUnitActive reports whether a job's systemd unit still runs; tests
+// replace it.
+var jobUnitActive = func(job string) bool {
+	return exec.Command("systemctl", "is-active", "--quiet", "cirrusux-job-"+job+".service").Run() == nil
 }
 
 func (c *Collector) helper(ctx context.Context, sub string, out any, args ...string) error {
@@ -264,20 +272,6 @@ func (c *Collector) helper(ctx context.Context, sub string, out any, args ...str
 	return json.Unmarshal(b, out)
 }
 
-// ---- Docker, through the filtered unix socket ----
-
-type dockerContainer struct {
-	ID     string            `json:"Id"`
-	Names  []string          `json:"Names"`
-	Image  string            `json:"Image"`
-	State  string            `json:"State"`
-	Status string            `json:"Status"`
-	Labels map[string]string `json:"Labels"`
-	Ports  []struct {
-		PublicPort int `json:"PublicPort"`
-	} `json:"Ports"`
-}
-
 // helperTimeout leaves the helper time to finish its own work first: it
 // gives the egress report 150 s and everything else 30 s.
 func helperTimeout(sub string) time.Duration {
@@ -285,218 +279,4 @@ func helperTimeout(sub string) time.Duration {
 		return 3 * time.Minute
 	}
 	return 40 * time.Second
-}
-
-// docker returns the client for the filtered socket. It's created once:
-// a new Transport per call would leave its idle connections open for good.
-// Callers set deadlines through their context.
-func (c *Collector) docker() *http.Client {
-	if c.dockerC == nil {
-		c.dockerC = &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-					return (&net.Dialer{}).DialContext(ctx, "unix", c.DockerSocket)
-				},
-				MaxIdleConns:    2,
-				IdleConnTimeout: 30 * time.Second,
-			},
-		}
-	}
-	return c.dockerC
-}
-
-func (c *Collector) containers(ctx context.Context) ([]snapshot.Container, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	client := c.docker()
-	var list []dockerContainer
-	if err := getJSON(ctx, client, "http://docker/containers/json?all=1", &list); err != nil {
-		return nil, err
-	}
-	out := make([]snapshot.Container, 0, len(list))
-	for _, d := range list {
-		img, tag := splitImage(d.Image)
-		if v := d.Labels["io.cirrusux.version"]; v != "" {
-			// Pinned by the app store as tag@digest: the runtime reports
-			// only the digest, so the version comes from its label.
-			tag = v
-		}
-		ct := snapshot.Container{
-			Name: strings.TrimPrefix(firstOr(d.Names, d.ID[:12]), "/"), Image: img, Tag: tag,
-			State: d.State, Status: d.Status, Health: containerHealth(d.State, d.Status), Ports: []int{},
-		}
-		seen := map[int]bool{}
-		for _, p := range d.Ports {
-			if p.PublicPort != 0 && !seen[p.PublicPort] {
-				seen[p.PublicPort] = true
-				ct.Ports = append(ct.Ports, p.PublicPort)
-			}
-		}
-		if d.State == "running" {
-			var insp struct {
-				State struct {
-					StartedAt time.Time `json:"StartedAt"`
-				} `json:"State"`
-			}
-			if err := getJSON(ctx, client, "http://docker/containers/"+d.ID+"/json", &insp); err == nil && !insp.State.StartedAt.IsZero() {
-				t := insp.State.StartedAt
-				ct.UpSince = &t
-			}
-		}
-		out = append(out, ct)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, nil
-}
-
-func getJSON(ctx context.Context, client *http.Client, url string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s", url, resp.Status)
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-func firstOr(s []string, def string) string {
-	if len(s) > 0 {
-		return s[0]
-	}
-	return def
-}
-
-// ---- systemd timers ----
-
-func nextWakes(ctx context.Context, units []string, errf func(string, ...any)) []snapshot.Wake {
-	wakes := []snapshot.Wake{}
-	if len(units) == 0 {
-		return wakes
-	}
-	out, err := exec.CommandContext(ctx, "systemctl", "list-timers", "--all", "--output=json").Output()
-	if err != nil {
-		errf("timers: %v", err)
-		return wakes
-	}
-	var timers []struct {
-		Next int64  `json:"next"` // µs since epoch
-		Unit string `json:"unit"`
-	}
-	if err := json.Unmarshal(out, &timers); err != nil {
-		errf("timers: %v", err)
-		return wakes
-	}
-	want := map[string]bool{}
-	for _, u := range units {
-		want[u] = true
-	}
-	for _, t := range timers {
-		if want[t.Unit] && t.Next > 0 {
-			wakes = append(wakes, snapshot.Wake{At: time.UnixMicro(t.Next), Unit: t.Unit})
-		}
-	}
-	sort.Slice(wakes, func(i, j int) bool { return wakes[i].At.Before(wakes[j].At) })
-	return wakes
-}
-
-// ---- /proc and /sys ----
-
-func bootTime() time.Time {
-	b, err := os.ReadFile("/proc/stat")
-	if err != nil {
-		return time.Time{}
-	}
-	for _, line := range strings.Split(string(b), "\n") {
-		if v, ok := strings.CutPrefix(line, "btime "); ok {
-			if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil {
-				return time.Unix(n, 0)
-			}
-		}
-	}
-	return time.Time{}
-}
-
-func (c *Collector) disk() (*snapshot.Disk, error) {
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(c.DiskMount, &st); err != nil {
-		return nil, err
-	}
-	d := &snapshot.Disk{
-		Mount:      c.DiskMount,
-		TotalBytes: st.Blocks * uint64(st.Bsize),
-		FreeBytes:  st.Bavail * uint64(st.Bsize),
-		LinkMbps:   usbSpeed(c.DiskMount),
-	}
-	return d, nil
-}
-
-// usbSpeed finds the block device behind mount and walks up its sysfs path
-// to the USB device's "speed" file (Mb/s). 0 when not on USB.
-func usbSpeed(mount string) int {
-	b, err := os.ReadFile("/proc/mounts")
-	if err != nil {
-		return 0
-	}
-	var dev string
-	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 && f[1] == mount {
-			dev = f[0]
-		}
-	}
-	if !strings.HasPrefix(dev, "/dev/") {
-		return 0
-	}
-	name := filepath.Base(dev)
-	if p, err := filepath.EvalSymlinks(dev); err == nil {
-		name = filepath.Base(p)
-	}
-	sys, err := filepath.EvalSymlinks("/sys/class/block/" + name)
-	if err != nil {
-		return 0
-	}
-	for dir := sys; dir != "/" && dir != "."; dir = filepath.Dir(dir) {
-		if b, err := os.ReadFile(filepath.Join(dir, "speed")); err == nil {
-			if n, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
-				return n
-			}
-		}
-	}
-	return 0
-}
-
-var errNoSensor = errors.New("no thermal zones")
-
-// cpuTemp prefers the package sensor, else the first thermal zone.
-func cpuTemp() (float64, error) {
-	zones, _ := filepath.Glob("/sys/class/thermal/thermal_zone*")
-	var first string
-	for _, z := range zones {
-		typ, _ := os.ReadFile(z + "/type")
-		if first == "" {
-			first = z
-		}
-		if strings.TrimSpace(string(typ)) == "x86_pkg_temp" {
-			first = z
-			break
-		}
-	}
-	if first == "" {
-		return 0, errNoSensor
-	}
-	b, err := os.ReadFile(first + "/temp")
-	if err != nil {
-		return 0, err
-	}
-	milli, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil {
-		return 0, err
-	}
-	return float64(milli) / 1000, nil
 }

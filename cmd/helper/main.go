@@ -37,15 +37,17 @@ func main() {
 	}
 	if len(os.Args) == 3 && os.Args[1] == helperapi.CmdStayAwake && slices.Contains(helperapi.StayAwakeArgs, os.Args[2]) {
 		// the one subcommand with an argument, from a fixed list
-	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdAppRun && jobRe.MatchString(os.Args[2]) {
+	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdAppJob && helperapi.JobRe.MatchString(os.Args[2]) {
+		// the agent's request, by its job ID
+	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdAppRun && helperapi.JobRe.MatchString(os.Args[2]) {
 		// started by systemd-run for a checked job; not in sudoers
-	} else if len(os.Args) == 4 && os.Args[1] == helperapi.CmdOSRun && (os.Args[2] == "check" || os.Args[2] == "upgrade") && jobRe.MatchString(os.Args[3]) {
+	} else if len(os.Args) == 4 && os.Args[1] == helperapi.CmdOSRun && (os.Args[2] == "check" || os.Args[2] == "upgrade") && helperapi.JobRe.MatchString(os.Args[3]) {
 		// started by systemd-run; not in sudoers
 	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdArchiveDelete && entryRe.MatchString(os.Args[2]) {
 		// an archive entry's name, checked again before anything goes
-	} else if len(os.Args) == 5 && os.Args[1] == helperapi.CmdStorageRun && jobRe.MatchString(os.Args[3]) && entryRe.MatchString(os.Args[4]) {
+	} else if len(os.Args) == 5 && os.Args[1] == helperapi.CmdStorageRun && helperapi.JobRe.MatchString(os.Args[3]) && entryRe.MatchString(os.Args[4]) {
 		// started by systemd-run; not in sudoers
-	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdJournal && unitRe.MatchString(os.Args[2]) {
+	} else if len(os.Args) == 3 && os.Args[1] == helperapi.CmdJournal && helperapi.UnitRe.MatchString(os.Args[2]) {
 		// a CirrusUX unit, checked by pattern
 	} else if len(os.Args) != 2 {
 		fail("usage: cirrusux-helper <%s>", strings.Join(helperapi.Commands, "|"))
@@ -107,7 +109,7 @@ func main() {
 		out, err = appsInfo(c)
 	case helperapi.CmdAppJob:
 		need(helperapi.ModApps)
-		out, err = appJob(ctx, c)
+		out, err = appJob(ctx, c, os.Args[2])
 	case helperapi.CmdAppRun:
 		need(helperapi.ModApps)
 		out, err = appRun(c, os.Args[2])
@@ -244,14 +246,10 @@ func command(ctx context.Context, name string, args ...string) (helperapi.Lines,
 	return helperapi.Lines{Lines: strings.Split(strings.TrimRight(string(out), "\n"), "\n")}, nil
 }
 
-var jobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
-
-// unitRe: the journal command reads only CirrusUX's own units, and app
+// helperapi.UnitRe: the journal command reads only CirrusUX's own units, and app
 // units the app store made (cirrusux-<app>.service).
 // entryRe: an archive entry's name, or "-" for none.
 var entryRe = regexp.MustCompile(`^(-|[A-Za-z0-9][A-Za-z0-9._-]{0,200})$`)
-
-var unitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
 
 var bannedRe = regexp.MustCompile(`Currently banned:\s*(\d+)`)
 

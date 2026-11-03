@@ -86,7 +86,7 @@ var assistantPresets = map[string]struct{ base, name string }{
 func ConfigFromEnv() (Config, error) {
 	c := Config{
 		Listen:      env("CIRRUS_LISTEN", "127.0.0.1:8064"),
-		DataDir:     env("CIRRUS_DATA_DIR", "/var/lib/cirrusux"),
+		DataDir:     env("CIRRUS_DATA_DIR", "/var/lib/cirrusux-gateway"),
 		Dev:         os.Getenv("CIRRUS_DEV") == "1",
 		AgentToken:  os.Getenv("CIRRUS_AGENT_TOKEN"),
 		ServerName:  env("CIRRUS_SERVER_NAME", "server"),
@@ -211,7 +211,7 @@ func loadZone(name string) (*time.Location, string, error) {
 		name = localZoneName()
 	}
 	if name == "" {
-		return time.Local, "UTC", nil
+		return time.UTC, "UTC", nil // the browser is told UTC, so stamps are in UTC too
 	}
 	l, err := time.LoadLocation(name)
 	if err != nil {

@@ -13,7 +13,7 @@ export const MAIN_NAV: NavItem[] = [
   { route: 'storage', label: 'Storage', icon: I.HardDrive, available: () => has('storage') },
   { route: 'security', label: 'Security', icon: I.ShieldCheck, available: () => has('security') || has('av') || has('egress') },
   { route: 'updates', label: 'Updates', icon: I.RefreshCw, available: () => has('apps') },
-  { route: 'media', label: 'Media', icon: I.Film, phase: 'Phase 3' },
+  { route: 'media', label: 'Media', icon: I.Film },
   { route: 'logs', label: 'Logs', icon: I.ScrollText },
   { route: 'changelog', label: 'Changelog', icon: I.History },
 ];

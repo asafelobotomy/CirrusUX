@@ -36,9 +36,16 @@ body='<?xml version="1.0" encoding="utf-8"?>
 <NewMACAddress>'"$SERVER_MAC"'</NewMACAddress>
 </u:GetSpecificHostEntry></s:Body></s:Envelope>'
 
+case "$ROUTER_USER$ROUTER_PASSWORD" in *"
+"*) echo "ROUTER_USER and ROUTER_PASSWORD must be on one line" >&2; exit 1 ;;
+esac
+# curl's config file quotes values: a backslash or a quote in them must be
+# escaped, or the login breaks.
+quote() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
+
 # The password goes to curl on stdin, never on its command line, where
 # other users could read it in the process list.
-reply=$(printf 'user = "%s:%s"\n' "$ROUTER_USER" "$ROUTER_PASSWORD" |
+reply=$(printf 'user = "%s:%s"\n' "$(quote "$ROUTER_USER")" "$(quote "$ROUTER_PASSWORD")" |
 	curl -sS --max-time 10 --anyauth -K - \
 		-H 'Content-Type: text/xml; charset="utf-8"' \
 		-H 'SoapAction: urn:dslforum-org:service:Hosts:1#GetSpecificHostEntry' \

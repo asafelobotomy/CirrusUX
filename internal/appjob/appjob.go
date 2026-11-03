@@ -12,11 +12,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"cirrusux/internal/catalogue"
+	"cirrusux/internal/helperapi"
 )
 
 // Request is what the agent asks for: one file per job.
@@ -31,8 +31,6 @@ type Request struct {
 	Digest string `json:"digest,omitempty"`
 }
 
-var jobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
-
 // ParseRequest reads a request strictly: unknown fields and actions refused.
 func ParseRequest(b []byte) (Request, error) {
 	var r Request
@@ -44,7 +42,7 @@ func ParseRequest(b []byte) (Request, error) {
 	if err := dec.Decode(&r); err != nil {
 		return r, err
 	}
-	if !jobRe.MatchString(r.Job) {
+	if !helperapi.JobRe.MatchString(r.Job) {
 		return r, fmt.Errorf("bad job id %q", r.Job)
 	}
 	switch r.Action {
@@ -176,6 +174,13 @@ func (e *Env) Check(r Request) (catalogue.App, error) {
 
 // Run carries out a checked request, writing its status as it goes.
 func (e *Env) Run(ctx context.Context, r Request) error {
+	// One job per app at a time: a second one waits, then is checked
+	// against what the first left (removed, or already on that version).
+	if _, known := e.find(r.App); known { // a catalogue id: safe in a path
+		if unlock, err := e.lockApp(r.App); err == nil {
+			defer unlock()
+		}
+	}
 	app, err := e.Check(r)
 	st := Status{Job: r.Job, Action: r.Action, App: r.App, Name: app.Name, State: "running", Started: e.Now()}
 	if err != nil {
@@ -250,93 +255,6 @@ func (e *Env) install(ctx context.Context, st *Status, app catalogue.App, o cata
 	return writeJSON(filepath.Join(e.RecordsDir, app.ID+".json"), rec, 0o644)
 }
 
-// update moves an installed app to another version: back up its own
-// folders, start the new version, and if it doesn't answer, put the folders
-// and the previous version back by itself.
-func (e *Env) update(ctx context.Context, st *Status, app catalogue.App, tag, digest string) error {
-	rec, err := e.record(app.ID)
-	if err != nil {
-		return err
-	}
-	prevDigest := rec.Digest
-	if prevDigest == "" && rec.Tag == app.Tag {
-		prevDigest = app.Digest // installed before records kept the digest
-	}
-	old, next := app.WithPin(rec.Tag, prevDigest), app.WithPin(tag, digest)
-	oldPlan, err := catalogue.Resolve(old, rec.Options, e.Host)
-	if err != nil {
-		return err
-	}
-	newPlan, err := catalogue.Resolve(next, rec.Options, e.Host)
-	if err != nil {
-		return err
-	}
-	appDir := filepath.Join(e.Host.AppsDir, app.ID)
-
-	e.step(st, "Downloading "+app.Image+":"+tag, "")
-	if err := e.Runtime.Pull(ctx, next.ImageRef(), func(line string) { e.step(st, st.Step, line) }); err != nil {
-		return fmt.Errorf("download: %w", err)
-	}
-
-	// Settings and data are copied aside first; the cache isn't worth it.
-	backup := filepath.Join(e.ArchiveDir, fmt.Sprintf("%s-before-%s-%s", app.ID, rec.Tag, e.Now().Format("20060102-150405")))
-	e.step(st, "Backing up "+app.Name+"'s settings and data", backup)
-	var saved []string
-	for _, v := range app.Volumes {
-		if v.Kind != catalogue.KindConfig && v.Kind != catalogue.KindData {
-			continue
-		}
-		src := filepath.Join(appDir, v.Name)
-		if _, err := os.Stat(src); err != nil {
-			continue
-		}
-		if err := os.MkdirAll(backup, 0o750); err != nil {
-			return err
-		}
-		if err := e.copy(src, filepath.Join(backup, v.Name)); err != nil {
-			return fmt.Errorf("backup: %w", err)
-		}
-		saved = append(saved, v.Name)
-	}
-
-	e.step(st, fmt.Sprintf("Starting %s %s", app.Name, tag), "")
-	err = e.Runtime.Up(ctx, newPlan, appDir)
-	if err == nil {
-		if url := e.healthURL(app, newPlan); url != "" {
-			e.step(st, "Waiting for "+app.Name+" to answer", url)
-			err = e.waitHealthy(ctx, url)
-		}
-	}
-	if err != nil {
-		e.step(st, fmt.Sprintf("%s %s didn't work: going back to %s", app.Name, tag, rec.Tag), err.Error())
-		ctx := context.WithoutCancel(ctx)
-		for _, name := range saved {
-			dst := filepath.Join(appDir, name)
-			if rerr := os.RemoveAll(dst); rerr == nil {
-				_ = e.copy(filepath.Join(backup, name), dst)
-			}
-		}
-		if rerr := e.Runtime.Up(ctx, oldPlan, appDir); rerr != nil {
-			return fmt.Errorf("update failed (%v), and so did going back: %v; the backup is in %s", err, rerr, backup)
-		}
-		if digest != prevDigest {
-			e.dropImage(ctx, app, digest) // the version that didn't work
-		}
-		return fmt.Errorf("update failed (%v); %s is back on %s", err, app.Name, rec.Tag)
-	}
-
-	e.step(st, "Recording the update", "")
-	// Only the version before this one is kept, to go back to: the one
-	// before that has no use any more.
-	if d := rec.PreviousDigest; d != "" && d != prevDigest && d != digest {
-		e.dropImage(ctx, app, d)
-	}
-	rec.PreviousTag, rec.PreviousDigest = rec.Tag, prevDigest
-	rec.Tag, rec.Digest, rec.Updated = tag, digest, e.Now()
-	st.Detail = "backup in " + backup
-	return writeJSON(filepath.Join(e.RecordsDir, app.ID+".json"), rec, 0o644)
-}
-
 func (e *Env) healthURL(app catalogue.App, p catalogue.Plan) string {
 	if app.Check == nil {
 		return ""
@@ -351,63 +269,6 @@ func (e *Env) healthURL(app catalogue.App, p catalogue.Plan) string {
 		}
 	}
 	return ""
-}
-
-func (e *Env) copy(src, dst string) error {
-	if e.Copy != nil {
-		return e.Copy(src, dst)
-	}
-	return CopyTree(src, dst)
-}
-
-func (e *Env) record(id string) (Record, error) {
-	var r Record
-	b, err := os.ReadFile(filepath.Join(e.RecordsDir, id+".json"))
-	if err != nil {
-		return r, fmt.Errorf("no record of %s: %v", id, err)
-	}
-	return r, json.Unmarshal(b, &r)
-}
-
-func (e *Env) remove(ctx context.Context, st *Status, app catalogue.App) error {
-	appDir := filepath.Join(e.Host.AppsDir, app.ID)
-	rec, _ := e.record(app.ID)
-	e.step(st, "Stopping "+app.Name, "")
-	if err := e.Runtime.Down(ctx, app.ID, appDir); err != nil {
-		return fmt.Errorf("stop: %w", err)
-	}
-	// Its images go: they hold no data of the owner's, and a reinstall
-	// downloads them again. Its folder is what's kept.
-	e.step(st, "Removing its images", "")
-	for _, d := range []string{rec.Digest, rec.PreviousDigest} {
-		if d != "" {
-			e.dropImage(ctx, app, d)
-		}
-	}
-	e.step(st, "Archiving its folder", "")
-	dest := filepath.Join(e.ArchiveDir, app.ID+"-"+e.Now().Format("20060102-150405"))
-	if err := os.MkdirAll(e.ArchiveDir, 0o750); err != nil {
-		return err
-	}
-	if _, err := os.Stat(appDir); err == nil {
-		if err := os.Rename(appDir, dest); err != nil {
-			return fmt.Errorf("archive: %w", err)
-		}
-	} else if err := os.MkdirAll(dest, 0o750); err != nil {
-		return err
-	}
-	recFile := filepath.Join(e.RecordsDir, app.ID+".json")
-	if b, err := os.ReadFile(recFile); err == nil {
-		_ = os.WriteFile(filepath.Join(dest, "cirrusux-record.json"), b, 0o644)
-	}
-	st.Detail = "archived to " + dest
-	return os.Remove(recFile)
-}
-
-// dropImage removes one version's image, if nothing else uses it. Failing
-// to (another container shares it) never fails the job.
-func (e *Env) dropImage(ctx context.Context, app catalogue.App, digest string) {
-	_ = e.Runtime.RemoveImage(context.WithoutCancel(ctx), app.Image+"@"+digest)
 }
 
 func (e *Env) waitHealthy(ctx context.Context, url string) error {
@@ -446,10 +307,6 @@ func (e *Env) finish(st *Status, err error) error {
 	return err
 }
 
-func (e *Env) writeStatus(st *Status) error {
-	return writeJSON(filepath.Join(e.StatusDir, st.Job+".json"), st, 0o644)
-}
-
 func (e *Env) find(id string) (catalogue.App, bool) {
 	for _, a := range e.Catalogue {
 		if a.ID == id {
@@ -462,37 +319,6 @@ func (e *Env) find(id string) (catalogue.App, bool) {
 func (e *Env) installed(id string) bool {
 	_, err := os.Stat(filepath.Join(e.RecordsDir, id+".json"))
 	return err == nil
-}
-
-// Records lists the installed apps.
-func Records(dir string) []Record {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
-	var out []Record
-	for _, f := range files {
-		var r Record
-		if b, err := os.ReadFile(f); err == nil && json.Unmarshal(b, &r) == nil {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-// Statuses lists job statuses, newest first.
-func Statuses(dir string) []Status {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
-	var out []Status
-	for _, f := range files {
-		var s Status
-		if b, err := os.ReadFile(f); err == nil && json.Unmarshal(b, &s) == nil {
-			out = append(out, s)
-		}
-	}
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j].Started.After(out[j-1].Started); j-- {
-			out[j], out[j-1] = out[j-1], out[j]
-		}
-	}
-	return out
 }
 
 func hostPortOf(p catalogue.Plan, port catalogue.Port) int {
@@ -513,19 +339,4 @@ func protoOr(p string) string {
 
 func emptyOptions(o catalogue.Options) bool {
 	return len(o.Ports) == 0 && len(o.Media) == 0 && len(o.Env) == 0 && len(o.Devices) == 0
-}
-
-func writeJSON(path string, v any, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, mode); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
 }

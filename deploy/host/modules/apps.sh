@@ -17,21 +17,16 @@ module_apps() {
 	local rt=${APPS_RUNTIME:-podman} dir=${APPS_DIR:-/srv/cirrusux/apps} archive=${APPS_ARCHIVE:-/srv/cirrusux/archive}
 	local roots=${APPS_MEDIA_ROOTS:-/srv/media} r
 	case "$rt" in podman | docker) ;; *) die "APPS_RUNTIME must be podman or docker" ;; esac
-	[[ -z ${APPS_BIND:-} || $APPS_BIND =~ ^[0-9a-fA-F.:]+$ ]] || die "APPS_BIND must be an IP address"
+	[ -z "${APPS_BIND:-}" ] || valid_ip "$APPS_BIND" || die "APPS_BIND must be an IP address"
 	for r in "$dir" "$archive" $roots; do
-		[[ $r =~ ^/[A-Za-z0-9._/@+-]*$ ]] || die "$r: an absolute path without spaces or special characters"
+		valid_path "$r" || die "$r: an absolute path without spaces, special characters, \"..\" or a trailing /"
 	done
 
 	if [ "$rt" = podman ]; then
 		# Installed without "recommends", so name what rootful Podman needs:
 		# netavark calls nft for container networking, aardvark-dns names.
 		need_packages podman nftables aardvark-dns
-		if unit_enabled podman.socket; then
-			ok "podman.socket on"
-		else
-			change "start Podman's API socket (podman.socket)" "systemctl disable --now podman.socket" \
-				systemctl enable --now podman.socket
-		fi
+		start_unit podman.socket "Podman's API socket (podman.socket)"
 		local before=$CHANGES
 		put_file /etc/systemd/system/cirrusux-dockerfilter.service.d/podman.conf 644 root:root <<'EOF2'
 # Written by cirrusux-setup (apps module): the filter talks to Podman.
@@ -57,6 +52,12 @@ EOF2
 			ok "docker with compose"
 		else
 			warn "APPS_RUNTIME=docker needs Docker with its compose plugin: see https://docs.docker.com/engine/install/debian/"
+		fi
+		# Back from Podman: the filter talks to Docker's socket again.
+		local dropin=/etc/systemd/system/cirrusux-dockerfilter.service.d/podman.conf
+		if [ -f "$ROOT$dropin" ]; then
+			change "point the Docker filter back at Docker (remove $dropin; a dated copy stays)" "cirrusux-setup apply apps with APPS_RUNTIME=podman" \
+				_apps_drop_podman "$ROOT$dropin"
 		fi
 	fi
 
@@ -86,4 +87,13 @@ APPS_USER=cirrusux-apps
 MEDIA_ROOTS=$roots
 ${APPS_BIND:+APPS_BIND=$APPS_BIND}
 EOF2
+}
+
+_apps_drop_podman() {
+	backup "$1"
+	rm -f "$1"
+	if [ -z "${NO_SYSTEMD:-}" ]; then
+		systemctl daemon-reload
+		systemctl restart cirrusux-dockerfilter.socket
+	fi
 }

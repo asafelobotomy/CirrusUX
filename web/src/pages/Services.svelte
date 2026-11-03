@@ -16,7 +16,7 @@
 <div class="stack">
   <div class="stats">
     <div class="stat"><span class="faint">Running</span><strong class="num">{running}<small>/{live.containers.length}</small></strong></div>
-    {#if memMb}<div class="stat"><span class="faint">Memory</span><strong class="num">{(memMb / 1024).toFixed(1)}<small> GB of 6.2</small></strong></div>{/if}
+    {#if memMb}<div class="stat"><span class="faint">Memory used</span><strong class="num">{(memMb / 1024).toFixed(1)}<small> GB</small></strong></div>{/if}
     <div class="stat">
       <span class="faint">Images</span>
       <strong>{unpinned ? `${unpinned} on :latest` : 'All pinned'}</strong>

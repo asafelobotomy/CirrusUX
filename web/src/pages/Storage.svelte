@@ -15,8 +15,9 @@
   import { confirmArchiveDelete, measureStorage } from '../lib/state/actions';
   import { fmtAgo, fmtDay, fmtDayTime } from '../lib/time.svelte';
   import { Archive, HardDrive, RefreshCw, Trash2 } from '../lib/icons';
+  import { fmtBytes } from '../lib/format';
+  const size = (b: number) => fmtBytes(b, true);
 
-  const size = (b: number) => (b >= 1e12 ? `${(b / 1e12).toFixed(2)} TB` : b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${Math.round(b / 1e6)} MB` : `${Math.round(b / 1e3)} kB`);
   const s = $derived(store.storage);
   const jobs = $derived(store.jobs.filter((j) => j.app === 'storage'));
   const busy = $derived(jobs.some((j) => j.state === 'running'));
@@ -91,7 +92,7 @@
             <Badge tone="neutral">{kindLabel[e.kind]}</Badge>
             <span class="num muted">{size(e.bytes)}</span>
             <span class="faint small">{fmtDay(e.modified)}</span>
-            <Button size="sm" variant="ghost" disabled={!canAct || busy} onclick={() => (reviewing = e)}>{#snippet icon()}<Trash2 />{/snippet}Delete…</Button>
+            <Button size="sm" variant="ghost" disabled={!canAct || busy} aria-label="Delete {what(e)} ({e.name})…" onclick={() => (reviewing = e)}>{#snippet icon()}<Trash2 />{/snippet}Delete…</Button>
           </li>
         {/each}
       </ul>

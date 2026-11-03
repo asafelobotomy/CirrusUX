@@ -1,7 +1,7 @@
 #!/bin/bash
-# cirrusux-setup — sets a machine up for CirrusUX, one module at a time
-# (ROADMAP Phase 4). Re-runnable: it changes only what differs from the
-# settings in /etc/cirrusux/host.env.
+# cirrusux-setup — sets a machine up for CirrusUX, one module at a time.
+# Re-runnable: it changes only what differs from the settings in
+# /etc/cirrusux/host.env.
 #
 #   cirrusux-setup check [MODULE...]   report what apply would change (exit 2 if anything)
 #   cirrusux-setup apply [MODULE...]   make the changes, logged with their undo
@@ -17,10 +17,23 @@ HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 # shellcheck source=lib.sh
 . "$HERE/lib.sh"
 
+# Root runs this folder's code, now and later (the firewall's rollback, the
+# link in /usr/local/sbin): anyone who can change it could act as root.
+if [ "$(id -u)" = 0 ] && [ -z "${ROOT:-}" ]; then
+	for d in "$HERE" "$HERE/modules"; do
+		read -r owner perms <<<"$(stat -c '%u %A' "$d")"
+		if [ "$owner" != 0 ] || [ "${perms:5:1}" = w ] || [ "${perms:8:1}" = w ]; then
+			warn "$d can be changed by a user other than root, and root runs its code: copy CirrusUX to a root-owned folder such as /opt/cirrusux"
+			break
+		fi
+	done
+fi
+
 CONFIG=${CONFIG:-$ROOT/etc/cirrusux/host.env}
 HOST_MODULES="base"
 
-usage() { sed -n '2,13s/^# \{0,1\}//p' "$0"; }
+# The comment block at the top, up to `set`.
+usage() { sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//p}' "$0"; }
 
 module_file() { printf '%s/modules/%s.sh' "$HERE" "$1"; }
 

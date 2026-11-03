@@ -2,10 +2,11 @@
 // a fixed, named list, worked out from what the panel already knows. A
 // widget only picks names from here, so nothing anyone types runs as code.
 import { live } from './state/live.svelte';
-import { power } from './state/power.svelte';
+import { power, powerLabel } from './state/power.svelte';
 import { pendingUpdates, store } from './state/store.svelte';
 import { has, mode, sleeps } from './api.svelte';
 import { clock, fmtAgo, fmtDayTime, fmtDuration } from './time.svelte';
+import { fmtBytes, fmtGb } from './format';
 
 export interface Reading {
   text: string;
@@ -21,13 +22,11 @@ export interface Metric {
   read: () => Reading | null;
 }
 
-const gb = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)} TB` : `${Math.round(n)} GB`);
-
 export const METRICS: Metric[] = [
   {
     id: 'power',
     label: 'Power',
-    read: () => ({ text: { awake: sleeps() ? 'Awake' : 'Online', asleep: 'Asleep', waking: 'Waking', unreachable: 'No reports' }[power.state], warn: power.state === 'unreachable' }),
+    read: () => ({ text: powerLabel(power.state), warn: power.state === 'unreachable' }),
   },
   {
     id: 'uptime',
@@ -46,7 +45,7 @@ export const METRICS: Metric[] = [
   {
     id: 'disk-free',
     label: 'Disk free',
-    read: () => (live.disk ? { text: gb(live.disk.totalGb - live.disk.usedGb), warn: live.disk.usedGb / live.disk.totalGb > 0.9 } : null),
+    read: () => (live.disk ? { text: fmtGb(live.disk.totalGb - live.disk.usedGb), warn: live.disk.usedGb / live.disk.totalGb > 0.9 } : null),
   },
   {
     id: 'disk-used',
@@ -103,7 +102,7 @@ export const METRICS: Metric[] = [
     id: 'archive-size',
     label: 'Archive',
     available: () => has('storage'),
-    read: () => (store.storage ? { text: gb(store.storage.archive.reduce((n, e) => n + e.bytes, 0) / 1e9) } : { text: 'not measured' }),
+    read: () => (store.storage ? { text: fmtBytes(store.storage.archive.reduce((n, e) => n + e.bytes, 0)) } : { text: 'not measured' }),
   },
   {
     id: 'banned',

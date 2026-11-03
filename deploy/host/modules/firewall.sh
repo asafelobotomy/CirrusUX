@@ -136,15 +136,33 @@ module_firewall() {
 # running this, unless the address is allowed. The rollback would undo it,
 # but there's no need to find out.
 fw_lockout_check() {
-	local client=${SSH_CONNECTION:-}
-	client=${client%% *}
-	[ -n "$client" ] || return 0
-	case "$client" in 100.*) [ "${FIREWALL_TAILSCALE:-yes}" = yes ] && return 0 ;; esac
-	local n
-	for n in ${FIREWALL_ALLOW:-}; do
-		if in_net "$client" "$n"; then return 0; fi
+	local client n ok
+	for client in $(ssh_clients); do
+		ok=""
+		if [ "${FIREWALL_TAILSCALE:-yes}" = yes ] && in_net "$client" 100.64.0.0/10; then ok=1; fi
+		for n in ${FIREWALL_ALLOW:-}; do
+			if in_net "$client" "$n"; then ok=1; fi
+		done
+		[ -n "$ok" ] || die "an SSH session comes from $client, which FIREWALL_ALLOW doesn't include: it would be cut off"
 	done
-	die "your SSH session comes from $client, which FIREWALL_ALLOW doesn't include: it would be cut off"
+}
+
+# ssh_clients lists the addresses SSH sessions come from. sudo and run0
+# drop SSH_CONNECTION, so it's also read from this process's ancestors
+# (sudo's parent is the SSH shell) and from the logged-in sessions (run0
+# runs outside them): a ruleset must not cut off any of them.
+ssh_clients() {
+	local pid=$$ env
+	{
+		[ -n "${SSH_CONNECTION:-}" ] && echo "${SSH_CONNECTION%% *}"
+		[ -n "${NO_SESSION_SCAN:-}" ] && exit 0 # tests: only the variable
+		while [ "${pid:-1}" -gt 1 ]; do
+			env=$(tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | sed -n 's/^SSH_CONNECTION=\([^ ]*\).*/\1/p')
+			[ -n "$env" ] && echo "$env"
+			pid=$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null)
+		done
+		who --ips 2>/dev/null | awk '$NF ~ /^[0-9a-fA-F.:]+$/ {print $NF}'
+	} | sort -u
 }
 
 # in_net ADDR CIDR: IPv4 only; IPv6 sessions are left to the rollback.
@@ -174,7 +192,15 @@ fw_try() {
 	STAMP=$(date +%Y%m%d-%H%M%S)
 	mkdir -p "$ROOT$FW_DIR"
 	prev="$ROOT$FW_DIR/$STAMP-before.nft"
-	fw_current >"$prev"
+	local pending
+	pending=$(cat "$ROOT$FW_DIR/pending" 2>/dev/null) || true
+	if [ -n "$pending" ] && [ -f "$ROOT$FW_DIR/$pending-before.nft" ]; then
+		# A ruleset is still waiting for confirmation: going back means going
+		# back past it, to what was there before either.
+		cp "$ROOT$FW_DIR/$pending-before.nft" "$prev"
+	else
+		fw_current >"$prev"
+	fi
 	cp "$new" "$ROOT$FW_DIR/$STAMP-candidate.nft"
 	# One transaction: the table is replaced whole or not at all.
 	{
@@ -182,9 +208,10 @@ fw_try() {
 		echo "delete table $FW_TABLE"
 		cat "$new"
 	} >"$ROOT$FW_DIR/$STAMP-load.nft"
-	nft -f "$ROOT$FW_DIR/$STAMP-load.nft"
-	echo "$STAMP" >"$ROOT$FW_DIR/pending"
+	# The rollback is set up first: if that fails, nothing has changed yet.
 	fw_schedule_rollback "$prev"
+	echo "$STAMP" >"$ROOT$FW_DIR/pending"
+	nft -f "$ROOT$FW_DIR/$STAMP-load.nft"
 	say "    Loaded. Check you can still reach this machine, then within ${FIREWALL_CONFIRM_SECONDS:-120} s run:"
 	say "      sudo cirrusux-setup firewall-confirm"
 	say "    Otherwise the previous rules come back on their own."
@@ -195,6 +222,7 @@ fw_schedule_rollback() {
 	self=$(readlink -f "$0")
 	if command -v systemd-run >/dev/null && [ -z "${NO_SYSTEMD:-}" ]; then
 		systemctl stop "$FW_TIMER.timer" 2>/dev/null || true
+		systemctl reset-failed "$FW_TIMER.timer" "$FW_TIMER.service" 2>/dev/null || true
 		systemd-run --quiet --unit="$FW_TIMER" --on-active="$secs" "$self" firewall-rollback "$prev"
 	else
 		# Without systemd (tests, containers): a detached sleeper.
@@ -242,8 +270,9 @@ _fw_keep() {
 
 # firewall_rollback FILE puts the table back as FILE has it (empty: none).
 firewall_rollback() {
-	local prev=${1:-}
+	local prev=${1:-} manual=""
 	if [ -z "$prev" ]; then
+		manual=1
 		local all=("$ROOT$FW_DIR"/*-before.nft)
 		prev=${all[-1]}
 	fi
@@ -256,6 +285,22 @@ firewall_rollback() {
 			_fw_restore ""
 	fi
 	rm -f "$ROOT$FW_DIR/pending" "$ROOT$FW_DIR/rollback.pid"
+	# By hand, going back undoes a confirmed ruleset: the earlier one becomes
+	# what loads at boot, and `check` shows host.env's rules as a change again.
+	if [ -n "$manual" ]; then
+		change "keep $(basename "$prev") as the confirmed ruleset" "cirrusux-setup apply firewall" \
+			_fw_keep_back "$prev"
+	fi
+}
+
+_fw_keep_back() {
+	backup "$ROOT$FW_RULES"
+	if [ -s "$1" ]; then
+		install -m 644 "$1" "$ROOT$FW_RULES"
+	else
+		rm -f "$ROOT$FW_RULES" # its dated copy stays
+		[ -n "${NO_SYSTEMD:-}" ] || systemctl disable "$FW_UNIT" 2>/dev/null || true
+	fi
 }
 
 _fw_restore() {
@@ -274,6 +319,7 @@ _fw_restore() {
 # table: Debian's nftables.service flushes every table, Docker's included,
 # so it isn't used.
 _fw_boot_unit() {
+	local before=$CHANGES
 	put_file "/etc/systemd/system/$FW_UNIT" 644 root:root <<EOF
 # Written by cirrusux-setup (firewall module).
 [Unit]
@@ -291,6 +337,9 @@ ExecStop=-/usr/sbin/nft delete table inet cirrusux
 [Install]
 WantedBy=sysinit.target
 EOF
+	if [ "$CHANGES" -ne "$before" ] && unit_enabled "$FW_UNIT"; then
+		change "reload systemd units" "—" systemctl daemon-reload
+	fi
 	if [ -f "$ROOT$FW_RULES" ] && ! unit_enabled "$FW_UNIT"; then
 		change "load the confirmed firewall at boot ($FW_UNIT)" "systemctl disable $FW_UNIT" \
 			_fw_enable

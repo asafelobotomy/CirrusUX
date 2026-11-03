@@ -153,16 +153,18 @@ func TestShippedConfigs(t *testing.T) {
 
 // Setup modules drop their own files in helper.d; they add to helper.env.
 func TestLoadAll(t *testing.T) {
-	main := writeConf(t, "IDLE_LOG=/var/log/idle.log\nFIREWALL_CHECKS=DOCKER-USER:DROP\n")
+	main := writeConf(t, "IDLE_LOG=/var/log/idle.log\nFIREWALL_CHECKS=DOCKER-USER:DROP\nMEDIA_ROOTS=/srv/media\n")
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "50-backup.env"), []byte("BACKUP_UNIT=cirrusux-backup.service\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "60-security.env"), []byte("FIREWALL_CHECKS=inet/cirrusux/input:drop\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "60-security.env"), []byte("FIREWALL_CHECKS=inet/cirrusux/input:drop DOCKER-USER:DROP\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "70-apps.env"), []byte("MEDIA_ROOTS=/srv/media /srv/music\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignored"), 0o644)
 	c, err := loadAll(main, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.BackupUnit != "cirrusux-backup.service" || c.IdleLog == "" || len(c.FirewallChecks) != 2 {
+	// Lists add up, and something given in two files counts once.
+	if c.BackupUnit != "cirrusux-backup.service" || c.IdleLog == "" || len(c.FirewallChecks) != 2 || len(c.MediaRoots) != 2 {
 		t.Errorf("merged = %+v", c)
 	}
 	os.WriteFile(filepath.Join(dir, "70-bad.env"), []byte("SHELL=/bin/sh\n"), 0o644)
@@ -171,29 +173,51 @@ func TestLoadAll(t *testing.T) {
 	}
 }
 
-// The agent writes the requests folder; root reads it. Links and big or odd
-// files are refused, and the oldest request goes first.
-func TestOldestRequest(t *testing.T) {
-	dir := t.TempDir()
-	if _, _, err := oldestRequest(dir); err == nil {
-		t.Error("empty folder")
+// The agent writes the requests folder; root reads it. Only the named job's
+// file is read, and a link (to the file or in place of the folder), a big
+// or odd file, or a bad job ID gets nowhere. What was seen is removed.
+func TestReadRequest(t *testing.T) {
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "requests")
+	os.Mkdir(dir, 0o700)
+	os.WriteFile(filepath.Join(dir, "aaaa1111.json"), []byte(`{"first":1}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "bbbb2222.json"), []byte(`{"second":1}`), 0o644)
+	if b, err := readRequest(dir, "bbbb2222"); err != nil || string(b) != `{"second":1}` {
+		t.Errorf("got %s %v", b, err)
 	}
-	os.WriteFile(filepath.Join(dir, "b.json"), []byte(`{"second":1}`), 0o644)
-	old := time.Now().Add(-time.Minute)
-	os.WriteFile(filepath.Join(dir, "a.json"), []byte(`{"first":1}`), 0o644)
-	os.Chtimes(filepath.Join(dir, "a.json"), old, old)
-	if name, b, err := oldestRequest(dir); err != nil || filepath.Base(name) != "a.json" || string(b) != `{"first":1}` {
-		t.Errorf("got %s %s %v", name, b, err)
+	if _, err := os.Stat(filepath.Join(dir, "bbbb2222.json")); err == nil {
+		t.Error("request left behind")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "aaaa1111.json")); err != nil {
+		t.Error("another job's request was touched")
+	}
+	if _, err := readRequest(dir, "../../etc/passwd"); err == nil {
+		t.Error("a path as a job ID")
+	}
+	if _, err := readRequest(dir, "cccc3333"); err == nil {
+		t.Error("a missing request")
 	}
 
-	links := t.TempDir()
-	os.Symlink("/etc/shadow", filepath.Join(links, "x.json"))
-	if _, _, err := oldestRequest(links); err == nil {
-		t.Error("followed a symlink")
+	// The folder swapped for a link to somewhere root keeps files.
+	elsewhere := t.TempDir()
+	os.WriteFile(filepath.Join(elsewhere, "dddd4444.json"), []byte(`{"precious":1}`), 0o644)
+	os.RemoveAll(dir)
+	os.Symlink(elsewhere, dir)
+	if _, err := readRequest(dir, "dddd4444"); err == nil {
+		t.Error("followed a linked folder")
 	}
-	big := t.TempDir()
-	os.WriteFile(filepath.Join(big, "x.json"), make([]byte, 17<<10), 0o644)
-	if _, _, err := oldestRequest(big); err == nil {
+	if _, err := os.Stat(filepath.Join(elsewhere, "dddd4444.json")); err != nil {
+		t.Error("removed a file through a linked folder")
+	}
+
+	os.Remove(dir)
+	os.Mkdir(dir, 0o700)
+	os.Symlink("/etc/shadow", filepath.Join(dir, "eeee5555.json"))
+	if _, err := readRequest(dir, "eeee5555"); err == nil {
+		t.Error("followed a linked file")
+	}
+	os.WriteFile(filepath.Join(dir, "ffff6666.json"), make([]byte, 17<<10), 0o644)
+	if _, err := readRequest(dir, "ffff6666"); err == nil {
 		t.Error("read a big file")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 const digestHour = 8 // local time (CIRRUS_TZ)
 
 type Digest struct {
-	Day     string    `json:"day"` // UK date, 2006-01-02
+	Day     string    `json:"day"` // date in CIRRUS_TZ, 2006-01-02
 	At      time.Time `json:"at"`
 	Lines   []string  `json:"lines"`
 	Summary string    `json:"summary,omitempty"` // from the assistant
@@ -37,6 +38,8 @@ func buildDigest(now time.Time, snap *snapshot.Snapshot, audit []AuditEntry) Dig
 	add("Data from %s.", stamp(snap.TakenAt))
 
 	switch r := snap.Backups.LastRun; {
+	case !slices.Contains(snap.Features, "backup"):
+		// No backup module here: nothing to say.
 	case r == nil:
 		add("Backup: no run found in the journal.")
 	case !r.OK:
@@ -65,19 +68,23 @@ func buildDigest(now time.Time, snap *snapshot.Snapshot, audit []AuditEntry) Dig
 
 	var asleep time.Duration
 	wakes := 0
-	for _, seg := range snap.Timeline {
+	for i, seg := range snap.Timeline {
 		end := snap.TakenAt
 		if seg.To != nil {
 			end = *seg.To
 		}
 		if seg.State == "asleep" {
 			asleep += end.Sub(seg.From)
-		} else {
-			wakes++
+		} else if i > 0 && snap.Timeline[i-1].State == "asleep" {
+			wakes++ // the day's first stretch awake isn't a wake
 		}
 	}
 	if len(snap.Timeline) > 0 {
-		add("Sleep so far today: %s asleep, %d wakes.", hoursMinutes(asleep), wakes)
+		plural := "s"
+		if wakes == 1 {
+			plural = ""
+		}
+		add("Sleep so far today: %s asleep, %d wake%s.", hoursMinutes(asleep), wakes, plural)
 	}
 
 	if sec := snap.Security; sec != nil {
@@ -99,9 +106,9 @@ func buildDigest(now time.Time, snap *snapshot.Snapshot, audit []AuditEntry) Dig
 	}
 
 	if dk := snap.Disk; dk != nil {
-		line := fmt.Sprintf("Media disk: %.0f GB free of %.1f TB", float64(dk.FreeBytes)/1e9, float64(dk.TotalBytes)/1e12)
+		line := fmt.Sprintf("Disk: %.0f GB free of %.1f TB", float64(dk.FreeBytes)/1e9, float64(dk.TotalBytes)/1e12)
 		if dk.LinkMbps > 0 && dk.LinkMbps <= 480 {
-			line += ", still on a USB 2 link"
+			line += ", on a slow USB 2 link"
 		}
 		add("%s.", line)
 	}
@@ -119,7 +126,7 @@ func buildDigest(now time.Time, snap *snapshot.Snapshot, audit []AuditEntry) Dig
 	return d
 }
 
-// RunDigest builds the digest once a day after digestHour, UK time.
+// RunDigest builds the digest once a day after digestHour, in CIRRUS_TZ.
 func (s *Server) RunDigest(ctx context.Context) {
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()

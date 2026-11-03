@@ -5,8 +5,8 @@
   import Badge from '../components/Badge.svelte';
   import { live } from '../state/live.svelte';
   import { TriangleAlert } from '../icons';
+  import { fmtGb } from '../format';
 
-  const fmt = (gb: number) => (gb >= 1000 ? `${(gb / 1000).toFixed(1)} TB` : gb >= 1 ? `${Math.round(gb)} GB` : `${Math.round(gb * 1000)} MB`);
   const disk = $derived(live.disk);
   // The last measurement's biggest folders (Storage page), media first.
   const folders = $derived.by(() => {
@@ -21,8 +21,8 @@
   <div class="st">
     <div class="top">
       <div>
-        <strong class="big num">{fmt(disk.totalGb - disk.usedGb)}</strong>
-        <span class="muted"> free of {fmt(disk.totalGb)}</span>
+        <strong class="big num">{fmtGb(disk.totalGb - disk.usedGb)}</strong>
+        <span class="muted"> free of {fmtGb(disk.totalGb)}</span>
       </div>
       {#if disk.linkMbps && disk.linkMbps < 5000}
         <Badge tone="warn">{#snippet icon()}<TriangleAlert />{/snippet}USB {disk.linkMbps <= 480 ? '2' : '3'} · {disk.linkMbps} Mb/s</Badge>
@@ -35,7 +35,7 @@
           <li>
             <span class="n">{f.name}</span>
             <span class="bar"><span style="width: {(f.gb / max) * 100}%"></span></span>
-            <span class="v num muted">{fmt(f.gb)}</span>
+            <span class="v num muted">{fmtGb(f.gb)}</span>
           </li>
         {/each}
       </ul>

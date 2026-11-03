@@ -33,6 +33,7 @@ build: web
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN)/cirrusux-idle ./cmd/idle
 
 test: web-stub
+	scripts/check-file-length.sh
 	test -z "$$(gofmt -l .)" || { gofmt -l .; echo "run gofmt -w ."; exit 1; }
 	$(GO) vet ./...
 	$(GO) test ./...

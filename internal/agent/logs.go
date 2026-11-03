@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,8 +20,6 @@ import (
 // Logs for the panel's Logs page (PHASES-4-6 §6b): a container's recent
 // output through the Docker filter, or a CirrusUX unit's journal through the
 // helper. Never followed: each request is one recent window.
-
-var unitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
 
 func (a *Agent) logs(ctx context.Context, source, lines string) ([]string, error) {
 	n, err := strconv.Atoi(lines)
@@ -41,7 +38,7 @@ func (a *Agent) logs(ctx context.Context, source, lines string) ([]string, error
 		}
 		return a.collector.containerLogs(ctx, name, n)
 	case "unit":
-		if !unitRe.MatchString(name) {
+		if !helperapi.UnitRe.MatchString(name) {
 			return nil, fmt.Errorf("not a CirrusUX unit: %q", name)
 		}
 		var l helperapi.Lines

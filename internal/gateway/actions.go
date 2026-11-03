@@ -1,20 +1,16 @@
 package gateway
 
 import (
-	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"cirrusux/internal/catalogue"
+	"cirrusux/internal/helperapi"
 	"cirrusux/internal/snapshot"
 	"cirrusux/internal/storage"
 )
@@ -134,100 +130,6 @@ var actionSpecs = map[string]actionSpec{
 	},
 }
 
-// catalogueApps is the built-in catalogue, loaded once.
-var catalogueApps = func() []catalogue.App {
-	apps, err := catalogue.Load()
-	if err != nil {
-		panic("built-in catalogue: " + err.Error())
-	}
-	return apps
-}()
-
-func findApp(id string) (catalogue.App, bool) {
-	for _, a := range catalogueApps {
-		if a.ID == id {
-			return a, true
-		}
-	}
-	return catalogue.App{}, false
-}
-
-func appName(id string) string {
-	if a, ok := findApp(id); ok {
-		return a.Name
-	}
-	return id
-}
-
-func checkInstall(a map[string]string, snap *snapshot.Snapshot) error {
-	if _, ok := findApp(a["app"]); !ok {
-		return fmt.Errorf("no app %q in the catalogue", a["app"])
-	}
-	if len(a["options"]) > 4096 {
-		return fmt.Errorf("options too long")
-	}
-	if a["options"] != "" {
-		if _, err := catalogue.ParseOptions(a["options"]); err != nil {
-			return fmt.Errorf("options: %v", err)
-		}
-	}
-	if snap != nil && slices.ContainsFunc(snap.Apps, func(x snapshot.App) bool { return x.ID == a["app"] }) {
-		return fmt.Errorf("%s is already installed", appName(a["app"]))
-	}
-	return nil
-}
-
-// previewApp renders the file an install would write, with the facts the
-// server reported: the same code and inputs as the job itself. A problem
-// with the options comes back as a message to show, not an HTTP error.
-func (s *Server) previewApp(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		App     string            `json:"app"`
-		Options catalogue.Options `json:"options"`
-	}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&body); err != nil {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	app, ok := findApp(body.App)
-	if !ok {
-		http.Error(w, "no such app", http.StatusNotFound)
-		return
-	}
-	snap := s.store.Snapshot()
-	if snap == nil || snap.AppsHost == nil {
-		http.Error(w, s.cfg.ServerName+" hasn't reported its app store settings yet (the apps module)", http.StatusConflict)
-		return
-	}
-	hi := snap.AppsHost
-	host := catalogue.Host{AppsDir: hi.AppsDir, TZ: hi.TZ, UID: hi.UID, GID: hi.GID, Groups: hi.Groups, MediaRoots: hi.MediaRoots, BindAddress: hi.Bind}
-	out := map[string]any{"runtime": hi.Runtime, "mediaRoots": hi.MediaRoots}
-	p, err := catalogue.Resolve(app, body.Options, host)
-	if err != nil {
-		out["error"] = err.Error()
-		writeJSON(w, out)
-		return
-	}
-	if hi.Runtime == "podman" {
-		out["file"], out["content"] = "/etc/containers/systemd/"+p.QuadletName(), p.Quadlet()
-	} else {
-		out["file"], out["content"] = hi.AppsDir+"/"+app.ID+"/compose.yml", p.Compose()
-	}
-	// Ports another container already publishes: the job would refuse them.
-	var clash []string
-	for _, pm := range p.Ports {
-		for _, c := range snap.Containers {
-			if slices.Contains(c.Ports, pm.Host) {
-				clash = append(clash, fmt.Sprintf("port %d is already used by %s", pm.Host, c.Name))
-			}
-		}
-	}
-	out["warnings"] = clash
-	writeJSON(w, out)
-}
-
 func checkArchiveDelete(a map[string]string, snap *snapshot.Snapshot) error {
 	if snap == nil || snap.Storage == nil || !slices.ContainsFunc(snap.Storage.Archive, func(e storage.Entry) bool { return e.Name == a["name"] }) {
 		return fmt.Errorf("%q isn't in the archive the server last reported", a["name"])
@@ -237,8 +139,6 @@ func checkArchiveDelete(a map[string]string, snap *snapshot.Snapshot) error {
 	}
 	return nil
 }
-
-var logUnitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
 
 // checkLogSource accepts a container the agent reported, or one of
 // CirrusUX's own units.
@@ -251,7 +151,7 @@ func checkLogSource(a map[string]string, snap *snapshot.Snapshot) error {
 	case "container":
 		return checkContainer(map[string]string{"name": name}, snap)
 	case "unit":
-		if logUnitRe.MatchString(name) {
+		if helperapi.UnitRe.MatchString(name) {
 			return nil
 		}
 	}
@@ -295,122 +195,6 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 		}
 	}
 	return clean, spec, nil
-}
-
-// Command is an action on its way to the agent.
-type Command struct {
-	ID string `json:"id"`
-	ActionReq
-	Label    string     `json:"label"`
-	Who      string     `json:"who"`
-	Created  time.Time  `json:"created"`
-	State    string     `json:"state"` // pending, sent, done, failed
-	Output   []string   `json:"output,omitempty"`
-	Error    string     `json:"error,omitempty"`
-	Undo     *ActionReq `json:"undo,omitempty"`
-	ReadOnly bool       `json:"-"`
-	sent     time.Time
-}
-
-const (
-	pollWait    = 25 * time.Second
-	pendingMax  = 2 * time.Minute // agent never asked: server asleep or agent down
-	sentMax     = 4 * time.Minute // agent took it but didn't report (egress report: up to 3 min)
-	keepHistory = 50
-)
-
-// Queue holds commands in memory. A gateway restart drops pending ones,
-// which then show as failed in the UI; nothing runs twice.
-type Queue struct {
-	mu     sync.Mutex
-	cmds   []*Command
-	notify chan struct{}
-}
-
-func NewQueue() *Queue { return &Queue{notify: make(chan struct{}, 1)} }
-
-func (q *Queue) Add(c *Command) {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	c.ID = hex.EncodeToString(b)
-	c.State, c.Created = "pending", time.Now()
-	q.mu.Lock()
-	q.cmds = append(q.cmds, c)
-	if len(q.cmds) > keepHistory {
-		q.cmds = q.cmds[len(q.cmds)-keepHistory:]
-	}
-	q.mu.Unlock()
-	select {
-	case q.notify <- struct{}{}:
-	default:
-	}
-}
-
-func (q *Queue) Get(id string) (Command, bool) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.expire(time.Now())
-	for _, c := range q.cmds {
-		if c.ID == id {
-			return *c, true
-		}
-	}
-	return Command{}, false
-}
-
-// Next waits up to pollWait for a pending command and marks it sent.
-func (q *Queue) Next(ctx context.Context) *Command {
-	timer := time.NewTimer(pollWait)
-	defer timer.Stop()
-	for {
-		q.mu.Lock()
-		q.expire(time.Now())
-		for _, c := range q.cmds {
-			if c.State == "pending" {
-				c.State, c.sent = "sent", time.Now()
-				cc := *c
-				q.mu.Unlock()
-				return &cc
-			}
-		}
-		q.mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-timer.C:
-			return nil
-		case <-q.notify:
-		}
-	}
-}
-
-// Complete records the agent's result. It returns the finished command, or
-// false if it was unknown or had already expired.
-func (q *Queue) Complete(id string, ok bool, output []string, errMsg string) (Command, bool) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	for _, c := range q.cmds {
-		if c.ID == id && c.State == "sent" {
-			c.Output, c.Error = output, errMsg
-			c.State = "done"
-			if !ok {
-				c.State = "failed"
-			}
-			return *c, true
-		}
-	}
-	return Command{}, false
-}
-
-func (q *Queue) expire(now time.Time) {
-	for _, c := range q.cmds {
-		switch {
-		case c.State == "pending" && now.Sub(c.Created) > pendingMax:
-			c.State, c.Error = "failed", "the server didn't pick it up (asleep, or the agent isn't running)"
-		case c.State == "sent" && now.Sub(c.sent) > sentMax:
-			c.State, c.Error = "failed", "the server took it but didn't report back"
-		}
-	}
 }
 
 // label is the action's audit text with the server's name filled in.

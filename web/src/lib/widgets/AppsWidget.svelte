@@ -18,6 +18,8 @@
   const shown = $derived(config?.group ? tiles.filter((a) => a.group === config.group) : tiles);
 
   function status(app: AppTile) {
+    if (power.state === 'unreachable') return { tone: 'warn' as const, word: 'no reports' };
+    if (power.state === 'waking') return { tone: 'info' as const, word: 'waking' };
     if (power.state !== 'awake') return { tone: 'sleep' as const, word: 'asleep' };
     const c = live.containers.find((x) => x.name === app.id);
     if (!c || c.health === 'exited') return { tone: 'bad' as const, word: 'stopped' };
@@ -28,7 +30,8 @@
   function open(e: MouseEvent, name: string) {
     if (power.state === 'asleep') {
       e.preventDefault();
-      return confirmWake();
+      if (mode.wake) return confirmWake();
+      return toast(`${mode.server} is asleep, and no wake method is set up`, 'warn');
     }
     // Demo mode has no server to open.
     if (!mode.live) {

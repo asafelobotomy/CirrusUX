@@ -21,6 +21,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"cirrusux/internal/fsutil"
 )
 
 // Result is one measurement.
@@ -216,17 +218,7 @@ func Read(path string) *Result {
 }
 
 // Write keeps a result, readable by the agent.
-func Write(path string, r Result) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	b, _ := json.MarshalIndent(r, "", "  ")
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
+func Write(path string, r Result) error { return fsutil.WriteJSON(path, r, 0o644) }
 
 // Forget drops a deleted entry from a kept result, so the page is right
 // before the next measurement.

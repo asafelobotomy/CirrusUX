@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -25,7 +26,8 @@ const configPath = "/etc/cirrusux/helper.env"
 const confDir = "/etc/cirrusux/helper.d"
 
 // loadAll reads helper.env, then helper.d/*.env in name order. A later
-// file's value wins; firewall checks add up.
+// file's value wins; firewall checks, media roots and storage roots add up
+// (each counted once).
 func loadAll(main, dir string) (conf, error) {
 	var c conf
 	files, _ := filepath.Glob(filepath.Join(dir, "*.env"))
@@ -126,33 +128,17 @@ var keys = map[string]func(c *conf, v string) error{
 		c.AppsBind = v
 		return nil
 	},
-	"STORAGE_ROOTS": func(c *conf, v string) error {
-		for _, f := range strings.Fields(v) {
-			var p string
-			if err := path(func(*conf) *string { return &p })(c, f); err != nil {
-				return err
-			}
-			c.StorageRoots = append(c.StorageRoots, p)
-		}
-		return nil
-	},
-	"MEDIA_ROOTS": func(c *conf, v string) error {
-		for _, f := range strings.Fields(v) {
-			var p string
-			if err := path(func(*conf) *string { return &p })(c, f); err != nil {
-				return err
-			}
-			c.MediaRoots = append(c.MediaRoots, p)
-		}
-		return nil
-	},
+	"STORAGE_ROOTS": paths(func(c *conf) *[]string { return &c.StorageRoots }),
+	"MEDIA_ROOTS":   paths(func(c *conf) *[]string { return &c.MediaRoots }),
 	"FIREWALL_CHECKS": func(c *conf, v string) error {
 		for _, f := range strings.Fields(v) {
 			chain, pat, ok := strings.Cut(f, ":")
 			if !ok || !validChain(chain) || pat == "" {
 				return fmt.Errorf("FIREWALL_CHECKS: want CHAIN:pattern or family/table/chain:pattern, got %q", f)
 			}
-			c.FirewallChecks = append(c.FirewallChecks, firewallCheck{chain, pat})
+			if fc := (firewallCheck{chain, pat}); !slices.Contains(c.FirewallChecks, fc) {
+				c.FirewallChecks = append(c.FirewallChecks, fc)
+			}
 		}
 		return nil
 	},
@@ -164,6 +150,23 @@ func path(field func(*conf) *string) func(*conf, string) error {
 			return fmt.Errorf("want a clean absolute path, got %q", v)
 		}
 		*field(c) = v
+		return nil
+	}
+}
+
+// paths takes a space-separated list of paths, added to what earlier files
+// gave; one given twice (in helper.env and a helper.d file) counts once.
+func paths(field func(*conf) *[]string) func(*conf, string) error {
+	return func(c *conf, v string) error {
+		for _, f := range strings.Fields(v) {
+			var p string
+			if err := path(func(*conf) *string { return &p })(c, f); err != nil {
+				return err
+			}
+			if list := field(c); !slices.Contains(*list, p) {
+				*list = append(*list, p)
+			}
+		}
 		return nil
 	}
 }
@@ -270,4 +273,13 @@ func (c conf) features() helperapi.Features {
 	add(hasApt(), helperapi.ModOS)
 	add(len(c.places().Roots) > 0, helperapi.ModStorage)
 	return f
+}
+
+// archiveDir is where removed apps' folders go: APPS_ARCHIVE, or "archive"
+// beside the apps folder.
+func (c conf) archiveDir() string {
+	if c.AppsArchive != "" {
+		return c.AppsArchive
+	}
+	return filepath.Join(filepath.Dir(c.AppsDir), "archive")
 }

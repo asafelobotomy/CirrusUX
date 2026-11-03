@@ -14,7 +14,7 @@
 
 module_cirrusux() {
 	local role=${CIRRUS_ROLE:-single} rel
-	rel=${CIRRUS_RELEASE:-$(cd "$HERE/../.." && pwd)}
+	rel=$(release_dir)
 	case "$role" in single | server | gateway) ;; *) die "CIRRUS_ROLE must be single, server or gateway" ;; esac
 	[ -d "$rel/bin" ] || die "no binaries in $rel/bin: run make build, or set CIRRUS_RELEASE"
 	id cirrusux >/dev/null 2>&1 || [ "$MODE" = check ] || die "the cirrusux user is missing: apply the base module first"
@@ -83,6 +83,13 @@ _cx_sudoers() {
 	else
 		cp "$src" "$tmp"
 	fi
+	# The agent reaches the helper through sudo, which a minimal install
+	# (a root password and no sudo user) doesn't have.
+	need_packages sudo
+	if ! command -v visudo >/dev/null; then
+		[ "$MODE" = check ] && { rm -f "$tmp"; return 0; }
+		die "visudo is missing although sudo was just installed"
+	fi
 	visudo -cqf "$tmp" || die "visudo rejects $src; nothing changed"
 	put_file /etc/sudoers.d/cirrusux 440 root:root <"$tmp"
 	rm -f "$tmp"
@@ -90,21 +97,53 @@ _cx_sudoers() {
 
 _cx_configs() {
 	local role=$1 rel=$2 token=$3 name
-	name=${CIRRUS_SERVER_NAME:-$(hostname -s 2>/dev/null || echo server)}
+	name=${CIRRUS_SERVER_NAME:-$(short_host)}
 	if [ "$role" != gateway ]; then
 		put_once /etc/cirrusux/helper.env 644 root:root <"$rel/deploy/server/helper.env.example"
-		sed -e "s|^CIRRUS_AGENT_TOKEN=.*|CIRRUS_AGENT_TOKEN=${token:-<set in env>}|" \
-			"$rel/deploy/server/agent.env.example" | put_once /etc/cirrusux/agent.env 600 cirrusux:cirrusux
+		fill_values "CIRRUS_AGENT_TOKEN=${token:-<set in env>}" <"$rel/deploy/server/agent.env.example" |
+			put_once /etc/cirrusux/agent.env 600 cirrusux:cirrusux
 	fi
 	if [ "$role" != server ]; then
 		local setup=split
 		[ "$role" = single ] && setup=single
-		sed -e "s|^CIRRUS_AGENT_TOKEN=.*|CIRRUS_AGENT_TOKEN=${token:-<set in env>}|" \
-			-e "s|^CIRRUS_SERVER_NAME=.*|CIRRUS_SERVER_NAME=$name|" \
-			-e "s|^CIRRUS_SETUP=.*|CIRRUS_SETUP=$setup|" \
-			-e "s|^CIRRUS_ALLOWED_USERS=.*|CIRRUS_ALLOWED_USERS=${CIRRUS_ALLOWED_USERS:-<your login>}|" \
-			"$rel/deploy/gateway/gateway.env.example" | put_once /etc/cirrusux/gateway.env 600 cirrusux:cirrusux
+		fill_values "CIRRUS_AGENT_TOKEN=${token:-<set in env>}" "CIRRUS_SERVER_NAME=$name" "CIRRUS_SETUP=$setup" \
+			"CIRRUS_ALLOWED_USERS=${CIRRUS_ALLOWED_USERS:-<your login>}" <"$rel/deploy/gateway/gateway.env.example" |
+			put_once /etc/cirrusux/gateway.env 600 cirrusux:cirrusux
+		_cx_gateway_data
 	fi
+}
+
+# _cx_gateway_data moves an older gateway's files out of /var/lib/cirrusux,
+# which belongs to root, into its own folder (CIRRUS_DATA_DIR's default).
+_cx_gateway_data() {
+	local env="$ROOT/etc/cirrusux/gateway.env" f moved=()
+	if grep -qx 'CIRRUS_DATA_DIR=/var/lib/cirrusux' "$env" 2>/dev/null; then
+		change "point CIRRUS_DATA_DIR at /var/lib/cirrusux-gateway in gateway.env" \
+			"set CIRRUS_DATA_DIR=/var/lib/cirrusux in gateway.env" _cx_new_data_dir "$env"
+	fi
+	for f in snapshot.json ui.json ui-history audit.jsonl digest.json updates.json assistant-usage.json wallpaper.bin wallpaper.json; do
+		[ -e "$STATE_DIR/$f" ] && [ ! -e "$ROOT/var/lib/cirrusux-gateway/$f" ] && moved+=("$f")
+	done
+	[ ${#moved[@]} -eq 0 ] && return 0
+	change "move the gateway's files to /var/lib/cirrusux-gateway: ${moved[*]}" "move them back to /var/lib/cirrusux" \
+		_cx_move_data "${moved[@]}"
+}
+
+_cx_new_data_dir() {
+	backup "$1"
+	local tmp
+	tmp=$(mktemp)
+	fill_values "CIRRUS_DATA_DIR=/var/lib/cirrusux-gateway" <"$1" >"$tmp"
+	cat "$tmp" >"$1" # keeps the file's owner and mode
+	rm -f "$tmp"
+}
+
+_cx_move_data() {
+	local f
+	mkdir -p "$ROOT/var/lib/cirrusux-gateway"
+	for f; do mv "$STATE_DIR/$f" "$ROOT/var/lib/cirrusux-gateway/"; done
+	# systemd gives the folder to the gateway's user when it next starts.
+	if [ -z "${NO_SYSTEMD:-}" ] && unit_active cirrusux-gateway.service; then systemctl restart cirrusux-gateway.service; fi
 }
 
 # _cx_service ENVFILE UNIT...: start the units once their config is complete.

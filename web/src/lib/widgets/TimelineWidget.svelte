@@ -23,7 +23,15 @@
       last.to = t.at;
       out.push({ from: t.at, to: new Date(clock.now), state: t.state, reason: t.reason });
     }
-    return out;
+    // Only today counts: an overnight sleep starts at midnight here.
+    const start = dayStart;
+    return out
+      .filter((s) => s.to.getTime() > start)
+      .map((s) => ({
+        ...s,
+        from: new Date(Math.max(s.from.getTime(), start)),
+        to: new Date(Math.min(s.to.getTime(), clock.now)),
+      }));
   });
 
   const pct = (d: Date) => ((d.getTime() - dayStart) / DAY) * 100;

@@ -1,9 +1,5 @@
 package agent
 
-// Parsers for the text the idle checker, backup unit and virus scanner
-// write. Formats checked against real output on 1 Nov 2026 (INSTALL.md §0);
-// each parser still skips lines it can't read rather than failing.
-
 import (
 	"regexp"
 	"strconv"
@@ -12,6 +8,10 @@ import (
 
 	"cirrusux/internal/snapshot"
 )
+
+// Parsers for the text the idle checker, backup unit and virus scanner
+// write. Formats checked against real output on 1 Nov 2026 (INSTALL.md §0);
+// each parser still skips lines it can't read rather than failing.
 
 // logZone is the zone of log timestamps that carry no offset: the
 // machine's own, as the logs are written in local time.
@@ -52,7 +52,8 @@ func splitTS(line string, now time.Time) (time.Time, string, bool) {
 			}
 		}
 		rest := strings.TrimSpace(line[len(m[0]):])
-		// The idle log writes "2026-11-01 17:37:32 GMT ACTIVE: …"
+		// Older idle checkers wrote "2026-11-01 17:37:32 GMT ACTIVE: …";
+		// cirrusux-idle writes RFC 3339 times, offset included.
 		for _, z := range []string{"GMT ", "BST ", "UTC "} {
 			rest = strings.TrimPrefix(rest, z)
 		}
@@ -125,7 +126,8 @@ func sleptBefore(events []idleEvent, i int) time.Duration {
 	return 0
 }
 
-// timeline builds today's awake/asleep segments (UK day) from idle events.
+// timeline builds today's awake/asleep segments (the server's local day)
+// from idle events.
 func timeline(events []idleEvent, now time.Time, bootAt time.Time) []snapshot.Segment {
 	l := now.In(logZone)
 	dayStart := time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, logZone)
@@ -312,102 +314,4 @@ func parseStayAwake(content string) (until *time.Time, forever bool) {
 	}
 	t := time.Unix(n, 0)
 	return &t, false
-}
-
-// parseBackupJournal finds the last run of the backup unit in
-// `journalctl -o short-iso` output.
-func parseBackupJournal(lines []string, unit string, now time.Time) *snapshot.BackupRun {
-	base := strings.TrimSuffix(unit, ".service")
-	var run *snapshot.BackupRun
-	for _, line := range lines {
-		at, rest, ok := splitTS(line, now)
-		if !ok {
-			continue
-		}
-		switch {
-		case strings.Contains(rest, "Starting "+base):
-			run = &snapshot.BackupRun{Start: at}
-		case run == nil:
-			continue
-		case strings.Contains(rest, "Failed with result") || strings.Contains(rest, "Failed to start "+base):
-			run.End, run.OK = at, false
-		case strings.Contains(rest, "Finished "+base) || strings.Contains(rest, "Deactivated successfully"):
-			if run.End.IsZero() {
-				run.End, run.OK = at, true
-			}
-		case strings.Contains(rest, " OK ") || strings.HasSuffix(rest, " OK") || strings.Contains(rest, "OK "):
-			run.Summary = rest
-		}
-	}
-	if run != nil && run.End.IsZero() {
-		return nil // still running, or never finished
-	}
-	if run != nil && run.Summary != "" {
-		if _, msg, ok := strings.Cut(run.Summary, ": "); ok {
-			run.Summary = msg
-		}
-	}
-	return run
-}
-
-var (
-	avScanned  = regexp.MustCompile(`Scanned files:\s*(\d+)`)
-	avInfected = regexp.MustCompile(`Infected files:\s*(\d+)`)
-	avEnd      = regexp.MustCompile(`End Date:\s*(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2})`)
-)
-
-// parseClamAV reads the last clamscan summary block.
-func parseClamAV(lines []string) *snapshot.ClamAV {
-	var res *snapshot.ClamAV
-	var cur snapshot.ClamAV
-	for _, line := range lines {
-		if m := avScanned.FindStringSubmatch(line); m != nil {
-			cur.Files, _ = strconv.Atoi(m[1])
-		}
-		if m := avInfected.FindStringSubmatch(line); m != nil {
-			cur.Infected, _ = strconv.Atoi(m[1])
-		}
-		if m := avEnd.FindStringSubmatch(line); m != nil {
-			if t, err := time.ParseInLocation("2006:01:02 15:04:05", m[1], logZone); err == nil {
-				cur.At = t
-				c := cur
-				res = &c
-				cur = snapshot.ClamAV{}
-			}
-		}
-	}
-	return res
-}
-
-var healthRe = regexp.MustCompile(`\((healthy|unhealthy|health: starting)\)`)
-
-// containerHealth turns Docker's state and status text into one word.
-func containerHealth(state, status string) string {
-	if state != "running" {
-		return "exited"
-	}
-	if m := healthRe.FindStringSubmatch(status); m != nil {
-		if m[1] == "health: starting" {
-			return "starting"
-		}
-		return m[1]
-	}
-	return "running"
-}
-
-// splitImage separates "repo/name:tag" into image and tag ("latest" if none).
-func splitImage(ref string) (string, string) {
-	digest := ""
-	if i := strings.LastIndex(ref, "@"); i >= 0 {
-		ref, digest = ref[:i], ref[i+1:]
-	}
-	slash := strings.LastIndex(ref, "/")
-	if i := strings.LastIndex(ref, ":"); i > slash {
-		return ref[:i], ref[i+1:]
-	}
-	if d, ok := strings.CutPrefix(digest, "sha256:"); ok && len(d) >= 12 {
-		// Pulled by digest alone: pinned, not latest.
-		return ref, "sha256:" + d[:12]
-	}
-	return ref, "latest"
 }

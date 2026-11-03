@@ -21,7 +21,7 @@
   const commands = $derived.by((): Cmd[] => {
     const awake = power.state === 'awake';
     const list: Cmd[] = [];
-    if (power.state === 'asleep') list.push({ id: 'wake', label: `Wake ${mode.server}`, group: 'Power', icon: I.Power, run: () => confirmWake() });
+    if (power.state === 'asleep' && mode.wake) list.push({ id: 'wake', label: `Wake ${mode.server}`, group: 'Power', icon: I.Power, run: () => confirmWake() });
     if (awake) {
       // Only what this server has: no sleep controls on one that doesn't sleep.
       if (sleeps() && has('stay-awake'))

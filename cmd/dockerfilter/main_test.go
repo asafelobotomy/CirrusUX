@@ -45,6 +45,8 @@ func TestAllow(t *testing.T) {
 		"POST /containers/abc/restart?signal=KILL",
 		"POST /containers/../images/create/start",
 		"PUT /containers/abc/archive",
+		"POST /v1.23/containers/abc/start",
+		"POST /v1.9/containers/abc/start",
 	}
 	for _, s := range ok {
 		if !allow(req(s)) {
@@ -55,6 +57,11 @@ func TestAllow(t *testing.T) {
 		if allow(req(s)) {
 			t.Errorf("%s should be denied", s)
 		}
+	}
+	withBody := req("POST /containers/abc/start")
+	withBody.ContentLength = 20
+	if allow(withBody) {
+		t.Error("a POST with a body should be denied")
 	}
 }
 

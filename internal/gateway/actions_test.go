@@ -168,14 +168,23 @@ func TestDigest(t *testing.T) {
 	end := now.Add(-5 * time.Hour)
 	snap := awakeSnap()
 	snap.TakenAt = now.Add(-time.Hour)
+	snap.Features = []string{"backup", "sleep"}
 	snap.Backups.LastRun = &snapshot.BackupRun{Start: end.Add(-time.Minute), End: end, OK: true}
 	snap.Security = &snapshot.Security{Firewall: []snapshot.FirewallCheck{{Chain: "DOCKER-USER", OK: true}}}
+	// Awake from midnight, asleep, then woken once: one wake, not two.
+	at := func(h int) *time.Time { t := now.Add(time.Duration(h-8) * time.Hour); return &t }
+	snap.Timeline = []snapshot.Segment{{State: "awake", From: *at(0), To: at(1)}, {State: "asleep", From: *at(1), To: at(6)}, {State: "awake", From: *at(6)}}
 	d := buildDigest(now, &snap, []AuditEntry{{At: now.Add(-time.Hour)}, {At: now.Add(-48 * time.Hour)}})
 	all := strings.Join(d.Lines, "\n")
-	for _, want := range []string{"Backup: OK", "1 of 2 not running well: nginx_server (exited)", "firewall rules intact", "last 24 h: 1"} {
+	for _, want := range []string{"Backup: OK", "1 of 2 not running well: nginx_server (exited)", "firewall rules intact", "last 24 h: 1", "5 h 0 min asleep, 1 wake."} {
 		if !strings.Contains(all, want) {
 			t.Errorf("digest missing %q:\n%s", want, all)
 		}
+	}
+	// No backup module: no backup line at all.
+	snap.Features = nil
+	if all := strings.Join(buildDigest(now, &snap, nil).Lines, "\n"); strings.Contains(all, "Backup") {
+		t.Errorf("backup line without the backup module:\n%s", all)
 	}
 	if d.Day != "2026-11-02" {
 		t.Errorf("day = %s", d.Day)

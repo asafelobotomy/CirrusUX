@@ -25,13 +25,14 @@ open(sys.argv[1] + '.tmp', 'w').write(str(srv.server_port)); os.rename(sys.argv[
 srv.serve_forever()
 PY
 # A password made now, so nothing else on the machine can contain it.
-PASS="pw $(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+# A quote and a backslash in it too: curl's config needs them escaped.
+PASS="pw\"q\\ $(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 export PASS
 python3 -I $T/router.py $T/port & SRV=$!
 # Ready once it has a port: no fixed wait, which a busy machine can outrun.
 for _ in $(seq 100); do [ -s $T/port ] && break; sleep 0.1; done
 PORT=$(cat $T/port 2>/dev/null) || fail "the stand-in router didn't start"
-conf() { printf 'ROUTER_URL=http://127.0.0.1:%s\nROUTER_USER=admin\nROUTER_PASSWORD="%s"\nSERVER_MAC=%s\n' $PORT "$PASS" "$1" > $T/router.env; chmod 600 $T/router.env; }
+conf() { printf 'ROUTER_URL=http://127.0.0.1:%s\nROUTER_USER=admin\nROUTER_PASSWORD=\047%s\047\nSERVER_MAC=%s\n' $PORT "$PASS" "$1" > $T/router.env; chmod 600 $T/router.env; }
 run() { CIRRUS_ROUTER_ENV=$T/router.env $H/gateway/cirrusux-router-check; }
 
 conf 52:54:00:12:34:56; [ "$(run)" = online ] || fail "online"
@@ -42,7 +43,7 @@ echo "1 online, offline and unknown hosts read right"
 conf 52:54:00:12:34:56; chmod 640 $T/router.env
 run >/dev/null 2>&1 && fail "a readable secrets file was accepted"
 chmod 600 $T/router.env
-sed -i "s/$PASS/wrong/" $T/router.env
+sed -i "s/^ROUTER_PASSWORD=.*/ROUTER_PASSWORD=wrong/" $T/router.env
 run >/dev/null 2>&1 && fail "a wrong password gave an answer"
 echo "2 refuses a readable secrets file; a wrong password gives no answer"
 
@@ -56,5 +57,5 @@ conf 52:54:00:12:34:56
 ( while :; do ps -eo args >> $T/ps; sleep 0.01; done ) & PS=$!
 for _ in 1 2 3 4 5; do run >/dev/null; done
 kill $PS
-grep -qF "${PASS#pw }" $T/ps && fail "the password showed in the process list"
+grep -qF "${PASS##* }" $T/ps && fail "the password showed in the process list"
 echo "4 the password never shows in the process list"

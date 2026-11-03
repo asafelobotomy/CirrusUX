@@ -17,6 +17,8 @@ enable) shift; [ "$1" = --now ] && shift; for u; do echo "$u" >> "$f"; done ;;
 esac
 S
 printf '#!/bin/sh\n[ "$1" = cirrusux ] && exit 0\nexec /usr/bin/id "$@"\n' > $T/stub/id
+# sudo (and so visudo) counts as installed; visudo itself is the real one.
+printf '#!/bin/sh\nprintf "install ok installed"\n' > $T/stub/dpkg-query
 chmod +x $T/stub/*
 export STUBDIR=$T PATH=$T/stub:$PATH ROOT=$T/root NO_CHOWN=1 CONFIG=$T/root/etc/cirrusux/host.env CIRRUS_RELEASE=$T/rel
 printf 'CIRRUS_ROLE=single\nCIRRUS_SERVER_NAME=atlas\n' > $CONFIG
@@ -57,3 +59,12 @@ printf 'CIRRUS_ROLE=single\nCIRRUS_ACTIONS=no\n' > $CONFIG
 $H/cirrusux-setup apply cirrusux > /dev/null 2>&1
 tail -1 $ROOT/etc/sudoers.d/cirrusux | grep -q "NOPASSWD: CIRRUS_READ$" || fail "read-only sudoers"
 echo "5 CIRRUS_ACTIONS=no: read-only sudoers rule"
+
+# An older gateway kept its files in /var/lib/cirrusux, which is root's.
+sed -i 's|^CIRRUS_DATA_DIR=.*|CIRRUS_DATA_DIR=/var/lib/cirrusux|' $E/gateway.env
+echo '{"version":3}' > $ROOT/var/lib/cirrusux/ui.json
+$H/cirrusux-setup apply cirrusux > $T/out 2>&1 || { cat $T/out; fail "apply with old data"; }
+grep -qx "CIRRUS_DATA_DIR=/var/lib/cirrusux-gateway" $E/gateway.env && grep -q "me@example.com" $E/gateway.env || fail "data dir not moved in gateway.env, or the rest lost"
+[ -f $ROOT/var/lib/cirrusux-gateway/ui.json ] && [ ! -e $ROOT/var/lib/cirrusux/ui.json ] || fail "gateway files not moved"
+$H/cirrusux-setup check cirrusux > /dev/null 2>&1 || fail "re-check after the move"
+echo "6 an older gateway's files move to its own folder"

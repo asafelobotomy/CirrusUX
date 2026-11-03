@@ -1,13 +1,12 @@
 <script lang="ts">
   import Button from '../components/Button.svelte';
-  import { power, sleepsInMs, WAKE_STEPS } from '../state/power.svelte';
+  import { power, powerLabel, sleepsInMs, WAKE_STEPS } from '../state/power.svelte';
+  import { fmtGb } from '../format';
   import { confirmAllowSleep, confirmStayAwake, confirmWake } from '../state/actions';
   import { clock, fmtAgo, fmtDayTime, fmtDuration, fmtTime, tzLabel } from '../time.svelte';
   import { live } from '../state/live.svelte';
   import { has, mode, sleeps } from '../api.svelte';
   import { Activity, Check, Coffee, HardDrive, Loader, Moon, MoonStar, Package, Power, Sun, Thermometer, TriangleAlert, Wifi, Zap } from '../icons';
-
-  const LABEL = $derived({ awake: sleeps() ? 'Awake' : 'Online', asleep: 'Asleep', waking: 'Waking…', unreachable: 'No reports' });
 
   const sinceMs = $derived(clock.now - power.since.getTime());
   /** False until the first report: a new gateway has nothing to show yet. */
@@ -21,7 +20,6 @@
   const ailing = $derived(live.containers.filter((c) => c.health === 'unhealthy' || (c.health === 'exited' && !c.leftover)).length);
   const diskUsed = $derived(live.disk ? live.disk.usedGb / live.disk.totalGb : 0);
   const temp = $derived(live.temps.at(-1));
-  const gb = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)} TB` : `${Math.round(n)} GB`);
   const holding = $derived(stay === 'forever' || (stay instanceof Date && stay.getTime() > clock.now));
 </script>
 
@@ -35,7 +33,7 @@
     <div class="head">
       <span class="eyebrow">{mode.server}</span>
       <h2 class="state" aria-live="polite">
-        {LABEL[power.state]}
+        {powerLabel(power.state)}{power.state === 'waking' ? '…' : ''}
       </h2>
       <span class="since muted num">
         {#if power.state === 'waking'}
@@ -64,7 +62,7 @@
         <li class:warn={diskUsed > 0.85}>
           <span class="vl"><HardDrive size={14} />Disk</span>
           <strong class="num">{Math.round(diskUsed * 100)}<small>%</small></strong>
-          <span class="vs">{gb(live.disk.totalGb - live.disk.usedGb)} free</span>
+          <span class="vs">{fmtGb(live.disk.totalGb - live.disk.usedGb)} free</span>
         </li>
       {/if}
       {#if temp !== undefined}

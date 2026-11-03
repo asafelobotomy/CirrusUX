@@ -337,3 +337,24 @@ func TestUpdateRequests(t *testing.T) {
 		}
 	}
 }
+
+// A second job for the same app waits for the first, then is checked
+// against what it left.
+func TestOneJobPerApp(t *testing.T) {
+	e, _, media := testEnv(t)
+	unlock, err := e.lockApp("navidrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- e.Run(context.Background(), navidrome(media)) }()
+	select {
+	case err := <-done:
+		t.Fatalf("ran while another job held the app: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	unlock()
+	if err := <-done; err != nil {
+		t.Fatalf("after the lock: %v", err)
+	}
+}

@@ -24,6 +24,9 @@ All of these must pass; CI runs them on every push.
 ## House rules
 
 - **Go uses only the standard library.** No new Go modules.
+- **No source file over 400 lines**, comments and blank lines included;
+  `make test` checks (`scripts/check-file-length.sh`). Split a long file
+  by what its parts do.
 - **New npm packages need a good reason**, pinned to an exact version.
 - **Images are pinned** by tag and digest in the catalogue; never `:latest`.
 - **No secrets** in code, tests, logs or the browser. Write `<set in env>`

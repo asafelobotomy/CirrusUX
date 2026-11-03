@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -28,6 +27,9 @@ func stamp(t time.Time) string {
 // the zone has none.
 func zoneLabel(t time.Time) string {
 	name, _ := t.Zone()
+	if name == "" || name[0] == '+' || name[0] == '-' {
+		return "UTC" + t.Format("-07:00")
+	}
 	return name
 }
 
@@ -125,59 +127,6 @@ func (p *Power) Run(ctx context.Context) {
 		case <-t.C:
 		}
 	}
-}
-
-func (p *Power) runRouter(ctx context.Context) {
-	every := p.opt.CheckEvery
-	if every <= 0 {
-		every = time.Minute
-	}
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
-		p.pollRouter(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
-}
-
-// pollRouter runs the check command once. Anything but "online" or
-// "offline" leaves the router's view as unknown.
-func (p *Power) pollRouter(ctx context.Context) {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, p.opt.CheckCmd[0], p.opt.CheckCmd[1:]...).Output()
-	word := strings.ToLower(strings.TrimSpace(firstLine(string(out))))
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if err != nil || (word != "online" && word != "offline") {
-		slog.Warn("router check", "err", err, "said", word)
-		return
-	}
-	p.routerOnline, p.routerAt = word == "online", time.Now()
-	if p.waking != nil && p.routerOnline && p.waking.step < 2 {
-		p.waking.step = 2 // the network link is up
-	}
-}
-
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(s, "\n")
-	return line
-}
-
-// routerSays is the router's view when it's recent enough to trust.
-func (p *Power) routerSays(now time.Time) (online, known bool) {
-	every := p.opt.CheckEvery
-	if every <= 0 {
-		every = time.Minute
-	}
-	if p.routerAt.IsZero() || now.Sub(p.routerAt) > 3*every {
-		return false, false
-	}
-	return p.routerOnline, true
 }
 
 func (p *Power) pollTailscale(ctx context.Context) {
@@ -335,83 +284,4 @@ func nonZero(t time.Time) *time.Time {
 		return nil
 	}
 	return &t
-}
-
-// Wake sends the configured wake in the background: a magic packet, or
-// the wake command. It reports false if a wake is already running. onFail,
-// if set, is called with the error when the wake can't be sent.
-func (p *Power) Wake(onFail func(error)) bool {
-	p.mu.Lock()
-	if p.waking != nil {
-		p.mu.Unlock()
-		return false
-	}
-	w := &wakeState{started: time.Now(), step: 1}
-	p.waking = w
-	p.mu.Unlock()
-
-	fail := func(err error) {
-		p.mu.Lock()
-		w.err = "The wake didn't go out (" + err.Error() + ")"
-		p.mu.Unlock()
-		if onFail != nil {
-			onFail(err)
-		}
-	}
-	switch {
-	case p.opt.Wake == "wol":
-		go func() {
-			if err := sendMagicPacket(p.opt.WakeMAC, p.opt.WakeBroadcast); err != nil {
-				slog.Warn("magic packet", "err", err)
-				fail(err)
-			}
-		}()
-	case p.opt.Wake == "command":
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), wakeTimeout)
-			defer cancel()
-			out, err := exec.CommandContext(ctx, p.opt.WakeCmd[0], p.opt.WakeCmd[1:]...).CombinedOutput()
-			if err != nil {
-				slog.Warn("wake command failed", "err", err, "output", strings.TrimSpace(string(out)))
-				fail(err)
-				return
-			}
-			p.mu.Lock()
-			if w.step < 2 {
-				w.step = 2
-			}
-			p.mu.Unlock()
-		}()
-	default:
-		// Development: pretend the packet went out.
-		go func() {
-			time.Sleep(2 * time.Second)
-			p.mu.Lock()
-			w.step = 2
-			p.mu.Unlock()
-		}()
-	}
-	return true
-}
-
-// sendMagicPacket broadcasts a Wake-on-LAN packet: six 0xFF bytes, then the
-// MAC address 16 times. It goes out three times, as single UDP packets can
-// be lost. Go sets SO_BROADCAST on UDP sockets, so a broadcast address works.
-func sendMagicPacket(mac net.HardwareAddr, addr string) error {
-	pkt := bytes.Repeat([]byte{0xff}, 6)
-	for range 16 {
-		pkt = append(pkt, mac...)
-	}
-	conn, err := net.Dial("udp", addr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	for range 3 {
-		if _, err := conn.Write(pkt); err != nil {
-			return err
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return nil
 }

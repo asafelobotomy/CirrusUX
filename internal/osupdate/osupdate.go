@@ -8,10 +8,11 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"cirrusux/internal/fsutil"
 )
 
 // Package is one upgradable package.
@@ -127,17 +128,7 @@ func Read(path, rebootFile string) *Result {
 	return &r
 }
 
-func write(path string, v any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	b, _ := json.MarshalIndent(v, "", "  ")
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
+func write(path string, v any) error { return fsutil.WriteJSON(path, v, 0o644) }
 
 func plural(n int, word string) string {
 	if n == 1 {

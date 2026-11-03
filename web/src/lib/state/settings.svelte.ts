@@ -76,18 +76,29 @@ export function effectiveAccent(theme: Theme = activeTheme()) {
   return { wanted, color, adjusted };
 }
 
-export function themeStyle(theme: Theme, accent = theme.tokens.accent): string {
-  const vars = TOKEN_NAMES.map((n) => `--${n}: ${n === 'accent' ? accent : theme.tokens[n]}`);
-  if (accent !== theme.tokens.accent) vars.push(`--on-accent: ${onColor(accent)}`);
-  vars.push(`--radius: ${theme.radius}px`, `color-scheme: ${theme.scheme}`);
-  return vars.join('; ');
+function themeVars(theme: Theme, accent: string): [string, string][] {
+  const vars: [string, string][] = TOKEN_NAMES.map((n) => [`--${n}`, n === 'accent' ? accent : theme.tokens[n]]);
+  if (accent !== theme.tokens.accent) vars.push(['--on-accent', onColor(accent)]);
+  vars.push(['--radius', `${theme.radius}px`], ['color-scheme', theme.scheme]);
+  return vars;
 }
+
+export function themeStyle(theme: Theme, accent = theme.tokens.accent): string {
+  return themeVars(theme, accent).map(([k, v]) => `${k}: ${v}`).join('; ');
+}
+
+// What the last theme set, so a property it no longer sets is removed. Other
+// inline variables (the wallpaper's --card-bg, say) are left alone.
+let applied: string[] = [];
 
 export function applyTheme(): void {
   const theme = activeTheme();
   const { color } = effectiveAccent(theme);
   const root = document.documentElement;
-  root.setAttribute('style', themeStyle(theme, color));
+  const vars = themeVars(theme, color);
+  for (const k of applied) if (!vars.some(([n]) => n === k)) root.style.removeProperty(k);
+  for (const [k, v] of vars) root.style.setProperty(k, v);
+  applied = vars.map(([k]) => k);
   root.style.setProperty('--density', settings.density === 'compact' ? '0.82' : '1');
   root.style.setProperty('--text-scale', String(settings.textScale));
   root.dataset.scheme = theme.scheme;

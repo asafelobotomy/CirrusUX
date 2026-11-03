@@ -1,23 +1,31 @@
 <script lang="ts">
+  // The Media page: CirrusUX doesn't manage media libraries itself. The media
+  // apps (Jellyfin and the like) do; this points to where they live.
   import Card from '../lib/components/Card.svelte';
-  import Badge from '../lib/components/Badge.svelte';
-  import { ALL_NAV } from '../lib/shell/nav';
-  import { ui } from '../lib/state/ui.svelte';
+  import Button from '../lib/components/Button.svelte';
+  import { has } from '../lib/api.svelte';
+  import { boards } from '../lib/state/layout.svelte';
+  import { go } from '../lib/state/ui.svelte';
 
-  const PLANNED: Record<string, string[]> = {
-    storage: ['Usage per folder, refreshed rarely (du over USB 2 counts as activity)', 'USB link-speed warning', 'SMART and btrfs health once smartmontools and btrfs-progs are installed'],
-    updates: ['Image tags vs pinned versions', 'apt upgrades after an approved apt update', 'Backup → set tag → pull → health check → changelog, with restore on failure'],
-    media: ['Library counts and scans', 'Archive review with two-step delete', 'AVI re-encode queue (later)'],
-    logs: ['Idle log, backup journal, virus-scan log', 'Per-container logs, live tails time out after 5 min'],
-  };
-  const nav = $derived(ALL_NAV.find((n) => n.route === ui.route));
+  const board = $derived(boards.list.find((b) => b.id === 'media'));
+
+  function openBoard() {
+    if (board) boards.active = board.id;
+    go('home');
+  }
 </script>
 
-<Card title="{nav?.label} is planned" subtitle="Not part of this prototype. From PLAN.md:">
-  {#snippet actions()}<Badge tone="accent">{nav?.phase}</Badge>{/snippet}
-  <ul>{#each PLANNED[ui.route] ?? [] as p}<li>{p}</li>{/each}</ul>
+<Card title="Media" subtitle="Your films, music and photos are run by the media apps you install, not by CirrusUX.">
+  <p class="muted">
+    The Media board gathers those apps and the storage they use on one page. To add a media app, use the App store.
+  </p>
+  <div class="row">
+    {#if board}<Button variant="primary" onclick={openBoard}>Open the Media board</Button>{/if}
+    {#if has('apps')}<Button onclick={() => go('apps')}>Open the App store</Button>{/if}
+  </div>
 </Card>
 
 <style>
-  ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; color: var(--text-muted); }
+  p { margin: 0 0 var(--space-3); }
+  .row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 </style>

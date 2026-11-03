@@ -220,3 +220,15 @@ func TestRouterCheck(t *testing.T) {
 		t.Errorf("wake step = %d", p.waking.step)
 	}
 }
+
+func TestZoneLabel(t *testing.T) {
+	at := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	london, _ := time.LoadLocation("Europe/London")
+	dubai, _ := time.LoadLocation("Asia/Dubai") // no abbreviation: "+04"
+	if got := zoneLabel(at.In(london)); got != "GMT" {
+		t.Errorf("London = %q", got)
+	}
+	if got := zoneLabel(at.In(dubai)); got != "UTC+04:00" {
+		t.Errorf("Dubai = %q", got)
+	}
+}

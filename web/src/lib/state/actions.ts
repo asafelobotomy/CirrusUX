@@ -10,7 +10,7 @@ import { api, mode, sleeps } from '../api.svelte';
 import { loadChangelog, refreshSoon } from '../sync.svelte';
 import { toast } from './ui.svelte';
 import { cleanOptions, type AppOptions, type CatalogueApp } from '../catalogue';
-import { demoJob, findApp, store, type ArchiveEntry } from './store.svelte';
+import { demoJob, findApp, loadCatalogue, store, type ArchiveEntry } from './store.svelte';
 
 
 type Opts = { source?: 'assistant' };
@@ -65,6 +65,10 @@ async function liveWake(): Promise<void> {
 
 export function confirmWake(o: Opts = {}): void {
   if (offline()) return;
+  if (!mode.wake) {
+    toast(`No wake method is set up for ${mode.server} (CIRRUS_WAKE on the gateway).`, 'warn');
+    return;
+  }
   ask({
     ...o,
     title: `Wake ${mode.server}?`,
@@ -315,7 +319,7 @@ function demoOSJob(action: 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive
 }
 
 /** Runs an action given by name, e.g. from an assistant proposal or an Undo. */
-export function confirmAction(req: ActionReq, o: Opts = {}): void {
+export async function confirmAction(req: ActionReq, o: Opts = {}): Promise<void> {
   const a = req.args ?? {};
   switch (req.action) {
     case 'wake':
@@ -331,14 +335,19 @@ export function confirmAction(req: ActionReq, o: Opts = {}): void {
     case 'backup_run':
       return confirmBackup(o);
     case 'app_update': {
+      // The catalogue loads on first use, so an Undo from Home may need it.
+      await loadCatalogue();
       const app = findApp(a.app);
       const rec = store.installed.find((x) => x.id === a.app);
       if (app && rec) return confirmUpdate(app, rec.tag, a.tag, a.digest, true);
+      toast(`Can't undo: ${a.app} isn't in the app catalogue or isn't installed`, 'warn');
       return;
     }
     case 'app_remove': {
+      await loadCatalogue();
       const app = findApp(a.app);
       if (app) return confirmRemove(app);
+      toast(`Can't undo: ${a.app} isn't in the app catalogue`, 'warn');
       return;
     }
   }
@@ -350,5 +359,5 @@ export function confirmUndo(undo: ActionReq): void {
     toast(`${mode.server} is asleep. Wake it first, then undo.`, 'warn');
     return;
   }
-  confirmAction(undo);
+  void confirmAction(undo);
 }

@@ -6,6 +6,7 @@
   import AppPage from '../lib/store/AppPage.svelte';
   import * as Icons from '../lib/icons';
   import { mode } from '../lib/api.svelte';
+  import { clock } from '../lib/time.svelte';
   import { isInstalled, loadCatalogue, runningJob, store } from '../lib/state/store.svelte';
 
   let q = $state('');
@@ -19,7 +20,7 @@
       (a) => (group === 'All' || a.group === group) && (!q.trim() || `${a.name} ${a.description}`.toLowerCase().includes(q.trim().toLowerCase())),
     ),
   );
-  const recentJobs = $derived(store.jobs.filter((j) => j.state === 'running' || (j.finished && Date.now() - j.finished.getTime() < 3600_000)));
+  const recentJobs = $derived(store.jobs.filter((j) => j.state === 'running' || (j.finished && clock.now - j.finished.getTime() < 3600_000)));
   const icon = (name: string) => Icons[name as keyof typeof Icons] ?? Icons.Package;
 </script>
 

@@ -6,13 +6,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -42,10 +41,7 @@ func appEnv(c conf) (*appjob.Env, error) {
 	if c.ContainerRuntime == "podman" {
 		rt = appjob.Podman{Exec: appjob.RunCommand, UnitDir: "/etc/containers/systemd"}
 	}
-	archive := c.AppsArchive
-	if archive == "" {
-		archive = filepath.Join(filepath.Dir(c.AppsDir), "archive")
-	}
+	archive := c.archiveDir()
 	return &appjob.Env{
 		Runtime: rt, Catalogue: cat, Now: time.Now,
 		Host: catalogue.Host{
@@ -81,17 +77,15 @@ func appsInfo(c conf) (helperapi.AppsInfo, error) {
 // appJob takes the oldest request the agent left, checks it in full, and
 // starts it as a background job (cirrusux-job-<id>.service), which the idle
 // checker counts as busy. A request that fails the check never runs.
-func appJob(ctx context.Context, c conf) (helperapi.Result, error) {
+func appJob(ctx context.Context, c conf, job string) (helperapi.Result, error) {
 	env, err := appEnv(c)
 	if err != nil {
 		return helperapi.Result{}, err
 	}
-	name, b, err := oldestRequest(helperapi.RequestsDir)
+	b, err := readRequest(helperapi.RequestsDir, job)
 	if err != nil {
 		return helperapi.Result{}, err
 	}
-	// Whatever happens next, the request has been read: it goes.
-	defer os.Remove(name)
 	req, err := appjob.ParseRequest(b)
 	if err != nil {
 		return helperapi.Result{}, fmt.Errorf("request: %v", err)
@@ -107,11 +101,9 @@ func appJob(ctx context.Context, c conf) (helperapi.Result, error) {
 	if err := os.WriteFile(saved, b, 0o600); err != nil {
 		return helperapi.Result{}, err
 	}
-	self, _ := os.Executable()
-	unit := "cirrusux-job-" + req.Job
-	if out, err := exec.CommandContext(ctx, "systemd-run", "--quiet", "--collect", "--unit="+unit,
-		"--property=TimeoutStartSec=45min", self, helperapi.CmdAppRun, req.Job).CombinedOutput(); err != nil {
-		return helperapi.Result{}, fmt.Errorf("starting the job: %v: %s", err, strings.TrimSpace(string(out)))
+	unit, err := launchJob(ctx, req.Job, []string{"RuntimeMaxSec=45min"}, helperapi.CmdAppRun, req.Job)
+	if err != nil {
+		return helperapi.Result{}, err
 	}
 	return helperapi.Result{Output: []string{fmt.Sprintf("%s %s: started as %s", req.Action, req.App, unit)}}, nil
 }
@@ -140,33 +132,36 @@ func appRun(c conf, job string) (helperapi.Result, error) {
 	return helperapi.Result{Output: []string{req.Action + " " + req.App + ": done"}}, nil
 }
 
-// oldestRequest reads the oldest *.json in dir, refusing symlinks and
-// anything that isn't a small regular file: the agent writes this folder,
-// and root reads it.
-func oldestRequest(dir string) (string, []byte, error) {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
-	if len(files) == 0 {
-		return "", nil, errors.New("no request waiting")
+// readRequest reads and removes the request <job>.json in dir. The agent
+// writes that folder and root reads it, so everything goes through an
+// os.Root opened at its parent (root-made, the agent can't replace it):
+// a symlink there, for the folder or the file, can't lead root anywhere
+// else, to read or to remove.
+func readRequest(dir, job string) ([]byte, error) {
+	if !helperapi.JobRe.MatchString(job) {
+		return nil, errors.New("not a job ID")
 	}
-	sort.Slice(files, func(i, j int) bool {
-		a, _ := os.Lstat(files[i])
-		b, _ := os.Lstat(files[j])
-		return a != nil && b != nil && a.ModTime().Before(b.ModTime())
-	})
-	name := files[0]
-	f, err := os.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	root, err := os.OpenRoot(filepath.Dir(dir))
 	if err != nil {
-		os.Remove(name)
-		return name, nil, fmt.Errorf("request: %v", err)
+		return nil, err
+	}
+	defer root.Close()
+	name := filepath.Join(filepath.Base(dir), job+".json")
+	fi, err := root.Lstat(name)
+	if err != nil {
+		return nil, fmt.Errorf("request: %v", err)
+	}
+	// Whatever happens next, the request has been seen: it goes.
+	defer root.Remove(name)
+	if !fi.Mode().IsRegular() || fi.Size() > 16<<10 {
+		return nil, errors.New("request isn't a small regular file")
+	}
+	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, fmt.Errorf("request: %v", err)
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil || !fi.Mode().IsRegular() || fi.Size() > 16<<10 {
-		return name, nil, errors.New("request isn't a small regular file")
-	}
-	b := make([]byte, fi.Size())
-	_, err = f.Read(b)
-	return name, b, err
+	return io.ReadAll(io.LimitReader(f, 16<<10))
 }
 
 // portFree tries to bind the port: if it can, nothing else has it.

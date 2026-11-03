@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"cirrusux/internal/fsutil"
 	"cirrusux/internal/snapshot"
 )
 
@@ -235,26 +236,4 @@ func writeFileJSON(path string, v any) error {
 }
 
 // writeFileAtomic writes b to path with mode 600, all or nothing.
-func writeFileAtomic(path string, b []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
-}
+func writeFileAtomic(path string, b []byte) error { return fsutil.WriteFile(path, b, 0o600) }

@@ -49,7 +49,7 @@ export function defaultBoards(): Board[] {
       ['apps', [8, 2], [8, 2], [4, 3], { group: 'Watch & listen' }],
       ['storage', [4, 4], [8, 3], [4, 3]],
       ['apps', [8, 2], [8, 2], [4, 2], { group: 'Manage' }],
-      ['note', [6, 2], [8, 2], [4, 2], { text: '332 legacy .avi files (~126 GB) are waiting for a decision on re-encoding. 15 videos in Mysteries, Politics and Stand Up are not in any library.' }],
+      ['note', [6, 2], [8, 2], [4, 2], { text: 'A note for this board. Switch on Edit layout to write here.' }],
     ]),
     board('maintenance', 'Maintenance', [
       ['digest', [8, 3], [8, 3], [4, 4]],

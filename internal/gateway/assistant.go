@@ -127,7 +127,7 @@ func (s *Server) assistantTools(snap *snapshot.Snapshot, view PowerView) []assis
 			}
 			return out
 		})},
-		{Name: "backups", Description: "Nightly system backup: last run result and the archive files.", Run: none(func() any {
+		{Name: "backups", Description: "System backups: the last run's result and the archive files.", Run: none(func() any {
 			out := map[string]any{}
 			if r := snap.Backups.LastRun; r != nil {
 				out["lastRun"] = map[string]any{"start": stamp(r.Start), "end": stamp(r.End), "ok": r.OK, "summary": r.Summary}
@@ -137,10 +137,10 @@ func (s *Server) assistantTools(snap *snapshot.Snapshot, view PowerView) []assis
 				files = append(files, fmt.Sprintf("%s %.1f GB encrypted=%v", stamp(f.At), float64(f.Bytes)/1e9, f.Encrypted))
 			}
 			out["files"] = files
-			out["note"] = "Backups sit on the same USB disk as the media; media itself is not backed up."
+			out["note"] = "Backups are encrypted; the private key isn't on the server. Media folders aren't in them unless BACKUP_PATHS says so."
 			return out
 		})},
-		{Name: "disk_usage", Description: "Media disk size, free space and USB link speed.", Run: none(func() any {
+		{Name: "disk_usage", Description: "The watched disk's size and free space, and its USB link speed when it's on USB (0 otherwise).", Run: none(func() any {
 			if snap.Disk == nil {
 				return "no disk data"
 			}

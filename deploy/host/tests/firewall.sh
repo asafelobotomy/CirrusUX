@@ -16,7 +16,7 @@ S
 # nft itself is real here; the package is reported as installed.
 printf '#!/bin/sh\nprintf "install ok installed"\n' > $T/stub/dpkg-query
 chmod +x $T/stub/systemctl $T/stub/dpkg-query
-export STUBDIR=$T PATH=$T/stub:$PATH ROOT=$T/root NO_CHOWN=1 NO_SYSTEMD=1 CONFIG=$T/root/etc/cirrusux/host.env
+export STUBDIR=$T PATH=$T/stub:$PATH ROOT=$T/root NO_CHOWN=1 NO_SYSTEMD=1 NO_SESSION_SCAN=1 CONFIG=$T/root/etc/cirrusux/host.env
 printf 'FIREWALL_ALLOW="192.168.1.0/24 fd00::/8"\nFIREWALL_CONFIRM_SECONDS=3\nFIREWALL_PUBLIC_TCP="80 443"\n' > $CONFIG
 fail() { echo "FAIL: $*"; exit 1; }
 
@@ -50,9 +50,14 @@ printf 'FIREWALL_ALLOW="192.168.1.0/24"\nFIREWALL_TAILSCALE=no\nFIREWALL_CONFIRM
 SSH_CONNECTION="203.0.113.5 5000 192.168.1.2 22" $H/cirrusux-setup apply firewall > $T/out 2>&1 && fail "lockout not refused"
 grep -q "would be cut off" $T/out || fail "wrong lockout message"
 SSH_CONNECTION="192.168.1.77 5000 192.168.1.2 22" $H/cirrusux-setup check firewall > /dev/null; [ $? = 2 ] || fail "allowed client refused"
+# sudo and run0 drop SSH_CONNECTION: the session is found in the parent.
+SSH_CONNECTION="203.0.113.5 5000 192.168.1.2 22" NO_SESSION_SCAN= bash -c "unset SSH_CONNECTION; $H/cirrusux-setup check firewall; rc=\$?; exit \$rc" > $T/out 2>&1 && fail "lockout not seen through sudo (SSH_CONNECTION only in the parent)"
+grep -q "203.0.113.5" $T/out || { cat $T/out; fail "lockout message"; }
 echo "6 lockout guard: refuses an SSH client outside the allowed networks"
 
 $H/cirrusux-setup apply firewall >/dev/null
 $H/cirrusux-setup firewall-rollback >/dev/null || fail rollback
 nft list table inet cirrusux | grep -q "100.64.0.0/10" || fail "manual rollback didn't restore the confirmed table"
+cmp -s $ROOT/var/lib/cirrusux/firewall/$(ls $ROOT/var/lib/cirrusux/firewall | grep -- -before.nft | tail -1) $ROOT/etc/cirrusux/firewall.nft || fail "the earlier ruleset isn't the one loaded at boot"
+SSH_CONNECTION="192.168.1.77 5000 192.168.1.2 22" $H/cirrusux-setup check firewall > /dev/null; [ $? = 2 ] || fail "check doesn't see host.env's rules as a change after the rollback"
 echo "7 manual rollback restores the earlier ruleset"

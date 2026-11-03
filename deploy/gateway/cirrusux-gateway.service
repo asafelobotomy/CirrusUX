@@ -9,12 +9,14 @@ User=cirrusux
 Group=cirrusux
 EnvironmentFile=/etc/cirrusux/gateway.env
 ExecStart=/usr/local/bin/cirrusux-gateway
-StateDirectory=cirrusux
+# Its own folder: systemd gives a StateDirectory to the service user, and
+# /var/lib/cirrusux belongs to root (setup and the helper keep state there).
+StateDirectory=cirrusux-gateway
 StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=5s
-# The wake command goes through sudo (cirrusux-wake), so no
-# NoNewPrivileges; everything else is locked down.
+# A wake command or the router check may go through sudo (one fixed rule
+# each), so no NoNewPrivileges; everything else is locked down.
 ProtectSystem=full
 PrivateTmp=yes
 ProtectKernelModules=yes

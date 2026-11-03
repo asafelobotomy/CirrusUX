@@ -34,7 +34,7 @@ Examples: `deploy/gateway/gateway.env.example`,
 | Setting | Default | What it does |
 |---|---|---|
 | `CIRRUS_LISTEN` | `127.0.0.1:8064` | Address to listen on. Keep it on loopback: the front end (`tailscale serve` or a reverse proxy) publishes it |
-| `CIRRUS_DATA_DIR` | `/var/lib/cirrusux` | Snapshot cache, settings, audit log |
+| `CIRRUS_DATA_DIR` | `/var/lib/cirrusux-gateway` | Snapshot cache, settings, audit log |
 | `CIRRUS_AGENT_TOKEN` | — (required) | Shared secret with the agent, 32+ characters |
 | `CIRRUS_SERVER_NAME` | `server` | The server's name in the UI and the audit log |
 | `CIRRUS_SERVER_HOST` | the server name | Host name or address app tiles open on |
@@ -124,7 +124,7 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `NET_TAILSCALE` | `yes` | network: check tailscaled starts at boot and is logged in |
 | `BACKUP_AGE_RECIPIENT` | — (required) | backup: age public key(s); the private key stays elsewhere |
 | `BACKUP_DIR` | `/srv/backups` | backup: where archives go |
-| `BACKUP_PATHS` | `/etc /root /home /usr/local /var/lib/cirrusux /srv/cirrusux` | backup: what goes in |
+| `BACKUP_PATHS` | `/etc /root /home /usr/local /var/lib/cirrusux /var/lib/cirrusux-gateway /srv/cirrusux` | backup: what goes in |
 | `BACKUP_EXCLUDE` | — | backup: what stays out |
 | `BACKUP_SCHEDULE` | `*-*-* 03:30` | backup: systemd `OnCalendar`; the timer wakes a sleeping server |
 | `BACKUP_KEEP` | `7` | backup: newest archives kept; `0` keeps all (the only automatic deletion) |

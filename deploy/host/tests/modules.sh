@@ -129,4 +129,11 @@ grep -q "media folder /srv/media doesn't exist yet" $T/out || fail "no warning f
 $H/cirrusux-setup check apps > $T/out 2>&1; [ $? = 0 ] || { cat $T/out; fail "apps re-check"; }
 printf 'APPS_MEDIA_ROOTS="/srv/My Media"\n' > $CONFIG
 $H/cirrusux-setup check apps > /dev/null 2>&1 && fail "a path with a space accepted"
+# Values the helper would refuse must be refused here, or the panel loses every module.
+for bad in 'APPS_DIR=/srv/apps/' 'APPS_DIR=/srv//apps' 'APPS_DIR=/srv/../apps' 'APPS_BIND=1.2.3' 'APPS_BIND=300.1.1.1'; do
+	printf '%s\n' "$bad" > $CONFIG
+	$H/cirrusux-setup check apps > /dev/null 2>&1 && fail "$bad accepted"
+done
+printf 'APPS_BIND=192.168.1.10\n' > $CONFIG
+$H/cirrusux-setup check apps > $T/out 2>&1; [ $? = 1 ] && { cat $T/out; fail "a good APPS_BIND refused"; }
 echo "apps: Podman with its socket, the filter pointed at it, folders, user and panel hookup; re-check clean"

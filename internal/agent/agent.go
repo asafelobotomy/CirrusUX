@@ -86,6 +86,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		last = wall
 		if !time.Now().Before(nextPush) {
 			ok := a.cycle(ctx)
+			// A slow cycle (a busy helper, up to a few minutes) isn't a resume.
+			last = time.Now().Round(0)
 			switch {
 			case ok && a.jobsRunning.Load():
 				nextPush, retryUntil = time.Now().Add(10*time.Second), time.Time{}

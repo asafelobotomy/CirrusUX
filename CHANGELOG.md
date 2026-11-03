@@ -7,6 +7,75 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Security
+
+- The root helper takes the app request the agent names (`app-job <id>`)
+  and reads it only through a handle on its own folder, so a link there
+  can't make root read or delete other files; a request the helper never
+  got to is removed instead of running with a later job. Replace
+  `/etc/sudoers.d/cirrusux` when upgrading (`cirrusux-setup apply` does).
+- The gateway keeps its files in `/var/lib/cirrusux-gateway`. Its systemd
+  state folder was `/var/lib/cirrusux`, which systemd handed to the
+  gateway's user although setup and the root helper keep their own state
+  there. Setup moves an older gateway's files and updates gateway.env.
+- The agent's token never appears on a command line while setup writes it.
+- The firewall's SSH lockout guard now works under sudo and run0 (which
+  drop `SSH_CONNECTION`): it also looks at the session's parent processes
+  and the logged-in SSH sessions. The tailnet counts as 100.64.0.0/10,
+  not any 100.x address.
+- The Docker filter refuses a POST with a body, or one naming an API
+  version before 1.24. The registry client follows the next page of tags
+  only on the registry's own host.
+- Setup warns when root would run CirrusUX from a folder another user can
+  change.
+
+### Fixed
+
+- Two jobs for the same app no longer run at once: the second waits, then
+  is checked against what the first left.
+- An update whose rollback couldn't put the app's folders back says so, and
+  where the backup is, instead of starting the old version on half its data.
+- A job killed on the way (out of memory, stopped, past its time limit)
+  shows as failed instead of running for ever; jobs now have a real time
+  limit (`RuntimeMaxSec`).
+- The firewall: its rollback is set up before the new rules load; a second
+  apply before confirming goes back past both; a manual rollback becomes
+  what loads at boot; a changed boot unit is reloaded.
+- fail2ban restarts when its jail changes. Setup installs sudo when it's
+  missing, refuses paths and addresses the helper would reject (which broke
+  every module), and points the Docker filter back at Docker when
+  `APPS_RUNTIME` changes from podman.
+- The router check works with a password containing `"` or `\`.
+- The daily digest counted one wake too many, mentioned backups without the
+  backup module, and called the disk "Media disk".
+- A server whose zone has no name shows as UTC+hh:mm; an unknown zone falls
+  back to UTC everywhere, not only in the browser.
+- The agent no longer reports a slow cycle as a resume, and no longer races
+  on its Docker client.
+- In the panel: the install form no longer resets every poll; the sleep
+  timeline is cut at midnight; Follow stops when the server sleeps; Wake
+  isn't offered without a wake method; Undo of an app action loads the
+  catalogue first; a gateway that answers 5xx shows as unreachable instead
+  of demo data; picking a theme keeps the wallpaper's glass; a failed save
+  is reported as one; app tiles say "no reports" or "waking" when that's
+  the state.
+- Leftovers from the owner's server: the default Media board's note, a
+  fixed memory total on Services, the assistant's note about a USB disk,
+  and the Media page's prototype text.
+
+### Changed
+
+- Duplicated code is shared: one atomic file writer (`internal/fsutil`,
+  replacing four, three of which could collide on a fixed temporary name),
+  the unit and job-ID patterns (`helperapi`), the helper's job launcher,
+  the setup modules' "start this unit" step, and one size formatter and one
+  set of power-state labels in the UI.
+- No source file may be over 400 lines: `make test` (and so CI) checks it.
+  The five that were longer are split by what their parts do: the gateway's
+  wake, router check, command queue and app-store helpers, the app jobs'
+  update, removal and records, and the agent's Docker, system and report
+  readers each have a file of their own. No behaviour changed.
+
 ## [0.5.1] - 2026-11-02
 
 ### Added

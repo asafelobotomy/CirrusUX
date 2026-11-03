@@ -2,13 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,14 +16,10 @@ import (
 // osJob starts an OS check or upgrade as a background job
 // (cirrusux-job-<id>.service), which keeps a sleeping server awake.
 func osJob(ctx context.Context, what string) (helperapi.Result, error) {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	job := hex.EncodeToString(b)
-	self, _ := os.Executable()
-	unit := "cirrusux-job-" + job
-	if out, err := exec.CommandContext(ctx, "systemd-run", "--quiet", "--collect", "--unit="+unit,
-		"--property=TimeoutStartSec=90min", self, helperapi.CmdOSRun, what, job).CombinedOutput(); err != nil {
-		return helperapi.Result{}, fmt.Errorf("starting the job: %v: %s", err, strings.TrimSpace(string(out)))
+	job := newJobID()
+	unit, err := launchJob(ctx, job, []string{"RuntimeMaxSec=90min"}, helperapi.CmdOSRun, what, job)
+	if err != nil {
+		return helperapi.Result{}, err
 	}
 	return helperapi.Result{Output: []string{"os " + what + ": started as " + unit}}, nil
 }
@@ -36,14 +28,7 @@ func osJob(ctx context.Context, what string) (helperapi.Result, error) {
 // goes to a status file like an app job's.
 func osRun(what, job string) (helperapi.Result, error) {
 	st := appjob.Status{Job: job, Action: "os-" + what, App: "os", Name: "Operating system", State: "running", Started: time.Now()}
-	save := func() {
-		b, _ := jsonMarshal(st)
-		_ = os.MkdirAll(helperapi.JobsDir, 0o755)
-		tmp := filepath.Join(helperapi.JobsDir, "."+job)
-		if os.WriteFile(tmp, b, 0o644) == nil {
-			_ = os.Rename(tmp, filepath.Join(helperapi.JobsDir, job+".json"))
-		}
-	}
+	save := func() { saveStatus(st) }
 	r := &osupdate.Runner{
 		Exec: aptExec, Now: time.Now,
 		Progress:   func(s string) { st.Step = s; save() },
@@ -85,5 +70,3 @@ func aptExec(ctx context.Context, env []string, name string, args ...string) (st
 	}
 	return string(out), nil
 }
-
-var jsonMarshal = func(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }

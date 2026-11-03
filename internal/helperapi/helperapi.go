@@ -3,6 +3,8 @@
 // caller-supplied paths; the helper prints one JSON value on stdout.
 package helperapi
 
+import "regexp"
+
 // Read-only subcommands (Phase 1).
 const (
 	CmdFeatures       = "features"  // which modules this machine has
@@ -23,8 +25,8 @@ const (
 	CmdNudgeAwake   = "nudge-awake"   // ≥10 min, unless a longer hold exists (decision D3)
 	CmdBackupRun    = "backup-run"    // start the backup unit, don't wait
 	CmdEgressReport = "egress-report" // read-only, but slow: on demand only
-	// CmdAppJob takes the oldest request the agent left in RequestsDir,
-	// checks it against the built-in catalogue and starts it as a job.
+	// CmdAppJob <job> takes the request the agent left in RequestsDir as
+	// <job>.json, checks it against the built-in catalogue and starts it.
 	CmdAppJob = "app-job"
 	// CmdAppRun runs a checked job; systemd starts it, never sudo.
 	CmdAppRun = "app-run"
@@ -118,7 +120,7 @@ type IdleStatus struct {
 	// Files in the idle checker's state directory, name → content (trimmed, size-limited).
 	// The checker rewrites them every minute: last-msg (its verdict),
 	// last-active, last-wake, last-suspend (unix seconds). The panel never
-	// runs the idle checker itself: on cloud64 its --dry-run was not write-free.
+	// runs the idle checker itself, so reading never changes its state.
 	State map[string]string `json:"state"`
 	// Content of /run/stay-awake, nil when the file does not exist.
 	StayAwake *string `json:"stayAwake"`
@@ -150,3 +152,9 @@ type FirewallCheck struct {
 	Chain string `json:"chain"`
 	OK    bool   `json:"ok"`
 }
+
+// UnitRe matches CirrusUX's own services, whose journals the panel may read.
+var UnitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
+
+// JobRe matches a job's ID: 8 to 32 hex digits.
+var JobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
