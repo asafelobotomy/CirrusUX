@@ -68,6 +68,9 @@ type conf struct {
 	AppsUser         string
 	MediaRoots       []string
 	AppsBind         string // publish apps' ports on this address only
+	// StoreNoOfficial: STORE_OFFICIAL=no, the official CirrusStore source
+	// isn't trusted (third-party ones are in store.d).
+	StoreNoOfficial bool
 	// StorageRoots are extra folders the Storage page measures, besides
 	// the apps, media, backup and archive folders.
 	StorageRoots []string
@@ -126,6 +129,13 @@ var keys = map[string]func(c *conf, v string) error{
 			return fmt.Errorf("an IP address")
 		}
 		c.AppsBind = v
+		return nil
+	},
+	"STORE_OFFICIAL": func(c *conf, v string) error {
+		if v != "yes" && v != "no" {
+			return fmt.Errorf("yes or no")
+		}
+		c.StoreNoOfficial = v == "no"
 		return nil
 	},
 	"STORAGE_ROOTS": paths(func(c *conf) *[]string { return &c.StorageRoots }),

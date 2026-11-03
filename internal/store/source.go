@@ -119,11 +119,17 @@ type Info struct {
 	Keys         []string `json:"keys"`         // key lines, for the gateway to check with
 	Fingerprints []string `json:"fingerprints"` // for the owner to compare
 	Official     bool     `json:"official,omitempty"`
+	// Error says why the server can't use this source (a file it refused,
+	// an official source without a key yet).
+	Error string `json:"error,omitempty"`
 }
 
 // Info describes the source for the snapshot.
 func (s Source) Info() Info {
 	in := Info{Name: s.Name, URL: s.URL, Official: s.Official, Keys: []string{}, Fingerprints: []string{}}
+	if len(s.Keys) == 0 {
+		in.Error = "no signing key yet"
+	}
 	for _, k := range s.Keys {
 		in.Keys = append(in.Keys, k.String())
 		in.Fingerprints = append(in.Fingerprints, k.Fingerprint())

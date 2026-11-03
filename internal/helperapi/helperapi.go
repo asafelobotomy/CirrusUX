@@ -3,7 +3,11 @@
 // caller-supplied paths; the helper prints one JSON value on stdout.
 package helperapi
 
-import "regexp"
+import (
+	"regexp"
+
+	"cirrusux/internal/store"
+)
 
 // Read-only subcommands (Phase 1).
 const (
@@ -103,6 +107,10 @@ type AppsInfo struct {
 	UID        int            `json:"uid"`
 	GID        int            `json:"gid"`
 	Groups     map[string]int `json:"groups"`
+	// Sources are the CirrusStore catalogues the helper trusts, with their
+	// keys: the gateway checks what it fetches against them, and the
+	// helper checks every install again.
+	Sources []store.Info `json:"sources"`
 }
 
 // BackupLast is the backup unit's recent journal.

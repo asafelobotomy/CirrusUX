@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run by run.sh inside `unshare -r`: the opt-in pieces (the ssh and ftps
-# modules, fail2ban's settings, the sleep module's resume fixes) against a
-# scratch ROOT, with stand-ins.
+# modules, fail2ban's settings, the sleep module's resume fixes, the store
+# module) against a scratch ROOT, with stand-ins.
 set -u
 H=$(cd "$(dirname "$0")/.." && pwd)
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT; mkdir -p $T/stub $T/root/etc/cirrusux $T/rel/bin
@@ -99,3 +99,24 @@ $H/cirrusux-setup ftps-passwd < /dev/null > $T/out 2>&1 && fail "ftps-passwd ran
 grep -q "in a terminal" $T/out || fail "wrong refusal"
 $H/cirrusux-setup check ftps > /dev/null 2>&1 || fail "ftps re-check"
 echo "5 ftps: TLS required, passive ports, no anonymous, own cert; the password only asked for"
+
+# store: sources written for the helper, a dropped one removed.
+K=$(printf 'k%.0s' $(seq 32) | base64)
+printf 'STORE_SOURCES="cirrusstore|https://example.org/|%s"\n' "$K" > $CONFIG
+$H/cirrusux-setup check store > /dev/null 2>&1 && fail "a source named like the official one accepted"
+printf 'STORE_SOURCES="extra|http://example.org/|%s"\n' "$K" > $CONFIG
+$H/cirrusux-setup check store > /dev/null 2>&1 && fail "a plain-http source accepted"
+printf 'STORE_SOURCES="extra|https://example.org/|short"\n' > $CONFIG
+$H/cirrusux-setup check store > /dev/null 2>&1 && fail "a key that isn't one accepted"
+printf 'STORE_OFFICIAL=no\nSTORE_SOURCES="extra|https://example.org/apps|%s friends|https://friends.example/cat/|%s"\n' "$K" "$K" > $CONFIG
+$H/cirrusux-setup apply store > $T/out 2>&1 || { cat $T/out; fail "store apply"; }
+S=$ROOT/etc/cirrusux/store.d
+grep -qx "url=https://example.org/apps/" $S/extra.source && grep -qx "key=cirrusstore-key v1 extra $K" $S/extra.source &&
+	[ "$(stat -c %a $S/friends.source)" = 644 ] || fail "source files"
+grep -qx "STORE_OFFICIAL=no" $ROOT/etc/cirrusux/helper.d/store.env || fail "STORE_OFFICIAL not passed to the helper"
+printf 'STORE_SOURCES="extra|https://example.org/apps|%s"\n' "$K" > $CONFIG
+$H/cirrusux-setup apply store > $T/out 2>&1 || { cat $T/out; fail "store apply 2"; }
+[ ! -e $S/friends.source ] && ls $S/friends.source.bak-* > /dev/null 2>&1 || fail "a dropped source wasn't removed with a copy kept"
+grep -qx "STORE_OFFICIAL=yes" $ROOT/etc/cirrusux/helper.d/store.env || fail "STORE_OFFICIAL default"
+$H/cirrusux-setup check store > /dev/null 2>&1 || fail "store re-check"
+echo "6 store: sources for the helper; reserved names, http and bad keys refused; dropped ones removed"

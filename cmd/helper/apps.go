@@ -53,8 +53,8 @@ func appEnv(c conf) (*appjob.Env, error) {
 	}, nil
 }
 
-// appsInfo reports the facts installs use; groups only those the
-// catalogue's devices ask for.
+// appsInfo reports the facts installs use (groups only those apps' devices
+// ask for) and the CirrusStore sources the helper trusts.
 func appsInfo(c conf) (helperapi.AppsInfo, error) {
 	env, err := appEnv(c)
 	if err != nil {
@@ -62,6 +62,13 @@ func appsInfo(c conf) (helperapi.AppsInfo, error) {
 	}
 	h := env.Host
 	groups := map[string]int{}
+	// The device groups apps from any CirrusStore source may ask for, and
+	// whatever the built-in ones name.
+	for _, g := range []string{"render", "video", "audio", "dialout"} {
+		if gid, ok := h.Groups[g]; ok {
+			groups[g] = gid
+		}
+	}
 	for _, a := range env.Catalogue {
 		for _, d := range a.Devices {
 			for _, g := range d.HostGroups {
@@ -71,7 +78,8 @@ func appsInfo(c conf) (helperapi.AppsInfo, error) {
 			}
 		}
 	}
-	return helperapi.AppsInfo{Runtime: env.Runtime.Name(), AppsDir: h.AppsDir, MediaRoots: h.MediaRoots, Bind: h.BindAddress, TZ: h.TZ, UID: h.UID, GID: h.GID, Groups: groups}, nil
+	_, sources := storeSources(c)
+	return helperapi.AppsInfo{Runtime: env.Runtime.Name(), AppsDir: h.AppsDir, MediaRoots: h.MediaRoots, Bind: h.BindAddress, TZ: h.TZ, UID: h.UID, GID: h.GID, Groups: groups, Sources: sources}, nil
 }
 
 // appJob takes the oldest request the agent left, checks it in full, and
