@@ -1,4 +1,5 @@
-// The app store's catalogue as the gateway sends it (internal/catalogue).
+// CirrusStore's catalogue as the gateway sends it: the built-in apps
+// (internal/catalogue) merged with each source's (internal/gateway/cirrusstore.go).
 
 export interface CatalogueApp {
   id: string;
@@ -19,6 +20,34 @@ export interface CatalogueApp {
   runAsUser?: boolean;
   check?: { port: string; path: string };
   minMemoryMB?: number;
+  /** Where it comes from: 'built-in', 'cirrusstore' (official) or a third-party source. */
+  source?: string;
+  /** Its signed definition's serial. */
+  serial?: number;
+  /** Why it can't be installed (another source has its id). */
+  unavailable?: string;
+}
+
+export const BUILT_IN = 'built-in';
+export const OFFICIAL = 'cirrusstore';
+
+/** An app's unique key in the merged catalogue. */
+export const appKey = (a: { id: string; source?: string }) => `${a.source || BUILT_IN}/${a.id}`;
+
+/** A source's name as the panel shows it. */
+export const sourceLabel = (name?: string) => (!name || name === BUILT_IN ? 'Built in' : name === OFFICIAL ? 'CirrusStore' : name);
+
+/** One source as the Sources card shows it (gateway.SourceStatus). */
+export interface StoreSource {
+  name: string;
+  url: string;
+  fingerprints: string[];
+  official?: boolean;
+  error?: string;
+  status: 'ok' | 'not-checked' | 'expired' | 'unreachable' | 'refused' | 'unusable';
+  detail?: string;
+  checked?: string;
+  apps: number;
 }
 
 /** The owner's choices on an app's page (catalogue.Options). */

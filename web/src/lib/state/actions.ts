@@ -9,8 +9,8 @@ import { now } from '../time.svelte';
 import { api, mode, sleeps } from '../api.svelte';
 import { loadChangelog, refreshSoon } from '../sync.svelte';
 import { toast } from './ui.svelte';
-import { cleanOptions, type AppOptions, type CatalogueApp } from '../catalogue';
-import { demoJob, findApp, loadCatalogue, store, type ArchiveEntry } from './store.svelte';
+import { BUILT_IN, cleanOptions, sourceLabel, type AppOptions, type CatalogueApp } from '../catalogue';
+import { demoJob, installedApp, loadCatalogue, store, type ArchiveEntry } from './store.svelte';
 
 
 type Opts = { source?: 'assistant' };
@@ -170,14 +170,15 @@ export function confirmBackup(o: Opts = {}): void {
   });
 }
 
-// ---- the app store (PHASES-4-6 §5c) ----
+// ---- CirrusStore (PHASES-4-6 §5c) ----
 
 /** Installs an app: the confirmation shows the exact file the server writes. */
 export function confirmInstall(app: CatalogueApp, options: AppOptions, preview: { file: string; content: string } | null): void {
   if (offline()) return;
+  const signed = app.source && app.source !== BUILT_IN ? ` Its definition is signed by ${sourceLabel(app.source)}, and ${mode.server} checks the signature before anything runs.` : '';
   ask({
     title: `Install ${app.name}?`,
-    body: `Downloads ${app.image}:${app.tag} (pinned to its digest), writes the file below, starts it and waits until it answers.${d3()}`,
+    body: `Downloads ${app.image}:${app.tag} (pinned to its digest), writes the file below, starts it and waits until it answers.${signed}${d3()}`,
     command: `cirrusux-helper app-job (install ${app.id})`,
     undo: `Remove ${app.name}; its folder is archived`,
     confirmLabel: 'Install',
@@ -185,7 +186,9 @@ export function confirmInstall(app: CatalogueApp, options: AppOptions, preview: 
     preview: preview ?? undefined,
     run: () => {
       if (!mode.live) return demoJob('install', app);
-      void sendAction({ action: 'app_install', args: { app: app.id, options: JSON.stringify(cleanOptions(app, options)) } }, `Started installing ${app.name}`).then(() => refreshSoon());
+      void sendAction({ action: 'app_install', args: { app: app.id, store: app.source || BUILT_IN, options: JSON.stringify(cleanOptions(app, options)) } }, `Started installing ${app.name}`).then(() =>
+        refreshSoon(),
+      );
     },
   });
 }
@@ -207,21 +210,29 @@ export function confirmRemove(app: CatalogueApp): void {
   });
 }
 
-/** Moves an installed app to another version: an update, or back to the previous one. */
-export function confirmUpdate(app: CatalogueApp, from: string, tag: string, digest: string, rollback = false): void {
+/** Moves an installed app to another version: an update, or back to the
+ *  previous one. With definition, it moves to the newer signed definition
+ *  CirrusStore offers from that source (new settings, ports or version). */
+export function confirmUpdate(app: CatalogueApp, from: string, tag: string, digest: string, rollback = false, definition?: { source: string }): void {
   if (offline()) return;
+  const what = definition && tag === from ? `${app.name}'s new definition` : tag;
   ask({
-    title: rollback ? `Put ${app.name} back to ${tag}?` : `Update ${app.name} to ${tag}?`,
+    title: rollback ? `Put ${app.name} back to ${tag}?` : `Update ${app.name} to ${what}?`,
     body:
+      (definition
+        ? `Uses the newer definition ${sourceLabel(definition.source)} signed (its ports, settings and version), checked again on ${mode.server}. `
+        : '') +
       `Downloads ${app.image}:${tag} (pinned to its digest), backs up ${app.name}'s settings and data, then restarts it on the new version. ` +
       `If it doesn't answer afterwards, ${from} and its settings come back by themselves.${d3()}`,
     command: `cirrusux-helper app-job (update ${app.id}: ${from} → ${tag})`,
-    undo: `Update ${app.name} back to ${from}`,
+    undo: tag === from ? undefined : `Update ${app.name} back to ${from}`,
     confirmLabel: rollback ? 'Go back' : 'Update',
     changelog: `Started updating ${app.name} to ${tag}`,
     run: () => {
       if (!mode.live) return demoJob('update', app, tag);
-      void sendAction({ action: 'app_update', args: { app: app.id, tag, digest } }, `Started updating ${app.name} to ${tag}`).then(() => refreshSoon());
+      const args: Record<string, string> = { app: app.id, tag, digest };
+      if (definition) args.store = definition.source;
+      void sendAction({ action: 'app_update', args }, `Started updating ${app.name} to ${tag}`).then(() => refreshSoon());
     },
   });
 }
@@ -337,7 +348,7 @@ export async function confirmAction(req: ActionReq, o: Opts = {}): Promise<void>
     case 'app_update': {
       // The catalogue loads on first use, so an Undo from Home may need it.
       await loadCatalogue();
-      const app = findApp(a.app);
+      const app = installedApp(a.app);
       const rec = store.installed.find((x) => x.id === a.app);
       if (app && rec) return confirmUpdate(app, rec.tag, a.tag, a.digest, true);
       toast(`Can't undo: ${a.app} isn't in the app catalogue or isn't installed`, 'warn');
@@ -345,7 +356,7 @@ export async function confirmAction(req: ActionReq, o: Opts = {}): Promise<void>
     }
     case 'app_remove': {
       await loadCatalogue();
-      const app = findApp(a.app);
+      const app = installedApp(a.app);
       if (app) return confirmRemove(app);
       toast(`Can't undo: ${a.app} isn't in the app catalogue`, 'warn');
       return;

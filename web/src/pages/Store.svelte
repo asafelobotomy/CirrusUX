@@ -4,15 +4,29 @@
   import Badge from '../lib/components/Badge.svelte';
   import JobList from '../lib/store/JobList.svelte';
   import AppPage from '../lib/store/AppPage.svelte';
+  import Sources from '../lib/store/Sources.svelte';
+  import Button from '../lib/components/Button.svelte';
   import * as Icons from '../lib/icons';
   import { mode } from '../lib/api.svelte';
-  import { clock } from '../lib/time.svelte';
-  import { isInstalled, loadCatalogue, runningJob, store } from '../lib/state/store.svelte';
+  import { clock, fmtAgo, fmtDayTime } from '../lib/time.svelte';
+  import { appKey, BUILT_IN, sourceLabel } from '../lib/catalogue';
+  import { installedApp, isInstalled, loadCatalogue, runningJob, store } from '../lib/state/store.svelte';
+  import { checkStore, loadSources, openApp } from '../lib/state/cirrusstore.svelte';
 
   let q = $state('');
   let group = $state('All');
 
-  onMount(() => void loadCatalogue());
+  let checking = $state(false);
+  onMount(() => {
+    void loadCatalogue();
+    void loadSources();
+  });
+
+  async function check() {
+    checking = true;
+    await checkStore();
+    checking = false;
+  }
 
   const groups = $derived(['All', ...new Set(store.catalogue.map((a) => a.group))]);
   const shown = $derived(
@@ -35,13 +49,14 @@
     {#if store.installed.length}
       <ul class="installed">
         {#each store.installed as a (a.id)}
-          {@const cat = store.catalogue.find((c) => c.id === a.id)}
+          {@const cat = installedApp(a.id)}
           {@const Icon = icon(cat?.icon ?? 'Package')}
           <li>
-            <button class="row" onclick={() => (store.open = a.id)}>
+            <button class="row" onclick={() => openApp(a.id, a.source || undefined)}>
               <span class="mini" style="--tile: {cat?.color ?? '#5b8def'}"><Icon size={16} /></span>
               <span class="name">{a.name}</span>
               <code class="faint">{a.tag}</code>
+              {#if a.source}<Badge tone="neutral">{sourceLabel(a.source)}</Badge>{/if}
               <span class="faint mono">:{a.mainPort}</span>
               {#if runningJob(a.id)}<Badge tone="info">working…</Badge>{/if}
             </button>
@@ -53,8 +68,14 @@
     {/if}
   </Card>
 
-  <Card title="Apps">
+  <Card
+    title="Apps"
+    subtitle={store.sources.fetched
+      ? `CirrusStore checked ${fmtAgo(store.sources.fetched)} (${fmtDayTime(store.sources.fetched)})`
+      : 'The built-in apps. Check CirrusStore for new apps and versions; nothing is fetched unless you ask.'}
+  >
     {#snippet actions()}
+      <Button size="sm" disabled={checking} onclick={check}>{#snippet icon()}<Icons.RefreshCw />{/snippet}{checking ? 'Checking…' : 'Check CirrusStore'}</Button>
       <label class="search"><Icons.Search size={15} /><input bind:value={q} placeholder="Search apps" aria-label="Search apps" /></label>
     {/snippet}
     <div class="groups" role="group" aria-label="Group">
@@ -66,22 +87,29 @@
       <p class="muted">No app matches “{q}”.</p>
     {/if}
     <ul class="grid">
-      {#each shown as a (a.id)}
+      {#each shown as a (appKey(a))}
         {@const Icon = icon(a.icon)}
         <li>
-          <button class="card" onclick={() => (store.open = a.id)}>
+          <button class="card" class:off={!!a.unavailable} onclick={() => openApp(a.id, a.source)} title={a.unavailable}>
             <span class="tile" style="--tile: {a.color}"><Icon size={22} /></span>
             <span class="body">
-              <span class="title">{a.name} {#if isInstalled(a.id)}<Badge tone="ok">installed</Badge>{/if}</span>
-              <span class="muted d">{a.description}</span>
-              <span class="faint meta">{a.group} · <code>{a.tag}</code></span>
+              <span class="title">
+                {a.name}
+                {#if a.unavailable}<Badge tone="warn">unavailable</Badge>{:else if isInstalled(a.id)}<Badge tone="ok">installed</Badge>{/if}
+              </span>
+              <span class="muted d">{a.unavailable ?? a.description}</span>
+              <span class="faint meta">{a.group} · <code>{a.tag}</code>{#if a.source && a.source !== BUILT_IN} · <span class="src">{sourceLabel(a.source)}</span>{/if}</span>
             </span>
           </button>
         </li>
       {/each}
     </ul>
   </Card>
-  <p class="faint note">Every app is pinned to an exact version and checked again on {mode.server} before anything runs. Removing an app archives its folder, so its settings and data are kept; only its downloaded image goes.</p>
+  <Sources />
+  <p class="faint note">
+    Every app is pinned to an exact version. Apps from CirrusStore and other sources are signed, and {mode.server} checks the signature and the definition
+    again before anything runs. Removing an app archives its folder, so its settings and data are kept; only its downloaded image goes.
+  </p>
 </div>
 
 <AppPage />
@@ -115,6 +143,8 @@
   }
   .card:hover { border-color: var(--border-strong); }
   .card:active { transform: scale(0.99); }
+  .card.off { opacity: 0.6; }
+  .src { color: var(--accent); }
   .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .title { display: flex; gap: 6px; align-items: center; font-weight: 600; }
   .d { font-size: 0.86rem; line-height: 1.35; }

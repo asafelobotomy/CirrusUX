@@ -10,7 +10,7 @@
   import JobList from './JobList.svelte';
   import * as Icons from '../icons';
   import { api, mode, sleeps } from '../api.svelte';
-  import { cleanOptions, defaultOptions, type AppOptions } from '../catalogue';
+  import { appKey, BUILT_IN, cleanOptions, defaultOptions, sourceLabel, type AppOptions } from '../catalogue';
   import { findApp, isInstalled, runningJob, store } from '../state/store.svelte';
   import { power } from '../state/power.svelte';
   import { confirmInstall, confirmRemove } from '../state/actions';
@@ -20,7 +20,7 @@
   let preview = $state<{ file?: string; content?: string; error?: string; warnings?: string[] } | null>(null);
   let previewing = $state(false);
 
-  const app = $derived(store.open ? findApp(store.open) : undefined);
+  const app = $derived(store.open ? findApp(store.open, store.openSource) : undefined);
   const installed = $derived(app ? isInstalled(app.id) : false);
   const job = $derived(app ? runningJob(app.id) : undefined);
   const appsDir = $derived(store.host?.appsDir ?? '/srv/cirrusux/apps');
@@ -31,14 +31,14 @@
     open = !!store.open;
   });
   $effect(() => {
-    if (!open) store.open = null;
+    if (!open) store.open = store.openSource = null;
   });
   // A fresh page starts from the app's suggestions, before it's drawn. Only
   // a different app resets them: each poll brings a new store.host.
   let lastId = '';
   $effect.pre(() => {
-    if (app && app.id !== lastId) {
-      lastId = app.id;
+    if (app && appKey(app) !== lastId) {
+      lastId = appKey(app);
       options = defaultOptions(app, untrack(() => store.host?.mediaRoots[0]));
       preview = null;
     } else if (!app) lastId = '';
@@ -48,8 +48,8 @@
   // moment after the last change.
   let timer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    if (!app || installed || !mode.live) return;
-    const body = JSON.stringify({ app: app.id, options: cleanOptions(app, $state.snapshot(options)) });
+    if (!app || installed || app.unavailable || !mode.live) return;
+    const body = JSON.stringify({ app: app.id, store: app.source || BUILT_IN, options: cleanOptions(app, $state.snapshot(options)) });
     clearTimeout(timer);
     previewing = true;
     timer = setTimeout(async () => {
@@ -64,6 +64,7 @@
 
   const blocked = $derived.by(() => {
     if (!app) return 'No app';
+    if (app.unavailable) return app.unavailable;
     if (job) return `${job.action === 'install' ? 'Installing' : 'Removing'}…`;
     if (mode.live && !awake) return `${mode.server} is asleep: wake it first`;
     if (mode.live && (previewing || !preview)) return 'Checking…';
@@ -84,11 +85,17 @@
       <span class="tile" style="--tile: {app.color}"><Icon size={26} /></span>
       <div>
         <h2>{app.name}</h2>
-        <p class="muted">{app.group} · <code>{app.tag}</code> · <a href={app.website} target="_blank" rel="noopener noreferrer">website <Icons.ExternalLink size={12} /></a></p>
+        <p class="muted">
+          {app.group} · <code>{app.tag}</code> · <a href={app.website} target="_blank" rel="noopener noreferrer">website <Icons.ExternalLink size={12} /></a>
+          · <Badge tone={app.source && app.source !== BUILT_IN ? 'accent' : 'neutral'}>{sourceLabel(app.source)}</Badge>
+        </p>
       </div>
       {#if installed}<Badge tone="ok">installed</Badge>{/if}
     </header>
     <p class="desc">{app.description}</p>
+    {#if app.source && app.source !== BUILT_IN}
+      <p class="faint small">Signed by {sourceLabel(app.source)}{app.serial ? ` (definition ${app.serial})` : ''}; {mode.server} checks the signature again before installing.</p>
+    {/if}
     {#if app.notes}<p class="notes"><Icons.Info size={15} />{app.notes}</p>{/if}
 
     {#if job || store.jobs.some((j) => j.app === app.id)}

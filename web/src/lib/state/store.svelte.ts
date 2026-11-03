@@ -1,9 +1,9 @@
-// The app store (PHASES-4-6 §5c): the catalogue, what's installed, and jobs
+// CirrusStore (PHASES-4-6 §5c): the catalogue, what's installed, and jobs
 // in progress. Live, installed apps and jobs come from the agent's reports
 // (sync.svelte.ts); in demo mode they're simulated.
-import demoCatalogue from 'virtual:catalogue';
+import { demoStoreCatalogue } from '../demo/cirrusstore';
 import { api, mode } from '../api.svelte';
-import type { CatalogueApp } from '../catalogue';
+import { BUILT_IN, type CatalogueApp, type StoreSource } from '../catalogue';
 import { now } from '../time.svelte';
 import { toast } from './ui.svelte';
 
@@ -19,6 +19,9 @@ export interface InstalledApp {
   mainPort: number;
   https?: boolean;
   installed: Date;
+  /** The CirrusStore source it came from; empty for the built-in catalogue. */
+  source?: string;
+  serial?: number;
 }
 
 export interface Job {
@@ -48,8 +51,11 @@ export const store = $state({
   installed: [] as InstalledApp[],
   jobs: [] as Job[],
   host: null as AppsHost | null,
-  /** The app whose page is open. */
+  /** The app whose page is open, and the source it's from (null: whichever offers it). */
   open: null as string | null,
+  openSource: null as string | null,
+  /** CirrusStore's sources and when they were last fetched (gateway, on request). */
+  sources: { fetched: null as Date | null, list: [] as StoreSource[] },
   /** The last measurement and the archive, from the server (storage module). */
   storage: null as StorageResult | null,
   /** The last OS package check, from the server (os module). */
@@ -91,6 +97,10 @@ export interface AppUpdate {
   latest?: string;
   digest?: string;
   error?: string;
+  /** A newer signed definition from source (new settings, ports or version). */
+  definition?: boolean;
+  source?: string;
+  serial?: number;
 }
 
 const toUpdates = (u: { checked: string; apps: AppUpdate[] }) => ({ checked: u.checked && !u.checked.startsWith('0001') ? new Date(u.checked) : null, apps: u.apps ?? [] });
@@ -115,7 +125,9 @@ export async function checkUpdates(): Promise<void> {
       apps: store.installed.map((a) =>
         a.id === 'jellyfin'
           ? { app: a.id, name: a.name, current: a.tag, latest: '12.5.20261110-090000', digest: 'sha256:' + '7'.repeat(64) }
-          : { app: a.id, name: a.name, current: a.tag },
+          : a.id === 'navidrome'
+            ? { app: a.id, name: a.name, current: a.tag, latest: a.tag, digest: a.digest, definition: true, source: 'cirrusstore', serial: 2 }
+            : { app: a.id, name: a.name, current: a.tag },
       ),
     };
     return;
@@ -153,10 +165,10 @@ export function startDemoStore(): void {
       { name: 'homeserver-system-2026-10-30_0935.tar.zst', kind: 'backup', bytes: 2.3 * GB, modified: day(3) },
     ],
   };
-  store.catalogue = demoCatalogue;
+  store.catalogue = demoStoreCatalogue();
   store.host = { runtime: 'podman', appsDir: '/srv/cirrusux/apps', mediaRoots: ['/srv/media'], tz: 'Europe/London' };
   store.installed = ['jellyfin', 'navidrome'].map((id) => {
-    const a = demoCatalogue.find((x) => x.id === id)!;
+    const a = store.catalogue.find((x) => x.id === id)!;
     const main = a.ports.find((p) => p.main) ?? a.ports[0];
     return { id, name: a.name, tag: a.tag, digest: a.digest, runtime: 'podman', mainPort: main.host, https: main.https, installed: new Date(now().getTime() - 9 * 86400_000) };
   });
@@ -164,9 +176,10 @@ export function startDemoStore(): void {
 
 let loading: Promise<void> | null = null;
 
-/** Fetches the catalogue once; demo mode already has it. */
-export function loadCatalogue(): Promise<void> {
-  if (!mode.live || store.catalogue.length) return Promise.resolve();
+/** Fetches the catalogue once (again after a CirrusStore check); demo mode already has it. */
+export function loadCatalogue(force = false): Promise<void> {
+  if (force) loading = null;
+  if (!mode.live || (store.catalogue.length && !force)) return Promise.resolve();
   loading ??= api<CatalogueApp[]>('/api/catalogue')
     .then((apps) => void (store.catalogue = apps))
     .catch((e) => {
@@ -176,7 +189,16 @@ export function loadCatalogue(): Promise<void> {
   return loading;
 }
 
-export const findApp = (id: string) => store.catalogue.find((a) => a.id === id);
+/** The installable app id: from source if given, else whichever source offers it. */
+export const findApp = (id: string, source?: string | null) =>
+  store.catalogue.find((a) => a.id === id && !a.unavailable && (!source || (a.source || BUILT_IN) === source)) ??
+  (source ? undefined : store.catalogue.find((a) => a.id === id));
+
+/** The definition an installed app came from. */
+export const installedApp = (id: string) => {
+  const rec = store.installed.find((a) => a.id === id);
+  return findApp(id, rec?.source || undefined) ?? findApp(id);
+};
 export const isInstalled = (id: string) => store.installed.some((a) => a.id === id);
 export const runningJob = (id?: string) => store.jobs.find((j) => j.state === 'running' && (!id || j.app === id));
 
@@ -208,11 +230,15 @@ export function demoJob(action: 'install' | 'remove' | 'update', app: CatalogueA
       rec.previousTag = rec.tag;
       rec.previousDigest = rec.digest ?? app.digest;
       rec.tag = tag!;
+      rec.source = app.source === BUILT_IN ? undefined : app.source;
+      rec.serial = app.serial;
+      store.updates.apps = store.updates.apps.filter((u) => u.app !== app.id);
       j.step = `${app.name} is updated`;
       j.detail = `backup in /srv/cirrusux/archive/${app.id}-before-${rec.previousTag}-…`;
     } else if (action === 'install') {
       const main = app.ports.find((p) => p.main) ?? app.ports[0];
-      store.installed.push({ id: app.id, name: app.name, tag: app.tag, runtime: 'podman', mainPort: main.host, https: main.https, installed: now() });
+      store.installed.push({ id: app.id, name: app.name, tag: app.tag, runtime: 'podman', mainPort: main.host, https: main.https, installed: now(),
+        source: app.source === BUILT_IN ? undefined : app.source, serial: app.serial });
       j.step = `${app.name} is installed`;
     } else {
       store.installed = store.installed.filter((a) => a.id !== app.id);

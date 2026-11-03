@@ -8,7 +8,8 @@
   import { power } from '../lib/state/power.svelte';
   import { checkOS, confirmOSUpgrade, confirmUpdate } from '../lib/state/actions';
   import { has } from '../lib/api.svelte';
-  import { checkUpdates, findApp, loadCatalogue, loadUpdates, runningJob, store } from '../lib/state/store.svelte';
+  import { checkUpdates, findApp, installedApp, loadCatalogue, loadUpdates, runningJob, store } from '../lib/state/store.svelte';
+  import { sourceLabel } from '../lib/catalogue';
   import { fmtAgo, fmtDayTime } from '../lib/time.svelte';
   import { RefreshCw, TriangleAlert, Undo2 } from '../lib/icons';
 
@@ -52,7 +53,8 @@
       {/if}
       <ul class="apps">
         {#each rows as { a, u } (a.id)}
-          {@const cat = findApp(a.id)}
+          {@const cat = installedApp(a.id)}
+          {@const next = u?.definition && u.source ? findApp(a.id, u.source) : undefined}
           <li>
             <div class="name">
               <strong>{a.name}</strong>
@@ -63,6 +65,11 @@
                 <Badge tone="info">updating…</Badge>
               {:else if u?.error}
                 <span class="err" title={u.error}>couldn't check</span>
+              {:else if u?.definition && u.latest}
+                <span title="A newer definition, signed by {sourceLabel(u.source)}: settings, ports or version">
+                  <Badge tone="warn">{u.latest === a.tag ? 'new definition' : `${u.latest} available`} · {sourceLabel(u.source)}</Badge>
+                </span>
+                <Button size="sm" variant="primary" disabled={!canAct || !next} onclick={() => next && confirmUpdate(next, a.tag, u.latest!, u.digest!, false, { source: u.source! })}>Update</Button>
               {:else if u?.latest}
                 <Badge tone="warn">{u.latest} available</Badge>
                 <Button size="sm" variant="primary" disabled={!canAct || !cat} onclick={() => cat && confirmUpdate(cat, a.tag, u.latest!, u.digest!)}>Update</Button>
@@ -113,8 +120,9 @@
   {/if}
 
   <p class="faint note">
-    Checks ask the registries from the gateway, so a sleeping server isn't woken. An update backs up the app's settings and data first, and if the
-    new version doesn't answer, the old one and its settings come back by themselves. Only same-shaped release versions are offered: never betas, never :latest.
+    Checks ask the registries from the gateway, so a sleeping server isn't woken. Newer app definitions appear here after Check CirrusStore on the CirrusStore page.
+    An update backs up the app's settings and data first, and if the new version doesn't answer, the old one and its settings come back by themselves.
+    Only same-shaped release versions are offered: never betas, never :latest.
   </p>
 </div>
 

@@ -31,7 +31,7 @@ interface Snap {
   features?: string[];
   timeline: { from: string; to?: string; state: 'awake' | 'asleep'; reason?: string }[];
   errors?: string[];
-  apps?: { id: string; name: string; tag: string; digest?: string; previousTag?: string; previousDigest?: string; runtime: string; mainPort: number; https?: boolean; installed: string }[];
+  apps?: { id: string; name: string; tag: string; digest?: string; previousTag?: string; previousDigest?: string; runtime: string; mainPort: number; https?: boolean; installed: string; source?: string; serial?: number }[];
   storage?: { measured: string; roots: StorageResult['roots']; archive: (Omit<ArchiveEntry, 'modified'> & { modified: string })[] };
   osUpdates?: { checked: string; packages: { name: string; from: string; to: string; security?: boolean }[]; rebootRequired?: boolean; upgraded?: string; upgradedCount?: number };
   jobs?: { id: string; action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
