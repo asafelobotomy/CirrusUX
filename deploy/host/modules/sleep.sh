@@ -6,6 +6,11 @@
 #   SLEEP_GRACE_MIN=15           minutes after a wake before it may sleep again
 #   SLEEP_WATCH_PORTS=""         only these local ports count; empty: all of them
 #   SLEEP_IGNORE_CLIENTS=""      addresses or networks whose connections don't count
+#   SLEEP_IGNORE_CLIENTS_PLAY_MB=0   an ignored client pulling more than this
+#                                many MB a minute is playing something and
+#                                counts after all; 0 off
+#   SLEEP_IGNORE_WAKE_GRACE_MIN=0    after a wake only ignored clients used,
+#                                sleep this many minutes after the wake; 0 off
 #   SLEEP_MAX_LOAD=0             a 5-minute load above this counts; 0 off
 #   SLEEP_COUNT_LOGINS=yes       logged-in sessions count
 #   SLEEP_WAKE_TIMERS="cirrusux-backup.timer cirrusux-av-scan.timer"
@@ -26,8 +31,21 @@ module_sleep() {
 	rel=$(release_dir)
 	[ -f "$rel/bin/cirrusux-idle" ] || die "no $rel/bin/cirrusux-idle: run make build, or set CIRRUS_RELEASE"
 	[[ ${SLEEP_IDLE_MIN:-30} =~ ^[1-9][0-9]*$ ]] || die "SLEEP_IDLE_MIN must be a whole number of minutes"
+	[[ ${SLEEP_IGNORE_CLIENTS_PLAY_MB:-0} =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "SLEEP_IGNORE_CLIENTS_PLAY_MB must be a number of MB"
+	[[ ${SLEEP_IGNORE_WAKE_GRACE_MIN:-0} =~ ^[0-9]+$ ]] || die "SLEEP_IGNORE_WAKE_GRACE_MIN must be a whole number of minutes"
 
 	need_packages conntrack
+	# Byte counts per connection, so an ignored client that streams is seen.
+	local sysctl=/etc/sysctl.d/60-cirrusux-conntrack.conf before=$CHANGES
+	put_file $sysctl 644 root:root <<'EOF2'
+# Written by cirrusux-setup (sleep module): byte counts per connection, for
+# SLEEP_IGNORE_CLIENTS_PLAY_MB.
+net.netfilter.nf_conntrack_acct=1
+EOF2
+	if [ "$CHANGES" -ne "$before" ]; then
+		change "count bytes per connection now (nf_conntrack_acct)" "sysctl -w net.netfilter.nf_conntrack_acct=0" \
+			sysctl -q -p "$ROOT$sysctl"
+	fi
 	put_file /usr/local/sbin/cirrusux-idle 755 root:root <"$rel/bin/cirrusux-idle"
 	put_link /usr/local/sbin/cirrusux-stay-awake cirrusux-idle
 	put_link /usr/local/sbin/cirrusux-allow-sleep cirrusux-idle
@@ -39,6 +57,8 @@ IDLE_MIN=${SLEEP_IDLE_MIN:-30}
 GRACE_MIN=${SLEEP_GRACE_MIN:-15}
 WATCH_PORTS="${SLEEP_WATCH_PORTS:-}"
 IGNORE_CLIENTS="${SLEEP_IGNORE_CLIENTS:-}"
+IGNORE_CLIENTS_PLAY_MB=${SLEEP_IGNORE_CLIENTS_PLAY_MB:-0}
+IGNORE_WAKE_GRACE_MIN=${SLEEP_IGNORE_WAKE_GRACE_MIN:-0}
 MAX_LOAD=${SLEEP_MAX_LOAD:-0}
 COUNT_LOGINS=${SLEEP_COUNT_LOGINS:-yes}
 WAKE_TIMERS="${SLEEP_WAKE_TIMERS:-cirrusux-backup.timer cirrusux-av-scan.timer}"

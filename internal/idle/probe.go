@@ -50,6 +50,11 @@ func ParseSS(established, listening string) []Conn {
 // connection whose reply comes from somewhere other than where it was sent
 // was forwarded (DNAT) to a container's published port: that's someone
 // using an app. Outbound connections from containers don't count.
+//
+// A client that reaches an app through something on the host itself (a
+// `tailscale serve` proxy, say) arrives from loopback, which never counts;
+// Podman hands such a connection to the container from its bridge gateway,
+// so that address stands in for the client.
 func ParseConntrack(out string) []Conn {
 	var conns []Conn
 	for _, l := range lines(out) {
@@ -65,6 +70,11 @@ func ParseConntrack(out string) []Conn {
 		}
 		peer, err1 := netip.ParseAddr(src[0])
 		port, err2 := strconv.Atoi(dport[0])
+		if err1 == nil && peer.Unmap().IsLoopback() && len(dst) >= 2 {
+			if gw, err := netip.ParseAddr(dst[1]); err == nil && !gw.Unmap().IsLoopback() {
+				peer = gw
+			}
+		}
 		if err1 == nil && err2 == nil {
 			conns = append(conns, Conn{Port: port, Peer: peer})
 		}
@@ -107,18 +117,11 @@ func ParseActiveUnits(out string, patterns []string) []string {
 // Counted drops connections that don't count: loopback, ignored clients,
 // and ports outside WatchPorts when it's set.
 func Counted(conns []Conn, cfg Config) []Conn {
-	var ignore []netip.Prefix
-	for _, c := range cfg.IgnoreClients {
-		if p, err := netip.ParsePrefix(c); err == nil {
-			ignore = append(ignore, p)
-		} else if a, err := netip.ParseAddr(c); err == nil {
-			ignore = append(ignore, netip.PrefixFrom(a, a.BitLen()))
-		}
-	}
+	ignore := ignorePrefixes(cfg)
 	var out []Conn
 	for _, c := range conns {
 		peer := c.Peer.Unmap()
-		if peer.IsLoopback() || slices.ContainsFunc(ignore, func(p netip.Prefix) bool { return p.Contains(peer) }) {
+		if peer.IsLoopback() || ignored(ignore, peer) {
 			continue
 		}
 		if len(cfg.WatchPorts) > 0 && !slices.Contains(cfg.WatchPorts, c.Port) {

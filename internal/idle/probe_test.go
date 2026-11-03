@@ -38,6 +38,35 @@ tcp      6 300 ESTABLISHED src=192.0.2.5 dst=192.168.1.2 sport=51000 dport=22 sr
 	}
 }
 
+// Podman (netavark): a tailnet client reaching Jellyfin through a proxy on
+// the host arrives from loopback, and the container sees the bridge
+// gateway. Both families are read; IPv6 lines look the same.
+func TestParseConntrackPodman(t *testing.T) {
+	out := `tcp      6 431999 ESTABLISHED src=100.64.0.7 dst=100.64.0.2 sport=40000 dport=8096 src=10.88.0.5 dst=100.64.0.7 sport=8096 dport=40000 [ASSURED] mark=0 use=1
+tcp      6 431999 ESTABLISHED src=127.0.0.1 dst=127.0.0.1 sport=41000 dport=8096 src=10.88.0.5 dst=10.88.0.1 sport=8096 dport=41000 [ASSURED] mark=0 use=1
+tcp      6 431999 ESTABLISHED src=fd7a:115c:a1e0::7 dst=fd7a:115c:a1e0::2 sport=40001 dport=8096 src=fd00:88::5 dst=fd7a:115c:a1e0::7 sport=8096 dport=40001 [ASSURED] mark=0 use=1`
+	got := ConnReason(Counted(ParseConntrack(out), Config{}))
+	if got != "host conns: 8096<-10.88.0.1 8096<-100.64.0.7 8096<-fd7a:115c:a1e0::7" {
+		t.Errorf("reason = %q", got)
+	}
+}
+
+func TestParseFlows(t *testing.T) {
+	out := `tcp      6 431999 ESTABLISHED src=192.0.2.23 dst=192.168.1.2 sport=40000 dport=8096 packets=9 bytes=600 src=10.88.0.5 dst=192.0.2.23 sport=8096 dport=40000 packets=90 bytes=7000000 [ASSURED] mark=0 use=1
+tcp      6 300 ESTABLISHED src=192.0.2.5 dst=192.168.1.2 sport=51000 dport=22 src=192.168.1.2 dst=192.0.2.5 sport=22 dport=51000 [ASSURED] mark=0 use=1`
+	got := ParseFlows(out)
+	if len(got) != 2 || got[0].Bytes != 7000000 || got[0].Peer.String() != "192.0.2.23" || got[0].Port != 8096 || got[1].Bytes != 0 {
+		t.Errorf("flows = %+v", got)
+	}
+	if got[0].Key == got[1].Key {
+		t.Error("flows share a key")
+	}
+	conns := []Conn{{8096, netip.MustParseAddr("::ffff:192.0.2.23")}, {22, netip.MustParseAddr("192.0.2.5")}}
+	if p := IgnoredPeers(conns, Config{IgnoreClients: []string{"192.0.2.23"}}); len(p) != 1 || p[0].String() != "192.0.2.23" {
+		t.Errorf("ignored peers = %v", p)
+	}
+}
+
 func TestCountedAndReason(t *testing.T) {
 	conns := []Conn{
 		{22, netip.MustParseAddr("192.0.2.5")},

@@ -32,6 +32,29 @@ func TestDecide(t *testing.T) {
 		{"expired hold doesn't count", State{LastActive: ago(300), LastWake: ago(300)}, nil, Hold{Until: ago(1)}, Suspend, ""},
 		{"hold and activity both listed", State{}, []string{"host conns: 22<-192.0.2.5"}, Hold{Forever: true}, Active, "until you allow sleep; host conns: 22<-192.0.2.5"},
 	}
+	cfgTV := cfg
+	cfgTV.IgnoreWakeGraceMin = 5
+	tv := []struct {
+		name string
+		st   State
+		want Verdict
+		msg  string
+	}{
+		{"only the TV since the wake: short grace", State{LastActive: ago(300), LastWake: ago(3), LastIgnored: ago(1)}, Idle, "sleeps at 12:02"},
+		{"short grace over", State{LastActive: ago(300), LastWake: ago(6), LastIgnored: ago(1)}, Suspend, "only ignored clients since the wake 6 min ago"},
+		{"TV seen before the wake only", State{LastActive: ago(300), LastWake: ago(6), LastIgnored: ago(400)}, Idle, "sleeps at 12:24"},
+		{"someone else since the wake", State{LastActive: ago(2), LastWake: ago(6), LastIgnored: ago(1)}, Idle, "sleeps at 12:28"},
+	}
+	for _, c := range tv {
+		d := Decide(now, cfgTV, c.st, boot, nil, Hold{})
+		if d.Verdict != c.want || !strings.Contains(d.Msg, c.msg) {
+			t.Errorf("%s: got %v %q, want %v containing %q", c.name, d.Verdict, d.Msg, c.want, c.msg)
+		}
+	}
+	if d := Decide(now, cfg, State{LastActive: ago(300), LastWake: ago(6), LastIgnored: ago(1)}, boot, nil, Hold{}); d.Verdict != Idle {
+		t.Errorf("short grace off by default: %v", d.Msg)
+	}
+
 	for _, c := range cases {
 		b := boot
 		if c.name == "fresh boot gets grace" {

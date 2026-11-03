@@ -141,6 +141,8 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `SLEEP_GRACE_MIN` | `15` | sleep: minutes after a wake before it may sleep again |
 | `SLEEP_WATCH_PORTS` | — (all) | sleep: only these local ports count |
 | `SLEEP_IGNORE_CLIENTS` | — | sleep: addresses or networks whose connections don't count |
+| `SLEEP_IGNORE_CLIENTS_PLAY_MB` | `0` (off) | sleep: an ignored client pulling more than this many MB a minute is playing something, and counts after all |
+| `SLEEP_IGNORE_WAKE_GRACE_MIN` | `0` (off) | sleep: after a wake that only ignored clients used, it sleeps this many minutes after the wake |
 | `SLEEP_MAX_LOAD` | `0` (off) | sleep: a 5-minute load above this counts as activity |
 | `SLEEP_COUNT_LOGINS` | `yes` | sleep: logged-in sessions count |
 | `SLEEP_WAKE_TIMERS` | backup and scan timers | sleep: timers that wake it, shown as the next wake |
@@ -149,7 +151,11 @@ The sleep module installs `cirrusux-idle`, CirrusUX's own sleep manager. A
 timer runs `cirrusux-idle check` every minute: inbound connections (to the
 machine, and through conntrack to containers' published ports), logins,
 busy units (backups, scans, app jobs) and stay-awake holds count as
-activity; outbound connections never do. It suspends after the quiet time,
+activity; outbound connections never do. Someone reaching an app through
+a proxy on the server itself (`tailscale serve`) shows as Podman's bridge
+gateway, and counts. The sleep module turns on per-connection byte counts
+(`net.netfilter.nf_conntrack_acct=1`) for `SLEEP_IGNORE_CLIENTS_PLAY_MB`.
+It suspends after the quiet time,
 and timers with `WakeSystem=yes` wake it. `cirrusux-idle status` shows what
 it sees without changing anything, and `cirrusux-idle check --dry-run`
 writes nothing at all. Anything it can't read counts as activity.
@@ -170,6 +176,8 @@ settings above. `cirrusux-idle` reads it every minute, and the agent reads
 | `GRACE_MIN` | `15` | Minutes after a wake before it may sleep again |
 | `WATCH_PORTS` | — (all) | Space-separated local ports whose inbound connections count |
 | `IGNORE_CLIENTS` | — | Addresses or networks whose connections don't count |
+| `IGNORE_CLIENTS_PLAY_MB` | `0` (off) | An ignored client that was sent more than this many MB (millions of bytes) a minute counts as "playback by ignored client" |
+| `IGNORE_WAKE_GRACE_MIN` | `0` (off) | When an ignored client was connected since the last wake and nothing else counted, it sleeps this many minutes after the wake, instead of waiting for `IDLE_MIN` and `GRACE_MIN` |
 | `BUSY_UNITS` | `cirrusux-backup.service cirrusux-av-scan.service cirrusux-job-*` | Units that keep it awake while active; globs allowed. The module doesn't set it, and the next `apply sleep` replaces a hand edit, so the default is what runs |
 | `MAX_LOAD` | `0` (off) | A 5-minute load above this counts as activity |
 | `COUNT_LOGINS` | `yes` | `no`: logged-in sessions don't count |

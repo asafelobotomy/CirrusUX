@@ -21,6 +21,13 @@ type Config struct {
 	// IgnoreClients are addresses or networks whose connections don't count
 	// (a TV that holds a connection open, a monitoring box).
 	IgnoreClients []string
+	// IgnorePlayMB: an ignored client pulling more than this many MB a
+	// minute is playing something, and counts after all; 0 off.
+	IgnorePlayMB float64
+	// IgnoreWakeGraceMin: after a wake that only ignored clients used, it
+	// may sleep this many minutes after the wake, instead of after IdleMin
+	// and GraceMin; 0 off.
+	IgnoreWakeGraceMin int
 	// BusyUnits keep the server awake while active; globs allowed.
 	BusyUnits []string
 	// WakeTimers are the timers that wake it (for the SUSPEND line).
@@ -44,6 +51,7 @@ type State struct {
 	LastActive  time.Time // last minute anything counted
 	LastWake    time.Time // last resume
 	LastSuspend time.Time // last time it suspended
+	LastIgnored time.Time // last time an ignored client was connected
 	LastMsg     string    // last verdict
 }
 
@@ -93,6 +101,15 @@ func Decide(now time.Time, cfg Config, st State, boot time.Time, reasons []strin
 	quietSince := st.LastActive
 	if woke.After(quietSince) {
 		quietSince = woke
+	}
+	// Woken by an ignored client (the TV) and used by nobody else since:
+	// back to sleep soon, without waiting out the idle time.
+	if cfg.IgnoreWakeGraceMin > 0 && !woke.IsZero() && !st.LastIgnored.Before(woke) && st.LastActive.Before(woke) {
+		at := woke.Add(time.Duration(cfg.IgnoreWakeGraceMin) * time.Minute)
+		if !now.Before(at) {
+			return Decision{Verdict: Suspend, Msg: fmt.Sprintf("IDLE: only ignored clients since the wake %d min ago", int(now.Sub(woke).Minutes()))}
+		}
+		return Decision{Verdict: Idle, Msg: "IDLE: only ignored clients since the wake, sleeps at " + at.Format("15:04"), SleepsAt: at}
 	}
 	at := quietSince.Add(time.Duration(cfg.IdleMin) * time.Minute)
 	if graceEnd := woke.Add(time.Duration(cfg.GraceMin) * time.Minute); graceEnd.After(at) {

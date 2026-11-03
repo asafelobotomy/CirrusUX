@@ -51,7 +51,13 @@ func (c *Checker) Check() (Decision, error) {
 		st.LastWake = now
 	}
 
-	reasons := c.gather()
+	reasons, sawIgnored := c.gather(now)
+	if sawIgnored {
+		st.LastIgnored = now
+		if !c.DryRun {
+			c.writeTime("last-ignored", now)
+		}
+	}
 	d := Decide(now, c.Cfg, st, c.Sys.BootTime(), reasons, c.hold(now))
 
 	if c.DryRun {
@@ -81,9 +87,10 @@ func (c *Checker) Check() (Decision, error) {
 	return d, nil
 }
 
-// gather lists what's keeping the server awake. A source that can't be
-// read counts as activity: better awake than asleep by mistake.
-func (c *Checker) gather() []string {
+// gather lists what's keeping the server awake, and whether an ignored
+// client is connected. A source that can't be read counts as activity:
+// better awake than asleep by mistake.
+func (c *Checker) gather(now time.Time) ([]string, bool) {
 	var reasons []string
 	if c.Cfg.CountLogins {
 		if out, err := c.Sys.Run("who"); err != nil {
@@ -112,18 +119,26 @@ func (c *Checker) gather() []string {
 	est, err1 := c.Sys.Run("ss", "-Htn", "state", "established")
 	lis, err2 := c.Sys.Run("ss", "-Htln")
 	if err1 != nil || err2 != nil {
-		return append(reasons, "can't read connections (ss)")
+		return append(reasons, "can't read connections (ss)"), false
 	}
 	conns := ParseSS(est, lis)
-	if out, err := c.Sys.Run("conntrack", "-L", "-p", "tcp", "--state", "ESTABLISHED"); err == nil {
-		conns = append(conns, ParseConntrack(out)...)
+	// Each family on its own: tailnet clients may come over IPv6. IPv4
+	// failing counts as activity; a host without IPv6 tracking just has none.
+	var tracked string
+	if out, err := c.Sys.Run("conntrack", "-L", "-f", "ipv4", "-p", "tcp", "--state", "ESTABLISHED"); err == nil {
+		tracked = out
+		if out6, err := c.Sys.Run("conntrack", "-L", "-f", "ipv6", "-p", "tcp", "--state", "ESTABLISHED"); err == nil {
+			tracked += "\n" + out6
+		}
+		conns = append(conns, ParseConntrack(tracked)...)
 	} else if !errors.Is(err, ErrNotInstalled) {
 		reasons = append(reasons, "can't read forwarded connections (conntrack)")
 	}
 	if r := ConnReason(Counted(conns, c.Cfg)); r != "" {
 		reasons = append(reasons, r)
 	}
-	return reasons
+	reasons = append(reasons, c.playback(now, ParseFlows(tracked))...)
+	return reasons, len(IgnoredPeers(conns, c.Cfg)) > 0
 }
 
 // wakeNote is the SUSPEND line's "; RTC wake set …" part: the next of
@@ -244,7 +259,8 @@ func (c *Checker) loadState() State {
 		return time.Unix(n, 0)
 	}
 	msg, _ := os.ReadFile(filepath.Join(c.Dir, "last-msg"))
-	return State{LastActive: read("last-active"), LastWake: read("last-wake"), LastSuspend: read("last-suspend"), LastMsg: strings.TrimSpace(string(msg))}
+	return State{LastActive: read("last-active"), LastWake: read("last-wake"), LastSuspend: read("last-suspend"),
+		LastIgnored: read("last-ignored"), LastMsg: strings.TrimSpace(string(msg))}
 }
 
 func (c *Checker) write(name, content string) error {
@@ -312,6 +328,14 @@ func ParseConfig(text string) (Config, error) {
 			}
 		case "IGNORE_CLIENTS":
 			cfg.IgnoreClients = strings.Fields(v)
+		case "IGNORE_CLIENTS_PLAY_MB":
+			if cfg.IgnorePlayMB, err = strconv.ParseFloat(v, 64); err == nil && cfg.IgnorePlayMB < 0 {
+				err = fmt.Errorf("must be 0 or more")
+			}
+		case "IGNORE_WAKE_GRACE_MIN":
+			if cfg.IgnoreWakeGraceMin, err = strconv.Atoi(v); err == nil && cfg.IgnoreWakeGraceMin < 0 {
+				err = fmt.Errorf("must be 0 or more")
+			}
 		case "BUSY_UNITS":
 			cfg.BusyUnits = strings.Fields(v)
 		case "WAKE_TIMERS":

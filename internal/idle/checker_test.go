@@ -2,6 +2,7 @@ package idle
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 // fakeSys answers like a quiet server unless told otherwise.
 type fakeSys struct {
 	who, units, est, conntrack string
+	conntrack6                 string
 	ssErr                      error
 	boot                       time.Time
 	suspends                   int
@@ -38,6 +40,9 @@ func (f *fakeSys) Run(name string, args ...string) (string, error) {
 	case "conntrack":
 		if f.conntrack == "" {
 			return "", ErrNotInstalled
+		}
+		if args[2] == "ipv6" {
+			return f.conntrack6, nil
 		}
 		return f.conntrack, nil
 	}
@@ -187,12 +192,75 @@ func TestResumeWithoutHook(t *testing.T) {
 	}
 }
 
+// tvFlow is the TV's connection to Jellyfin in a container, with bytes
+// sent back to it so far (conntrack with accounting on).
+func tvFlow(sent int) string {
+	return fmt.Sprintf("tcp      6 431999 ESTABLISHED src=192.0.2.23 dst=192.168.1.2 sport=40000 dport=8096 packets=900 bytes=60000 src=10.88.0.5 dst=192.0.2.23 sport=8096 dport=40000 packets=9000 bytes=%d [ASSURED] mark=0 use=1", sent)
+}
+
+// The TV holding a connection open is ignored; the TV streaming isn't.
+func TestIgnoredClientPlayback(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	sys := &fakeSys{boot: now.Add(-5 * time.Hour), conntrack: tvFlow(1_000_000)}
+	c := newChecker(t, sys, &now)
+	c.Cfg.IgnoreClients, c.Cfg.IgnorePlayMB = []string{"192.0.2.23"}, 5
+
+	if d, _ := c.Check(); d.Verdict == Active {
+		t.Fatalf("first look has nothing to compare with: %v", d.Msg)
+	}
+	now = now.Add(time.Minute)
+	sys.conntrack = tvFlow(3_000_000) // 2 MB in a minute: idling on a menu
+	if d, _ := c.Check(); d.Verdict == Active {
+		t.Errorf("2 MB/min counted: %v", d.Msg)
+	}
+	now = now.Add(time.Minute)
+	sys.conntrack = tvFlow(15_000_000) // 12 MB: a film
+	d, _ := c.Check()
+	if d.Verdict != Active || d.Msg != "ACTIVE: playback by ignored client 192.0.2.23 (12 MB sent since last check)" {
+		t.Errorf("playback: %v", d.Msg)
+	}
+}
+
+// Woken, and only the TV turned up: back to sleep after the short grace.
+func TestIgnoredWakeGrace(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	sys := &fakeSys{boot: now.Add(-24 * time.Hour), conntrack: tvFlow(0)}
+	c := newChecker(t, sys, &now)
+	c.Cfg.IgnoreClients, c.Cfg.IgnoreWakeGraceMin = []string{"192.0.2.23"}, 5
+	c.writeTime("last-active", now.Add(-3*time.Hour))
+	if err := c.SleepHook("post"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(2 * time.Minute)
+	if d, _ := c.Check(); d.Verdict != Idle || !strings.Contains(d.Msg, "only ignored clients since the wake, sleeps at 12:05") {
+		t.Errorf("short grace: %v", d.Msg)
+	}
+	now = now.Add(3 * time.Minute)
+	if d, _ := c.Check(); d.Verdict != Suspend {
+		t.Errorf("after the short grace: %v", d.Msg)
+	}
+
+	// The same wake, but someone else used it: the usual times apply.
+	now = now.Add(time.Hour)
+	_ = c.SleepHook("post")
+	sys.est = "0 0 192.168.1.2:22 192.0.2.5:51000"
+	if d, _ := c.Check(); d.Verdict != Active {
+		t.Fatalf("ssh: %v", d.Msg)
+	}
+	sys.est = ""
+	now = now.Add(6 * time.Minute)
+	if d, _ := c.Check(); d.Verdict != Idle {
+		t.Errorf("someone else used it, yet the short grace applied: %v", d.Msg)
+	}
+}
+
 func TestParseConfig(t *testing.T) {
-	cfg, err := ParseConfig("# comment\nIDLE_MIN=20\nGRACE_MIN=\"5\"\nWATCH_PORTS=22 8096\nIGNORE_CLIENTS=192.0.2.23\nMAX_LOAD=1.5\nCOUNT_LOGINS=no\nWAKE_TIMERS=a.timer b.timer\n")
-	if err != nil || cfg.IdleMin != 20 || cfg.GraceMin != 5 || len(cfg.WatchPorts) != 2 || cfg.MaxLoad != 1.5 || cfg.CountLogins || len(cfg.WakeTimers) != 2 {
+	cfg, err := ParseConfig("# comment\nIDLE_MIN=20\nGRACE_MIN=\"5\"\nWATCH_PORTS=22 8096\nIGNORE_CLIENTS=192.0.2.23\nIGNORE_CLIENTS_PLAY_MB=5\nIGNORE_WAKE_GRACE_MIN=5\nMAX_LOAD=1.5\nCOUNT_LOGINS=no\nWAKE_TIMERS=a.timer b.timer\n")
+	if err != nil || cfg.IdleMin != 20 || cfg.GraceMin != 5 || len(cfg.WatchPorts) != 2 || cfg.MaxLoad != 1.5 || cfg.CountLogins || len(cfg.WakeTimers) != 2 ||
+		cfg.IgnorePlayMB != 5 || cfg.IgnoreWakeGraceMin != 5 {
 		t.Errorf("%+v %v", cfg, err)
 	}
-	for _, bad := range []string{"IDLE_MIN=0", "WATCH_PORTS=ssh", "SHELL=/bin/sh", "nonsense"} {
+	for _, bad := range []string{"IDLE_MIN=0", "WATCH_PORTS=ssh", "SHELL=/bin/sh", "nonsense", "IGNORE_CLIENTS_PLAY_MB=-1", "IGNORE_WAKE_GRACE_MIN=x"} {
 		if _, err := ParseConfig(bad); err == nil {
 			t.Errorf("%q accepted", bad)
 		}

@@ -32,6 +32,7 @@ printf 'Supports Wake-on: pumbg\n\tWake-on: %s\n' "$(cat "$STUBDIR/wol" 2>/dev/n
 S
 printf '#!/bin/sh\necho "{\\"BackendState\\": \\"NeedsLogin\\"}"\n' > $T/stub/tailscale
 printf '#!/bin/sh\necho atlas\n' > $T/stub/hostname
+printf '#!/bin/sh\necho "sysctl $*" >> "$STUBDIR/calls"\n' > $T/stub/sysctl
 # A stand-in for age: checks it got a recipient, passes the data through.
 printf '#!/bin/sh\n[ "$1" = -r ] || exit 9\ncat\n' > $T/stub/age
 chmod +x $T/stub/*
@@ -101,8 +102,12 @@ mkdir -p $T/rel/bin && echo "idle v1" > $T/rel/bin/cirrusux-idle
 printf 'CIRRUS_ROLE=single\nCIRRUS_RELEASE=%s\n' $T/rel > $CONFIG
 $H/cirrusux-setup check sleep > $T/out 2>&1 && fail "sleep module accepted the single setup"
 grep -q "for a split setup" $T/out || fail "wrong refusal"
-printf 'CIRRUS_ROLE=server\nCIRRUS_RELEASE=%s\nSLEEP_IDLE_MIN=20\nSLEEP_IGNORE_CLIENTS="192.0.2.23"\n' $T/rel > $CONFIG
+printf 'CIRRUS_ROLE=server\nCIRRUS_RELEASE=%s\nSLEEP_IGNORE_WAKE_GRACE_MIN=soon\n' $T/rel > $CONFIG
+$H/cirrusux-setup check sleep > /dev/null 2>&1 && fail "a wake grace that isn't a number accepted"
+printf 'CIRRUS_ROLE=server\nCIRRUS_RELEASE=%s\nSLEEP_IDLE_MIN=20\nSLEEP_IGNORE_CLIENTS="192.0.2.23"\nSLEEP_IGNORE_CLIENTS_PLAY_MB=5\nSLEEP_IGNORE_WAKE_GRACE_MIN=5\n' $T/rel > $CONFIG
 $H/cirrusux-setup apply sleep > $T/out 2>&1 || { cat $T/out; fail "sleep apply"; }
+grep -qx "IGNORE_CLIENTS_PLAY_MB=5" $ROOT/etc/cirrusux/sleep.env && grep -qx "IGNORE_WAKE_GRACE_MIN=5" $ROOT/etc/cirrusux/sleep.env || fail "sleep.env: TV settings"
+grep -qx "net.netfilter.nf_conntrack_acct=1" $ROOT/etc/sysctl.d/60-cirrusux-conntrack.conf && grep -q "sysctl -q -p" $T/calls || fail "conntrack byte counts"
 [ "$(readlink $ROOT/usr/local/sbin/cirrusux-stay-awake)" = cirrusux-idle ] && [ "$(readlink $ROOT/usr/local/sbin/cirrusux-allow-sleep)" = cirrusux-idle ] || fail "stay-awake links"
 grep -q "^IDLE_MIN=20" $ROOT/etc/cirrusux/sleep.env && grep -q 'IGNORE_CLIENTS="192.0.2.23"' $ROOT/etc/cirrusux/sleep.env || fail "sleep.env"
 [ "$(stat -c %a $ROOT/usr/lib/systemd/system-sleep/cirrusux-idle)" = 755 ] || fail "sleep hook"
@@ -110,7 +115,7 @@ grep -qx cirrusux-idle.timer $T/enabled || fail "timer not on"
 grep -q "STAY_AWAKE_BIN=/usr/local/sbin/cirrusux-stay-awake" $ROOT/etc/cirrusux/helper.d/sleep.env || fail "helper.d"
 grep -qx conntrack $T/installed || fail "conntrack not installed"
 $H/cirrusux-setup check sleep > $T/out 2>&1; [ $? = 0 ] || { cat $T/out; fail "sleep re-check"; }
-echo "sleep: refuses the single setup; checker, timer, hook, stay-awake links and panel hookup; re-check clean"
+echo "sleep: refuses the single setup; checker, timer, hook, stay-awake links, TV settings, byte counts and panel hookup; re-check clean"
 
 # apps: Podman by default, the filter pointed at Podman, folders and user.
 printf 'APPS_MEDIA_ROOTS="/srv/media /mnt/disk"\n' > $CONFIG
