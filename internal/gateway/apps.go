@@ -74,7 +74,7 @@ func (s *Server) previewApp(w http.ResponseWriter, r *http.Request) {
 	}
 	snap := s.store.Snapshot()
 	if snap == nil || snap.AppsHost == nil {
-		http.Error(w, s.cfg.ServerName+" hasn't reported its app store settings yet (the apps module)", http.StatusConflict)
+		http.Error(w, s.cfg.ServerName+" hasn't reported its CirrusStore settings yet (the apps module)", http.StatusConflict)
 		return
 	}
 	hi := snap.AppsHost

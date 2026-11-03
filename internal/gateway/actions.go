@@ -160,7 +160,7 @@ func checkLogSource(a map[string]string, snap *snapshot.Snapshot) error {
 
 func checkInstalled(a map[string]string, snap *snapshot.Snapshot) error {
 	if snap == nil || !slices.ContainsFunc(snap.Apps, func(x snapshot.App) bool { return x.ID == a["app"] }) {
-		return fmt.Errorf("%s isn't installed by the app store", appName(a["app"]))
+		return fmt.Errorf("%s isn't installed from CirrusStore", appName(a["app"]))
 	}
 	return nil
 }

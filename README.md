@@ -6,7 +6,7 @@ sleeps to save power, answering from the last report while it does.
 
 - `docs/INSTALL.md` — installing, in either setup (start here)
 - `docs/CONFIG.md` — every setting and module
-- `docs/APPS.md` — writing an app definition for the store
+- `docs/APPS.md` — writing and publishing apps for CirrusStore
 - `docs/ROADMAP.md` — what comes next; `docs/PHASES-4-6.md` — how phases 4–6 are built
 - `docs/PLAN.md` — the original plan and design spec (Phases 0–2)
 - `web/` — the UI (Svelte 5); runs on sample data when no gateway answers
@@ -15,7 +15,7 @@ sleeps to save power, answering from the last report while it does.
 - `cmd/helper` — on the server, root via sudo: fixed reads plus a few fixed actions, paths from its own config
 - `cmd/dockerfilter` — on the server, root: Docker API on a unix socket, reads plus start/stop/restart only
 - `deploy/server`, `deploy/gateway` — systemd units, sudoers rules, example config
-- `internal/catalogue` — the app store's catalogue (`apps/*.json`) and its compose/Quadlet renderers
+- `internal/catalogue` — the built-in CirrusStore catalogue (`apps/*.json`) and its compose/Quadlet renderers
 - `deploy/host` — `cirrusux-setup`: re-runnable host modules (base, firewall, cirrusux) with a check mode
 - `deploy/profiles/cloud64` — the owner's own setup (private; leaves before the repo goes public)
 - `deploy/dev` — the demo snapshot for local runs

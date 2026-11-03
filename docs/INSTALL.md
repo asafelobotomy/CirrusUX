@@ -176,7 +176,7 @@ The modules:
   server can write backups but never read them. Keep the private key safe
   and off the server, or the backups can't be restored.
 - **security:** fail2ban for SSH, and a weekly virus scan.
-- **apps:** the app store: Podman (or Docker), the apps' folders and user,
+- **apps:** CirrusStore, the app store: Podman (or Docker), the apps' folders and user,
   and, with Podman, the Docker filter pointed at Podman's API socket.
   Media folders you give apps must exist first, inside `APPS_MEDIA_ROOTS`;
   one an app writes to (a sync or download folder) must belong to the

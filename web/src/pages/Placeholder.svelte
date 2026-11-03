@@ -17,11 +17,11 @@
 
 <Card title="Media" subtitle="Your films, music and photos are run by the media apps you install, not by CirrusUX.">
   <p class="muted">
-    The Media board gathers those apps and the storage they use on one page. To add a media app, use the App store.
+    The Media board gathers those apps and the storage they use on one page. To add a media app, use CirrusStore.
   </p>
   <div class="row">
     {#if board}<Button variant="primary" onclick={openBoard}>Open the Media board</Button>{/if}
-    {#if has('apps')}<Button onclick={() => go('apps')}>Open the App store</Button>{/if}
+    {#if has('apps')}<Button onclick={() => go('apps')}>Open CirrusStore</Button>{/if}
   </div>
 </Card>
 

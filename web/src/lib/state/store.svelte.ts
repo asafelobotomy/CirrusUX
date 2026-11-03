@@ -171,7 +171,7 @@ export function loadCatalogue(): Promise<void> {
     .then((apps) => void (store.catalogue = apps))
     .catch((e) => {
       loading = null;
-      toast(`Couldn't load the app store: ${(e as Error).message}`, 'warn');
+      toast(`Couldn't load CirrusStore: ${(e as Error).message}`, 'warn');
     });
   return loading;
 }

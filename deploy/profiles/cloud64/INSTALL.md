@@ -1,7 +1,7 @@
 # Reinstalling cloud64, and the gateway on cloud-box
 
 This is ROADMAP Phase 8 for the cloud64 profile: a fresh Debian 13 on
-cloud64, set up by `cirrusux-setup`, with apps from CirrusUX's store under
+cloud64, set up by `cirrusux-setup`, with apps from CirrusStore under
 Podman and no 1Panel; and the gateway on cloud-box, which has no systemd,
 under runit. The general guide is docs/INSTALL.md, and every setting is in
 docs/CONFIG.md.
@@ -140,7 +140,7 @@ cloud64 for real; then remove it and its sudoers rule.
 
 ## 7. Apps
 
-From the store in the panel, with `/mnt/media` (or folders inside it) as
+From CirrusStore in the panel, with `/mnt/media` (or folders inside it) as
 the media: Jellyfin (tag `12.4.20261026-211555`), Navidrome, Audiobookshelf,
 Kavita, tinyMediaManager and Picard. They start clean. tinyMediaManager and
 Picard write to the media as its owner; switch off their update checks as

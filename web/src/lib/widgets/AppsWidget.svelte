@@ -42,7 +42,7 @@
 </script>
 
 {#if !shown.length}
-  <p class="empty muted">{config?.group ? `No apps in ${config.group} yet.` : 'No apps yet.'} {#if has('apps')}<a href="#/apps">Open the app store</a>{/if}</p>
+  <p class="empty muted">{config?.group ? `No apps in ${config.group} yet.` : 'No apps yet.'} {#if has('apps')}<a href="#/apps">Open CirrusStore</a>{/if}</p>
 {/if}
 <ul class="tiles">
   {#each shown as a (a.id)}

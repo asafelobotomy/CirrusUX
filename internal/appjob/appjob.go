@@ -154,7 +154,7 @@ func (e *Env) Check(r Request) (catalogue.App, error) {
 		}
 	case "remove", "update":
 		if !installed {
-			return app, fmt.Errorf("%s isn't installed by the app store", app.Name)
+			return app, fmt.Errorf("%s isn't installed from CirrusStore", app.Name)
 		}
 		if !emptyOptions(r.Options) {
 			return app, fmt.Errorf("%s takes no options", r.Action)

@@ -45,7 +45,7 @@
       <Button size="sm" disabled={checking || !store.installed.length} onclick={check}>{#snippet icon()}<RefreshCw />{/snippet}{checking ? 'Checking…' : 'Check now'}</Button>
     {/snippet}
     {#if !store.installed.length}
-      <p class="muted">No apps from the app store yet.</p>
+      <p class="muted">No apps from CirrusStore yet.</p>
     {:else}
       {#if store.updates.checked}
         <p class="summary">{waiting ? `${waiting} update${waiting === 1 ? '' : 's'} waiting.` : 'Everything is up to date.'}</p>

@@ -1,6 +1,6 @@
 # App definitions
 
-Every app in the store is one JSON file in `internal/catalogue/apps/`,
+Every built-in app in CirrusStore is one JSON file in `internal/catalogue/apps/`,
 named after the app's id (`syncthing.json` for `syncthing`). The files are
 built into the binaries, so adding or changing one means a rebuild and a
 new release. Nothing is downloaded from a catalogue server.
@@ -50,9 +50,9 @@ Docker compose file, depending on the server's runtime.
 | Field | Required | What it is |
 |---|---|---|
 | `id` | yes | Lowercase letters, digits and `-`, starting with a letter, 2–31 characters. Also the container's name and the app's folder name |
-| `name` | yes | Shown in the store and on the app's tile |
+| `name` | yes | Shown in CirrusStore and on the app's tile |
 | `description` | yes | One sentence on what it's for |
-| `group` | yes | The store section and tile group, e.g. `Media`, `Files`, `Home` |
+| `group` | yes | The CirrusStore section and tile group, e.g. `Media`, `Files`, `Home` |
 | `website` | no | The project's own site |
 | `icon` | no | A [Lucide](https://lucide.dev/icons/) icon name in PascalCase (`RefreshCw`), from those in `web/src/lib/icons.ts`; others fall back to a box |
 | `color` | no | The tile's colour, `#rrggbb` in lowercase |
@@ -164,7 +164,7 @@ Every container restarts unless stopped, and carries the labels
    and its digest.
 2. `go test ./internal/catalogue` checks every definition, and shows the
    first problem in plain words.
-3. Install it on a test machine from the store, open it, then update or
+3. Install it on a test machine from CirrusStore, open it, then update or
    remove it, and check its folders are where this page says.
 4. Send it as a pull request, saying which tag you tested.
 

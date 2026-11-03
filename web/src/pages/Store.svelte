@@ -31,7 +31,7 @@
     </Card>
   {/if}
 
-  <Card title="Installed" subtitle={store.host ? `${store.host.runtime === 'podman' ? 'Podman' : 'Docker'} · apps in ${store.host.appsDir} · media from ${store.host.mediaRoots.join(', ')}` : `${mode.server} hasn't reported its app store settings yet.`}>
+  <Card title="Installed" subtitle={store.host ? `${store.host.runtime === 'podman' ? 'Podman' : 'Docker'} · apps in ${store.host.appsDir} · media from ${store.host.mediaRoots.join(', ')}` : `${mode.server} hasn't reported its CirrusStore settings yet.`}>
     {#if store.installed.length}
       <ul class="installed">
         {#each store.installed as a (a.id)}
@@ -49,7 +49,7 @@
         {/each}
       </ul>
     {:else}
-      <p class="muted">Nothing installed from the app store yet.</p>
+      <p class="muted">Nothing installed from CirrusStore yet.</p>
     {/if}
   </Card>
 
