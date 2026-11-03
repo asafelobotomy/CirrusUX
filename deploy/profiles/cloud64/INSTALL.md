@@ -1,170 +1,159 @@
-# Installing CirrusUX on cloud64 and cloud-box
+# Reinstalling cloud64, and the gateway on cloud-box
 
-Before the reinstall (ROADMAP Phase 8), copy cloud64's own setup off it with
-`sudo bash capture.sh` from this folder. It's read-only, leaves keys and env
-files out, and names (without printing) any file that looks like it holds a
-secret.
+This is ROADMAP Phase 8 for the cloud64 profile: a fresh Debian 13 on
+cloud64, set up by `cirrusux-setup`, with apps from CirrusUX's store under
+Podman and no 1Panel; and the gateway on cloud-box, which has no systemd,
+under runit. The general guide is docs/INSTALL.md, and every setting is in
+docs/CONFIG.md.
 
-The general guide is docs/INSTALL.md; this is the cloud64 profile's version,
-with its Phase 0 findings. The env files to install are in this folder
-(`gateway.env`, `agent.env`, `helper.env`); unit files and sudoers rules are
-in `deploy/server/` and `deploy/gateway/`.
+The settings to fill in are in this folder as examples with names and
+comments only: `host.env.example` (cloud64), `gateway.env.example`
+(cloud-box), `agent.env.example` and `helper.env.example`. Real values,
+addresses, interface names and PCI addresses go only into the files on the
+machines.
 
-Phase 1 reads and wakes. Phase 2 adds actions you confirm in the panel:
-stay awake, allow sleep, start/stop/restart a container, run a backup. Both
-install the same way; the sudoers rule decides whether actions are allowed
-(§2). Nothing here changes cloud64's firewall, Tailscale or its apps'
-settings. Every step lists its undo.
+cloud64 is out of service from step 3 until the apps are back in step 7.
+Every change setup makes is in `/var/lib/cirrusux/setup.log` with its undo.
 
-Do the Phase 0 checks first (§0). They are read-only.
+## 1. Capture (before anything else)
 
-## 0. Checks before installing (read-only)
+On cloud64, from this folder: `sudo bash capture.sh`. It's read-only, leaves
+keys and env files out, and names (without printing) any file that looks
+like it holds a secret. Copy the result off cloud64. It holds what the new
+settings come from: `/etc/cloud64-idle.conf` (the idle times, the TV's
+address and its 5 MB/min threshold), the media disk's `fstab` line, the
+Wake-on-LAN setting, `tailscale debug prefs`, sshd's and fail2ban's
+settings, the egress report script and the old compose files.
 
-### Done 1 Nov 2026
+Archive each app's config folder to the media disk; the new apps start
+clean.
 
-The read-only checks ran on cloud64 and cloud-box. What they settled:
+## 2. Prove a backup restores
 
-- **Log formats** for the idle log, the backup journal, the ClamAV log and
-  the timers JSON are now covered by tests built from the real lines.
-- **`cloud64-idle-check --dry-run` is not write-free.** The panel never runs
-  it. The agent reads the checker's own state instead:
-  `/run/cloud64-idle/last-msg` (its verdict, rewritten every minute),
-  `last-active`, `last-wake` and `last-suspend` (unix seconds).
-- **The router password is not in the admin user's shell environment**, only
-  in the admin bot's process. `sudo -u <admin-user>` can't see it, so the
-  gateway wakes cloud64 through `cirrusux-wake` (§3), which reads the
-  password from a root-only file. You copy the value there yourself; it never
-  passes through the panel.
-- A `RESUMED` line can appear with no `SUSPEND` before it (19:08 that day).
-  The timeline places that sleep from the `WAKE-DIAG` line's
-  `slept ~Ns` when there is one, and otherwise leaves it out.
-
-- **Tailscale on cloud-box** (checked 1 Nov): tailscaled runs as root in
-  userspace mode with its socket at `/run/tailscale/tailscaled.sock`
-  (`root:root 0666`), so the gateway's own user can call `tailscale status`.
-  The gateway unit doesn't hide `/run`. Changing `tailscale serve` needs sudo
-  (no operator is set), as §3 does. HTTPS certificates are enabled for the
-  node; issuing one wasn't tested because it writes files.
-
-### Before installing: tailscaled on cloud-box must survive a reboot
-
-tailscaled on cloud-box was started by hand, not as a service. After a
-reboot there's no tailnet, so no `tailscale serve`, no panel and no
-reports from cloud64. Making it a service is a change to the admin box
-itself, outside the panel, so it's your call. With the official package it's
-usually the shipped unit, with userspace mode set in `/etc/default/tailscaled`:
+On the admin machine, where the private key lives, take the newest backup
+from `/mnt/media/BackUp/` and check it decrypts and lists:
 
 ```bash
-systemctl cat tailscaled.service      # read-only: is a unit installed?
+age -d -i key.txt <newest>.tar.zst.age | zstd -dc | tar -tvf - | head
 ```
 
-The node has also lost its connection to Tailscale's servers a few times and
-recovered on its own. The panel copes with that:
-- the gateway notices cloud-box is offline from the tailnet and stops trusting
-  peer states (it won't call cloud64 asleep just because the link dropped),
-  and the power card says so;
-- the agent retries a failed push after a minute instead of five.
+Don't go on until this works.
 
-The agent opens **no listening port**, in Phase 2 too, so no firewall change
-is needed on cloud64. It only connects out to cloud-box over the tailnet:
-snapshots go up every few minutes, and actions come back down over a long
-poll the agent keeps open (an outbound connection, which the idle check
-doesn't count).
+## 3. Reinstall Debian 13 on cloud64
 
-## 1. Build
+Install Debian 13 without a desktop, with SSH. **Don't format the media
+disk.** Put its `fstab` line back from the capture (mounted at `/mnt/media`,
+with `nofail`, so a missing disk doesn't stop the boot), then
+`sudo mount -a` and check the media is there with `ls -ln /mnt/media`. Note
+the owner's numbers: they are `APPS_MEDIA_UID` and `APPS_MEDIA_GID`.
 
-On this machine:
+Install Tailscale (https://tailscale.com/download/linux) and `sudo tailscale
+up` with the same node name as before.
+
+## 4. CirrusUX on cloud64
+
+Build on the admin machine (`make test && make build`), then copy `bin/` and
+`deploy/` to cloud64 and make them root's:
 
 ```bash
-make test
-make build        # bin/cirrusux-{gateway,agent,helper,dockerfilter}
+sudo mkdir -p /opt/cirrusux && sudo cp -r bin deploy /opt/cirrusux/ && sudo chown -R root:root /opt/cirrusux
+sudo install -D -m 600 /dev/null /etc/cirrusux/host.env    # then fill it in from host.env.example
+sudo /opt/cirrusux/deploy/host/cirrusux-setup check
+sudo /opt/cirrusux/deploy/host/cirrusux-setup apply
 ```
 
-Static binaries, no runtime dependencies. Copy them with `scp`.
+Leave `firewall` and `ssh` out of `HOST_MODULES` for the first run. Then add
+them, apply again from an SSH session on the LAN or the tailnet, check a
+new session still gets in, and confirm each within two minutes:
 
-## 2. cloud64
+```bash
+sudo cirrusux-setup firewall-confirm
+sudo cirrusux-setup ssh-confirm
+```
 
-| Step | Command | Undo |
-|---|---|---|
-| User | `sudo useradd --system --no-create-home --shell /usr/sbin/nologin cirrusux` | `sudo userdel cirrusux` |
-| Binaries | `sudo install -m 755 cirrusux-agent /usr/local/bin/` and `sudo install -m 755 cirrusux-helper cirrusux-dockerfilter /usr/local/sbin/` | `sudo rm` the three files |
-| sudoers | `sudo install -m 440 sudoers-cirrusux /etc/sudoers.d/cirrusux && sudo visudo -c` | `sudo rm /etc/sudoers.d/cirrusux` |
-| Env | `sudo install -d -m 750 -o root -g cirrusux /etc/cirrusux`, then `agent.env` from this folder (fill in the token), mode 600, owner cirrusux | `sudo rm -r /etc/cirrusux` |
-| Helper config | `sudo install -m 644 -o root -g root helper.env /etc/cirrusux/` | `sudo rm /etc/cirrusux/helper.env` |
-| Units | copy the three unit files to `/etc/systemd/system/`, `sudo systemctl daemon-reload` | `sudo rm` them, daemon-reload |
-| Start | `sudo systemctl enable --now cirrusux-dockerfilter.socket cirrusux-agent.service` | `sudo systemctl disable --now …` |
+Then choose the FTPS password (it's asked for, never stored by CirrusUX):
+`sudo cirrusux-setup ftps-passwd`.
 
-Check: `sudo -u cirrusux cirrusux-agent -once | head -40` prints a snapshot;
-its `errors` list should be empty. `sudo cat /run/cloud64-idle/last-msg`
-should show no new activity reasons (don't use `--dry-run`: it writes state).
+What this sets up, from the settings:
+- the sleep manager with the old idle check's tuning: the TV is ignored
+  unless it streams (`SLEEP_IGNORE_CLIENTS_PLAY_MB`), and a wake only the TV
+  used ends after a few minutes (`SLEEP_IGNORE_WAKE_GRACE_MIN`); after each
+  resume, Wake-on-LAN is set again and the clock synced
+  (`SLEEP_RESUME_FIXES`), and the USB controller no longer wakes it
+  (`SLEEP_NO_WAKEUP_DEVICES`);
+- Wake-on-LAN (`g`) on the wired card, kept across reboots;
+- backups to `/mnt/media/BackUp/…`, two weeks kept, refused when the disk
+  isn't mounted (`BACKUP_REQUIRE_MOUNT`);
+- fail2ban banning through nftables, never the tailnet; SSH limited to the
+  admin login from the LAN and the tailnet, password login left on;
+- Podman, and the `cirrusux-apps` user with the media's own IDs;
+- FTPS (pure-ftpd, TLS required, passive ports 39000–40000), one user in
+  `/mnt/media`. The firewall already allows every port from the LAN and the
+  tailnet.
 
-## 3. cloud-box
+Until CirrusUX logs outgoing traffic itself, install the captured egress
+report as `/usr/local/sbin/egress-report.sh` (root, mode 755) and name it in
+`/etc/cirrusux/helper.env` (`helper.env.example`).
 
-| Step | Command | Undo |
-|---|---|---|
-| User | `sudo useradd --system --no-create-home --shell /usr/sbin/nologin cirrusux` | `sudo userdel cirrusux` |
-| Binary | `sudo install -m 755 cirrusux-gateway /usr/local/bin/` | `sudo rm /usr/local/bin/cirrusux-gateway` |
-| Wake wrapper | set `ADMIN_USER` in `cirrusux-wake`, then `sudo install -m 755 cirrusux-wake /usr/local/sbin/` | `sudo rm /usr/local/sbin/cirrusux-wake` |
-| Router password | you, not the panel: `sudo install -m 600 -o root -g root /dev/null /etc/cirrusux/router.env`, then `sudoedit` it and add the one line `NAME=value` that `cloud64-wake` reads | `sudo rm /etc/cirrusux/router.env` |
-| Wake test | `sudo /usr/local/sbin/cirrusux-wake` while cloud64 sleeps: exits 0 once SSH answers | — |
-| sudoers | `sudo install -m 440 sudoers-cirrusux-wake /etc/sudoers.d/cirrusux-wake && sudo visudo -c` | `sudo rm /etc/sudoers.d/cirrusux-wake` |
-| Env | `sudo install -d -m 750 -o root -g cirrusux /etc/cirrusux` (before the password step), then `gateway.env` from this folder (fill in the token and your login), mode 600, owner cirrusux | `sudo rm -r /etc/cirrusux` |
-| Unit | copy `cirrusux-gateway.service`, daemon-reload, `sudo systemctl enable --now cirrusux-gateway` | disable, remove, daemon-reload |
-| Tailnet | `sudo tailscale serve --bg --https=443 http://127.0.0.1:8064` | `sudo tailscale serve --https=443 off` |
+## 5. The token
 
-Open `https://cloud-box.<tailnet>.ts.net/` from a tailnet device. Logins not
-in `CIRRUS_ALLOWED_USERS` get 403. The browser then offers to install
-CirrusUX as an app (it needs the HTTPS that `tailscale serve` provides).
+Make one shared token, `head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'`,
+and put it in `CIRRUS_AGENT_TOKEN` in cloud64's `/etc/cirrusux/agent.env` and
+cloud-box's `/etc/cirrusux/gateway.env`. Set the rest of `agent.env` from
+`agent.env.example`.
 
-### Actions (Phase 2)
+## 6. The gateway on cloud-box (runit, no systemd)
 
-- The sudoers rule has two parts: `CIRRUS_READ` and `CIRRUS_ACT`. Remove
-  `CIRRUS_ACT` from the last line to keep the panel read-only; actions then
-  fail with a clear error and nothing else changes.
-- Containers can only be started, stopped or restarted: the Docker filter
-  refuses create, exec, kill, delete and pulls.
-- After a container action or a backup the agent keeps cloud64 awake for at
-  least 10 minutes (`nudge-awake`), without shortening a longer hold.
-- Every action is logged with who asked, and with an Undo where there is a
-  safe inverse (stay awake ↔ allow sleep, start ↔ stop).
+cloud-box's PID 1 is tini, and its tailscaled runs in userspace mode with a
+SOCKS5 server on localhost:1055. Setup never starts, restarts or duplicates
+that tailscaled.
 
-### Grok and the daily digest
+1. Install runit, sudo and curl (`sudo apt install runit sudo curl`), and
+   make sure `runsvdir -P /etc/service` runs (started by tini, or by the
+   box's own start script).
+2. Copy `bin/` and `deploy/` to `/opt/cirrusux` as on cloud64, root-owned.
+3. `/etc/cirrusux/host.env` with `HOST_MODULES="base cirrusux"`,
+   `CIRRUS_ROLE=gateway`, `HOST_TZ`, `CIRRUS_SERVER_NAME` and
+   `CIRRUS_ALLOWED_USERS`; then `cirrusux-setup check` and `apply`. It finds
+   there's no systemd and installs the runit service
+   (`/etc/sv/cirrusux-gateway`); the gateway starts once `gateway.env` is
+   filled in from `gateway.env.example` and `apply` runs again.
+4. The router: install `deploy/gateway/cirrusux-router-check` as in
+   docs/INSTALL.md ("The router check and wake"), with the
+   `cirrusux-router-wake` link and both sudoers rules. In
+   `/etc/cirrusux/router.env` (root, 600), add
+   `ROUTER_PROXY=socks5h://localhost:1055`. Test both while cloud64 sleeps:
+   `sudo /usr/local/sbin/cirrusux-router-check` says `offline`, and
+   `sudo /usr/local/sbin/cirrusux-router-wake` says `wake sent` and cloud64
+   comes up.
+5. Publish it on the tailnet only:
+   `sudo tailscale serve --bg --https=443 http://127.0.0.1:8064`. In
+   userspace mode the proxy runs inside tailscaled, so it needs no tun
+   device.
 
-Grok is off until `ASSISTANT_MODEL` and `ASSISTANT_API_KEY` are set in
-`gateway.env` (the profile already sets `ASSISTANT_PROVIDER=xai`), and then
-it's only called when you ask it something. The 08:00 digest is built on
-cloud-box from cached data and sends nothing to xAI, unless you also set
-`CIRRUS_DIGEST_ASSISTANT=1` to have Grok write a short summary on top.
+Open `https://cloud-box.<tailnet>.ts.net/`. The gateway's log is
+`/var/log/cirrusux-gateway/current`.
 
-### Upgrading
+The old wake wrapper (`cirrusux-wake`, which ran the admin user's
+`cloud64-wake`) stays in this folder until `cirrusux-router-wake` has woken
+cloud64 for real; then remove it and its sudoers rule.
 
-From 0.2.x to the generalised core (ROADMAP Phase 3): besides the binaries
-and units,
-- install `helper.env` from this folder on cloud64 (the helper's paths used
-  to be built in) and the new `/etc/sudoers.d/cirrusux` (adds `features`);
-- update `agent.env` from this folder (adds `CIRRUS_DISK`, `CIRRUS_IDLE_CONF`,
-  `CIRRUS_PORT_NAMES`);
-- update `gateway.env` from this folder: it must say `CIRRUS_SETUP=split`
-  (the default is now `single`), and `XAI_API_KEY`, `XAI_MODEL`,
-  `CIRRUS_GROK_DAILY_TOKENS` and `CIRRUS_DIGEST_GROK` are now
-  `ASSISTANT_API_KEY`, `ASSISTANT_MODEL`, `CIRRUS_ASSISTANT_DAILY_TOKENS` and
-  `CIRRUS_DIGEST_ASSISTANT`.
+## 7. Apps
 
-From 0.2.0: install the new binaries and unit files on both machines, run
-`sudo systemctl daemon-reload`, then
-`sudo systemctl restart cirrusux-agent cirrusux-dockerfilter.socket` and
-`sudo systemctl stop cirrusux-dockerfilter.service` on cloud64 (the socket
-starts the new filter on the next request), and
-`sudo systemctl restart cirrusux-gateway` on cloud-box. A wallpaper set in
-0.2.0 still shows; uploading a new one moves it out of the settings.
+From the store in the panel, with `/mnt/media` (or folders inside it) as
+the media: Jellyfin (tag `12.4.20261026-211555`), Navidrome, Audiobookshelf,
+Kavita, tinyMediaManager and Picard. They start clean. tinyMediaManager and
+Picard write to the media as its owner; switch off their update checks as
+their pages say.
 
-From 0.1.x: install the new binaries on both machines, replace
-`/etc/sudoers.d/cirrusux` (check with `sudo visudo -c`), then
-`sudo systemctl restart cirrusux-agent cirrusux-dockerfilter.socket` and
-`sudo systemctl stop cirrusux-dockerfilter.service` on cloud64, and
-`sudo systemctl restart cirrusux-gateway` on cloud-box.
+Reinstall Jellyfin's Trakt plugin from Jellyfin's Dashboard → Plugins →
+Catalog, with the same settings as before. Version 33.0.0.0 was checked to
+load on this Jellyfin tag (docs/APPS.md).
 
-## 4. After 24 hours
+## 8. Watch it for 24 hours
 
-Check `/var/log/cloud64-idle.log` on cloud64: no extra wakes, no delayed
-suspends. That's Phase 1's done criterion (PLAN §6).
+The sleep manager is the riskiest part to rebuild. On cloud64, read
+`/var/log/cirrusux-idle.log` (or the panel's Power page): no extra wakes, no
+delayed suspends, `playback by ignored client …` only while the TV streams,
+and `only ignored clients since the wake` sleeping a few minutes after a
+TV-only wake. Check a backup ran to the media disk and shows in the panel.

@@ -7,6 +7,39 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Added
+
+- Idle: an `IGNORE_CLIENTS` peer that streams more than
+  `SLEEP_IGNORE_CLIENTS_PLAY_MB` a minute counts as playback, from the
+  conntrack byte counters (setup switches on `nf_conntrack_acct`). After a
+  wake that only an ignored client caused, the server sleeps again
+  `SLEEP_IGNORE_WAKE_GRACE_MIN` minutes later. IPv6 connections are read
+  too, and traffic that reaches a container through the host (Podman's
+  bridge, Tailscale serve) counts.
+- Backups: `BACKUP_REQUIRE_MOUNT` makes the unit wait for that mount and the
+  script refuse to write when the folder isn't on it, so a missing disk
+  never fills the system disk.
+- Router: `ROUTER_PROXY` (socks5h, socks5 or http) for a router reached
+  through a proxy, and `cirrusux-router-wake`, a wake through the
+  FRITZ!Box's TR-064 Wake-on-LAN request (`CIRRUS_WAKE=command`).
+- The gateway runs without systemd: `-env FILE` reads its settings the way
+  `EnvironmentFile` does, and `deploy/gateway/runit/` has a runit service
+  with svlogd. Setup detects runit (`CIRRUS_INIT`) and leaves systemd-only
+  steps out.
+- `APPS_MEDIA_UID`/`APPS_MEDIA_GID` create the apps user with the media
+  files' owner. `NET_TAILSCALE_SET` applies `tailscale set` preferences
+  (undo restores the old ones) and `NET_TAILSCALED_FLAGS` sets tailscaled's
+  flags.
+- Optional modules: `ssh` (restrict SSH to `SSH_ALLOW`, with the firewall's
+  confirm-or-rollback), `ftps` (pure-ftpd with TLS only and a virtual user;
+  `cirrusux-setup ftps-passwd` sets the password without storing it), and
+  fail2ban settings (`SEC_FAIL2BAN_*`). The sleep module adds a resume
+  service and `SLEEP_NO_WAKEUP_DEVICES`.
+- Apps: tinyMediaManager and MusicBrainz Picard, with writable media.
+  Jellyfin's Trakt 33 plugin is checked on the pinned image.
+- `deploy/profiles/cloud64/`: example settings for every component and an
+  install guide for the reinstall.
+
 ### Security
 
 - The root helper takes the app request the agent names (`app-job <id>`)
