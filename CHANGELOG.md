@@ -7,6 +7,8 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-03
+
 ### Added
 
 - Idle: an `IGNORE_CLIENTS` peer that streams more than
