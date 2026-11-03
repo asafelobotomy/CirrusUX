@@ -37,8 +37,9 @@ module_ftps() {
 	ftps_settings
 	local ports=${FTPS_PASSIVE_PORTS:-39000 40000} lo hi
 	read -r lo hi <<<"$ports"
-	[[ $lo =~ ^[0-9]+$ && $hi =~ ^[0-9]+$ ]] && [ "$lo" -ge 1024 ] && [ "$lo" -lt "$hi" ] && [ "$hi" -le 65535 ] ||
+	if ! [[ $lo =~ ^[0-9]+$ && $hi =~ ^[0-9]+$ ]] || ((lo < 1024 || lo >= hi || hi > 65535)); then
 		die "FTPS_PASSIVE_PORTS must be two port numbers, first and last, above 1023"
+	fi
 
 	need_packages pure-ftpd openssl
 	local before=$CHANGES min_uid=1000
