@@ -123,6 +123,8 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `FIREWALL_CONFIRM_SECONDS` | `120` | firewall: time to confirm before rollback |
 | `NET_WOL_IFACE` | — | network: wired interface to keep Wake-on-LAN on |
 | `NET_TAILSCALE` | `yes` | network: check tailscaled starts at boot and is logged in |
+| `NET_TAILSCALE_SET` | — | network: preferences applied with `tailscale set`, e.g. `--accept-dns=false --accept-routes`. Only `--flag` and `--flag=value` words. Applied when it changes; the preferences before the first change are kept in `/var/lib/cirrusux/tailscale-prefs.before` for the undo |
+| `NET_TAILSCALED_FLAGS` | — | network: tailscaled's own flags, e.g. `--no-logs-no-support`, written to `FLAGS=` in `/etc/default/tailscaled`, followed by a logged restart of tailscaled (Tailscale connections drop for a moment). Not used without systemd |
 | `BACKUP_AGE_RECIPIENT` | — (required) | backup: age public key(s); the private key stays elsewhere |
 | `BACKUP_DIR` | `/srv/backups` | backup: where archives go |
 | `BACKUP_PATHS` | `/etc /root /home /usr/local /var/lib/cirrusux /var/lib/cirrusux-gateway /srv/cirrusux` | backup: what goes in |
@@ -139,6 +141,7 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `APPS_ARCHIVE` | `/srv/cirrusux/archive` | apps: removed apps' folders, kept |
 | `APPS_MEDIA_ROOTS` | `/srv/media` | apps: folders media may be chosen from |
 | `APPS_BIND` | — (all) | apps: publish apps' ports on this address only |
+| `APPS_MEDIA_UID`, `APPS_MEDIA_GID` | — | apps: the media's owner. `cirrusux-apps` is created with these IDs, and a `media` group with the GID if no group has it, so files apps write match the rest of the media. Set both. An existing `cirrusux-apps` with other IDs is never changed, only warned about |
 | `SLEEP_IDLE_MIN` | `30` | sleep: quiet minutes before it suspends |
 | `SLEEP_GRACE_MIN` | `15` | sleep: minutes after a wake before it may sleep again |
 | `SLEEP_WATCH_PORTS` | — (all) | sleep: only these local ports count |

@@ -8,6 +8,10 @@
 #   APPS_MEDIA_ROOTS="/srv/media"  folders media may be chosen from
 #   APPS_BIND=""                   publish apps' ports on this address only
 #                                  (e.g. the LAN address); empty: all
+#   APPS_MEDIA_UID="" APPS_MEDIA_GID=""   the media's owner: cirrusux-apps is
+#                                  created with these IDs (and a "media"
+#                                  group with the GID, if none has it), so
+#                                  files apps write match the rest; set both
 #
 # Apps run as the cirrusux-apps user where they can. With Podman, the
 # Docker filter is pointed at Podman's API socket, so the panel's container
@@ -61,12 +65,7 @@ EOF2
 		fi
 	fi
 
-	if id cirrusux-apps >/dev/null 2>&1; then
-		ok "user cirrusux-apps"
-	else
-		change "create system user cirrusux-apps (apps run as it)" "userdel cirrusux-apps" \
-			useradd --system --no-create-home --shell /usr/sbin/nologin cirrusux-apps
-	fi
+	_apps_user
 	for r in "$dir" "$archive" /var/lib/cirrusux/apps; do
 		if [ -d "$ROOT$r" ]; then
 			ok "$r"
@@ -87,6 +86,39 @@ APPS_USER=cirrusux-apps
 MEDIA_ROOTS=$roots
 ${APPS_BIND:+APPS_BIND=$APPS_BIND}
 EOF2
+}
+
+# _apps_user: the cirrusux-apps user, with the media's IDs when they're set,
+# so what apps write belongs to the same owner as the rest of the media.
+# An existing user is never changed: a different UID would strand every
+# file it already owns.
+_apps_user() {
+	local uid=${APPS_MEDIA_UID:-} gid=${APPS_MEDIA_GID:-} name
+	if [ -n "$uid$gid" ]; then
+		[[ $uid =~ ^[0-9]+$ && $gid =~ ^[0-9]+$ ]] || die "APPS_MEDIA_UID and APPS_MEDIA_GID are set together, as numbers"
+		if name=$(getent group "$gid"); then
+			ok "group ${name%%:*} ($gid)"
+		elif getent group media >/dev/null; then
+			die "a group named media exists, but not with GID $gid (APPS_MEDIA_GID): fix one or the other"
+		else
+			change "create group media ($gid)" "groupdel media" groupadd -g "$gid" media
+		fi
+	fi
+	if id cirrusux-apps >/dev/null 2>&1; then
+		local have
+		have="$(id -u cirrusux-apps):$(id -g cirrusux-apps)"
+		if [ -n "$uid" ] && [ "$have" != "$uid:$gid" ]; then
+			warn "cirrusux-apps is $have, not $uid:$gid (APPS_MEDIA_UID:APPS_MEDIA_GID), so files apps write won't match the media's owner; change it by hand while no app runs: usermod -u $uid -g $gid cirrusux-apps"
+		else
+			ok "user cirrusux-apps ($have)"
+		fi
+	elif [ -n "$uid" ]; then
+		change "create system user cirrusux-apps ($uid:$gid; apps run as it)" "userdel cirrusux-apps" \
+			useradd --system --no-create-home --shell /usr/sbin/nologin -u "$uid" -g "$gid" cirrusux-apps
+	else
+		change "create system user cirrusux-apps (apps run as it)" "userdel cirrusux-apps" \
+			useradd --system --no-create-home --shell /usr/sbin/nologin cirrusux-apps
+	fi
 }
 
 _apps_drop_podman() {

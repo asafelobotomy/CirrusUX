@@ -30,7 +30,7 @@ cat > $T/stub/ethtool <<'S'
 if [ "$1" = -s ]; then echo "$4" > "$STUBDIR/wol"; exit 0; fi
 printf 'Supports Wake-on: pumbg\n\tWake-on: %s\n' "$(cat "$STUBDIR/wol" 2>/dev/null || echo d)"
 S
-printf '#!/bin/sh\necho "{\\"BackendState\\": \\"NeedsLogin\\"}"\n' > $T/stub/tailscale
+printf '#!/bin/sh\necho "tailscale $*" >> "$STUBDIR/calls"\necho "{\\"BackendState\\": \\"NeedsLogin\\"}"\n' > $T/stub/tailscale
 printf '#!/bin/sh\necho atlas\n' > $T/stub/hostname
 printf '#!/bin/sh\necho "sysctl $*" >> "$STUBDIR/calls"\n' > $T/stub/sysctl
 # A stand-in for age: checks it got a recipient, passes the data through.
@@ -49,6 +49,20 @@ grep -q "NamePolicy=keep" $ROOT/etc/systemd/network/50-cirrusux-wol.link || fail
 grep -q "switch on Wake-on-LAN for eth0" $T/out && grep -q "isn't logged in" $T/out || { cat $T/out; fail "network output"; }
 grep -qx tailscaled.service $T/enabled || fail "tailscaled not enabled"
 echo "network: Wake-on-LAN link file keeps the card's name; tailscaled at boot; login reported"
+
+printf 'NET_TAILSCALE_SET="--accept-dns=false; rm -rf /"\n' > $CONFIG
+$H/cirrusux-setup check network > /dev/null 2>&1 && fail "a NET_TAILSCALE_SET that isn't flags accepted"
+mkdir -p $ROOT/etc/default && printf 'PORT="41641"\nFLAGS=""\n' > $ROOT/etc/default/tailscaled
+printf 'NET_TAILSCALE_SET="--accept-dns=false --accept-routes"\nNET_TAILSCALED_FLAGS="--no-logs-no-support"\n' > $CONFIG
+: > $T/calls
+$H/cirrusux-setup apply network > $T/out 2>&1 || { cat $T/out; fail "network apply with Tailscale settings"; }
+grep -qx "tailscale set --accept-dns=false --accept-routes" $T/calls && [ -f $ROOT/var/lib/cirrusux/tailscale-prefs.before ] || fail "tailscale set, or the preferences before it"
+grep -qx 'PORT="41641"' $ROOT/etc/default/tailscaled && grep -qx 'FLAGS="--no-logs-no-support"' $ROOT/etc/default/tailscaled || fail "/etc/default/tailscaled"
+grep -q "systemctl restart tailscaled.service" $T/calls || fail "tailscaled not restarted for its flags"
+: > $T/calls
+$H/cirrusux-setup check network > $T/out 2>&1; [ $? = 0 ] || { cat $T/out; fail "re-check with Tailscale settings"; }
+grep -q "tailscale set" $T/calls && fail "re-check ran tailscale set"
+echo "network: NET_TAILSCALE_SET applied once, its undo kept; NET_TAILSCALED_FLAGS written and tailscaled restarted"
 
 # backup: refuses a bad key, then installs and runs for real
 printf 'BACKUP_AGE_RECIPIENT=age-not-a-key\n' > $CONFIG
@@ -137,8 +151,29 @@ echo "sleep: refuses the single setup; checker, timer, hook, stay-awake links, T
 
 # apps: Podman by default, the filter pointed at Podman, folders and user.
 printf 'APPS_MEDIA_ROOTS="/srv/media /mnt/disk"\n' > $CONFIG
-printf '#!/bin/sh\n[ "$1" = cirrusux-apps ] && { [ -f "$STUBDIR/appsuser" ]; exit; }\n[ "$1" = cirrusux ] && exit 0\nexec /usr/bin/id "$@"\n' > $T/stub/id
-printf '#!/bin/sh\ntouch "$STUBDIR/appsuser"\n' > $T/stub/useradd
+cat > $T/stub/id <<'S'
+#!/bin/sh
+case "$1 $2" in
+"cirrusux-apps "*) [ -f "$STUBDIR/appsuser" ]; exit ;;
+"-u cirrusux-apps") cut -d: -f1 "$STUBDIR/appsuser"; exit ;;
+"-g cirrusux-apps") cut -d: -f2 "$STUBDIR/appsuser"; exit ;;
+"cirrusux "*) exit 0 ;;
+esac
+exec /usr/bin/id "$@"
+S
+# useradd notes the IDs it was given (999 if none).
+cat > $T/stub/useradd <<'S'
+#!/bin/sh
+u=999 g=999
+while [ $# -gt 1 ]; do case "$1" in -u) u=$2; shift ;; -g) g=$2; shift ;; esac; shift; done
+echo "$u:$g" > "$STUBDIR/appsuser"
+S
+cat > $T/stub/getent <<'S'
+#!/bin/sh
+grep -E "^$2:|^[^:]*:x:$2:" "$STUBDIR/groups" 2>/dev/null
+S
+printf '#!/bin/sh\necho "$3:x:$2:" >> "$STUBDIR/groups"\n' > $T/stub/groupadd
+chmod +x $T/stub/getent $T/stub/groupadd
 printf '#!/bin/sh\nexec /usr/bin/mkdir "$@"\n' > $T/stub/mkdir
 chmod +x $T/stub/id $T/stub/useradd $T/stub/mkdir
 $H/cirrusux-setup apply apps > $T/out 2>&1 || { cat $T/out; fail "apps apply"; }
@@ -160,3 +195,17 @@ done
 printf 'APPS_BIND=192.168.1.10\n' > $CONFIG
 $H/cirrusux-setup check apps > $T/out 2>&1; [ $? = 1 ] && { cat $T/out; fail "a good APPS_BIND refused"; }
 echo "apps: Podman with its socket, the filter pointed at it, folders, user and panel hookup; re-check clean"
+
+# APPS_MEDIA_UID/GID: a fresh user gets the media's IDs and a media group;
+# an existing one with other IDs is only warned about.
+rm -f $T/appsuser
+printf 'APPS_MEDIA_UID=1000\n' > $CONFIG
+$H/cirrusux-setup check apps > /dev/null 2>&1 && fail "APPS_MEDIA_UID without APPS_MEDIA_GID accepted"
+printf 'APPS_MEDIA_UID=1000\nAPPS_MEDIA_GID=1001\n' > $CONFIG
+$H/cirrusux-setup apply apps > $T/out 2>&1 || { cat $T/out; fail "apps apply with media IDs"; }
+grep -qx "media:x:1001:" $T/groups && [ "$(cat $T/appsuser)" = 1000:1001 ] || fail "media group or user IDs"
+$H/cirrusux-setup check apps > $T/out 2>&1; [ $? = 0 ] || { cat $T/out; fail "re-check with media IDs"; }
+echo 999:999 > $T/appsuser
+$H/cirrusux-setup apply apps > $T/out 2>&1 || fail "apply with a user of other IDs"
+grep -q "cirrusux-apps is 999:999, not 1000:1001" $T/out && [ "$(cat $T/appsuser)" = 999:999 ] || { cat $T/out; fail "existing user changed, or no warning"; }
+echo "apps: media IDs make the user and the media group; an existing user is only warned about"

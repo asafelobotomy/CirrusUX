@@ -4,6 +4,10 @@
 # Settings (host.env):
 #   NET_WOL_IFACE=enp1s0     wired interface to wake on; empty skips Wake-on-LAN
 #   NET_TAILSCALE=yes        check that tailscaled starts at boot and is logged in
+#   NET_TAILSCALE_SET=""         preferences for `tailscale set`, e.g.
+#                                "--accept-dns=false --accept-routes"
+#   NET_TAILSCALED_FLAGS=""      tailscaled's flags, e.g. "--no-logs-no-support"
+#                                (FLAGS= in /etc/default/tailscaled; restarts it)
 #
 # Logging in to Tailscale needs a browser, so setup only reports it. Without
 # systemd (runit), tailscaled is never started or restarted, and
@@ -62,5 +66,64 @@ EOF2
 		else
 			warn "Tailscale isn't logged in: run 'sudo tailscale up' once"
 		fi
+		_net_tailscale_set
+		_net_tailscaled_flags
+	fi
+}
+
+# _net_flags NAME VALUE: dies unless VALUE is only --flag or --flag=value
+# words, so nothing but flags reaches tailscale.
+_net_flags() {
+	local w
+	for w in $2; do
+		[[ $w =~ ^--[a-z0-9-]+(=[A-Za-z0-9.,:/@_+-]*)?$ ]] || die "$1: \"$w\" isn't a --flag or --flag=value"
+	done
+}
+
+# NET_TAILSCALE_SET: preferences, applied with `tailscale set`. What was
+# applied is kept in /var/lib/cirrusux/tailscale-set, and the preferences
+# from before the first change in tailscale-prefs.before, for the undo.
+_net_tailscale_set() {
+	local want=${NET_TAILSCALE_SET:-} applied=/var/lib/cirrusux/tailscale-set have=""
+	[ -n "$want" ] || return 0
+	_net_flags NET_TAILSCALE_SET "$want"
+	[ -f "$ROOT$applied" ] && have=$(cat "$ROOT$applied")
+	if [ "$have" = "$want" ]; then
+		ok "tailscale set $want"
+		return 0
+	fi
+	change "tailscale set $want" "tailscale set back as in /var/lib/cirrusux/tailscale-prefs.before${have:+ (applied before: $have)}" \
+		_net_apply_set "$want" "$ROOT$applied"
+}
+
+_net_apply_set() {
+	local before=$ROOT/var/lib/cirrusux/tailscale-prefs.before
+	mkdir -p "$(dirname "$2")"
+	[ -e "$before" ] || tailscale debug prefs >"$before" 2>/dev/null || true
+	# shellcheck disable=SC2086 # one word per flag, checked by _net_flags
+	tailscale set $1
+	echo "$1" >"$2"
+}
+
+# NET_TAILSCALED_FLAGS: tailscaled's own flags (FLAGS= in
+# /etc/default/tailscaled, which Debian's unit reads), then a restart.
+_net_tailscaled_flags() {
+	local want=${NET_TAILSCALED_FLAGS:-} f=/etc/default/tailscaled
+	[ -n "$want" ] || return 0
+	_net_flags NET_TAILSCALED_FLAGS "$want"
+	if is_runit; then
+		warn "NET_TAILSCALED_FLAGS: tailscaled is never restarted without systemd; set its flags where it's started"
+		return 0
+	fi
+	local before=$CHANGES content
+	if [ -f "$ROOT$f" ]; then
+		content=$(grep -v '^FLAGS=' "$ROOT$f"; echo "FLAGS=\"$want\"")
+	else
+		content=$(printf '# Set by cirrusux-setup (network module).\nPORT="41641"\nFLAGS="%s"' "$want")
+	fi
+	put_file $f 644 root:root <<<"$content"
+	if [ "$CHANGES" -ne "$before" ]; then
+		change "restart tailscaled (new flags; Tailscale connections drop for a moment)" "restore $f and restart tailscaled" \
+			restart_unit tailscaled.service
 	fi
 }
