@@ -169,3 +169,25 @@ Every container restarts unless stopped, and carries the labels
 4. Send it as a pull request, saying which tag you tested.
 
 Apps that need several containers (Immich, for one) can't be described yet.
+
+## Apps that write to the media
+
+tinyMediaManager and Picard rename and tag files in place, so their media
+is `writable`. Both images start as root and then drop to `USER_ID` and
+`GROUP_ID`, set to the apps' user (`{{uid}}`, `{{gid}}`). With
+`APPS_MEDIA_UID` and `APPS_MEDIA_GID` set to the media's owner, that user
+is the owner, so nothing needs a `chown`. `UMASK=0002` keeps new files
+group-writable, which suits media folders shared through a group with
+setgid directories (mode `2775`). Neither has a password of its own (each is
+a desktop in the browser), and each has an update check to switch off by
+hand; their `notes` say where.
+
+## Checked plugins
+
+| App, tag | Plugin | Result | Checked |
+|---|---|---|---|
+| Jellyfin `12.4.20261026-211555` (server 12.4.0) | Trakt 33.0.0.0 (target ABI 12.1.0.0), from Jellyfin's stable repository | Loads: the log shows `Loaded plugin: Trakt 33.0.0.0`, its status is `Active`, no warnings or errors, and the server reports `Healthy` | 3 Nov 2026, rootless Podman, a fresh config with the plugin's zip unpacked in `plugins/Trakt_33.0.0.0` |
+
+CirrusUX never installs or changes Jellyfin plugins: install Trakt from
+Jellyfin's own Dashboard → Plugins → Catalog. After an update to a new
+Jellyfin tag, its log says whether each plugin loaded.

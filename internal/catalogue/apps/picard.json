@@ -1,0 +1,58 @@
+{
+  "id": "picard",
+  "name": "MusicBrainz Picard",
+  "description": "Tag and rename your music from the MusicBrainz database.",
+  "website": "https://picard.musicbrainz.org",
+  "icon": "Tags",
+  "color": "#8d7cf6",
+  "group": "Manage",
+  "image": "docker.io/mikenye/picard",
+  "tag": "2.13.3",
+  "digest": "sha256:8579fd6ca63e50463208cae7cdc8a0ca3504f5e7bdeb85c57441d5aac96030e3",
+  "ports": [
+    {
+      "name": "web",
+      "container": 5800,
+      "host": 5800,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "config",
+      "path": "/config",
+      "kind": "config"
+    },
+    {
+      "name": "music",
+      "path": "/storage",
+      "kind": "media",
+      "writable": true,
+      "label": "Music folder"
+    }
+  ],
+  "env": [
+    {
+      "name": "USER_ID",
+      "value": "{{uid}}"
+    },
+    {
+      "name": "GROUP_ID",
+      "value": "{{gid}}"
+    },
+    {
+      "name": "UMASK",
+      "value": "0002"
+    },
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    }
+  ],
+  "check": {
+    "port": "web",
+    "path": "/"
+  },
+  "minMemoryMB": 512,
+  "notes": "It runs as a desktop in the browser, with no password of its own: keep it to your LAN and tailnet. Your music is in /storage, written as the apps' user (set APPS_MEDIA_UID and APPS_MEDIA_GID to your media's owner). Turn off its update check under Options → Advanced → Network → Check for updates: CirrusStore updates it. The image is for x86-64 (amd64) only."
+}
