@@ -7,6 +7,14 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-03
+
+### Fixed
+
+- The ftps module's passive port check is written so ShellCheck 0.9 (the
+  version CI uses) accepts it. Its behaviour is unchanged. v0.5.2 and v0.6.0
+  failed CI on this lint step only.
+
 ## [0.6.0] - 2026-11-03
 
 ### Added
