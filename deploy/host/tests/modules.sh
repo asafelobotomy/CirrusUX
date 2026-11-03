@@ -82,6 +82,7 @@ CONF=$ROOT/etc/cirrusux/backup.env $ROOT/usr/local/sbin/cirrusux-backup > $T/run
 grep -q "FAILED" $T/run.out && ls $T/backups | grep -q partial || fail "failure not reported or .partial lost"
 echo "backup: a failed encryption fails the run and never looks like a good backup"
 
+
 # security
 printf 'SEC_AV_PATHS="/srv"\n' > $CONFIG
 echo clamav-freshclam.service >> $T/enabled
@@ -95,6 +96,23 @@ printf 'NET_WOL_IFACE=eth0\nBACKUP_AGE_RECIPIENT=%s\nBACKUP_DIR=%s\nBACKUP_PATHS
 $H/cirrusux-setup check network backup security > $T/out 2>&1; rc=$?
 [ $rc = 0 ] || { cat $T/out; fail "re-check $rc"; }
 echo "security: jail on the journal, scan updates itself (no daemon), panel checks written; re-check clean"
+
+# BACKUP_REQUIRE_MOUNT: no disk, no backup, and no folder made on the system disk.
+printf '#!/bin/sh\n[ "$1" = -r ] || exit 9\ncat\n' > $T/stub/age
+printf '#!/bin/sh\ncat "$STUBDIR/mnt"\n' > $T/stub/findmnt; chmod +x $T/stub/findmnt
+printf 'BACKUP_AGE_RECIPIENT=%s\nBACKUP_DIR=/srv/backups\nBACKUP_REQUIRE_MOUNT=/mnt/media\n' $KEY > $CONFIG
+$H/cirrusux-setup check backup > $T/out 2>&1 && fail "BACKUP_DIR outside BACKUP_REQUIRE_MOUNT accepted"
+grep -q "isn't inside BACKUP_REQUIRE_MOUNT" $T/out || { cat $T/out; fail "wrong refusal"; }
+printf 'BACKUP_AGE_RECIPIENT=%s\nBACKUP_DIR=%s/media/BackUp/sys\nBACKUP_PATHS="%s"\nBACKUP_REQUIRE_MOUNT=%s/media\nBACKUP_KEEP=14\n' $KEY $T $T/data $T > $CONFIG
+$H/cirrusux-setup apply backup > $T/out 2>&1 || { cat $T/out; fail "backup apply with a mount"; }
+grep -qx "RequiresMountsFor=$T/media/BackUp/sys" $ROOT/etc/systemd/system/cirrusux-backup.service || fail "RequiresMountsFor"
+mkdir -p $T/media
+echo / > $T/mnt
+CONF=$ROOT/etc/cirrusux/backup.env $ROOT/usr/local/sbin/cirrusux-backup > $T/run.out 2>&1 && fail "backed up with the disk missing"
+grep -q "isn't on $T/media" $T/run.out && [ ! -e $T/media/BackUp ] || { cat $T/run.out; fail "no clear refusal, or the folder was made anyway"; }
+echo $T/media > $T/mnt
+CONF=$ROOT/etc/cirrusux/backup.env $ROOT/usr/local/sbin/cirrusux-backup > $T/run.out 2>&1 || { cat $T/run.out; fail "backup with the disk there"; }
+echo "backup: BACKUP_REQUIRE_MOUNT refuses to write without the disk, and works with it"
 
 # sleep: only for a split setup's server; installs the checker, its timer,
 # the sleep hook and the stay-awake commands the panel uses.

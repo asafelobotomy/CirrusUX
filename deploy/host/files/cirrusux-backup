@@ -17,6 +17,20 @@ BACKUP_KEEP=${BACKUP_KEEP:-7}
 umask 077
 
 name="${BACKUP_PREFIX}$(date +%Y-%m-%d_%H%M%S).tar.zst.age"
+# BACKUP_DIR must be on its disk: unmounted, the folder would be made on the
+# system disk instead, and fill it. The nearest folder that exists decides.
+if [ -n "${BACKUP_REQUIRE_MOUNT:-}" ]; then
+	probe=$BACKUP_DIR
+	while [ ! -e "$probe" ]; do probe=$(dirname "$probe"); done
+	on=$(findmnt -n -o TARGET -T "$probe" 2>/dev/null || true)
+	case "$on" in
+	"$BACKUP_REQUIRE_MOUNT" | "$BACKUP_REQUIRE_MOUNT"/*) ;;
+	*)
+		echo "FAILED: $BACKUP_DIR isn't on $BACKUP_REQUIRE_MOUNT (it's on ${on:-an unknown filesystem}): is the disk mounted?" >&2
+		exit 1
+		;;
+	esac
+fi
 mkdir -p "$BACKUP_DIR"
 part="$BACKUP_DIR/$name.partial"
 

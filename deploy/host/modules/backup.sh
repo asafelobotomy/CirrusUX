@@ -8,7 +8,12 @@
 #   BACKUP_PATHS="/etc /root /home /usr/local /var/lib/cirrusux /var/lib/cirrusux-gateway /srv/cirrusux"
 #   BACKUP_EXCLUDE=""            paths or patterns to leave out
 #   BACKUP_SCHEDULE="*-*-* 03:30"   systemd OnCalendar
-#   BACKUP_KEEP=7                newest archives to keep; 0 keeps all
+#   BACKUP_KEEP=7                newest archives to keep; 0 keeps all (e.g. 14
+#                                for two weeks of nightly backups)
+#   BACKUP_REQUIRE_MOUNT=""      a mount point BACKUP_DIR must be on, e.g. an
+#                                external disk's /mnt/media: without the disk
+#                                the backup refuses to run, rather than fill
+#                                the system disk
 #
 # The timer wakes a sleeping server (WakeSystem=yes) and runs late if it was
 # off at the time (Persistent=yes). Media isn't in the default paths.
@@ -23,6 +28,11 @@ module_backup() {
 	local dir=${BACKUP_DIR:-/srv/backups} keep=${BACKUP_KEEP:-7}
 	[[ $keep =~ ^[0-9]+$ ]] || die "BACKUP_KEEP must be a number"
 	valid_path "$dir" || die "BACKUP_DIR must be an absolute path without spaces, special characters, \"..\" or a trailing /"
+	local mount=${BACKUP_REQUIRE_MOUNT:-}
+	if [ -n "$mount" ]; then
+		valid_path "$mount" || die "BACKUP_REQUIRE_MOUNT must be an absolute path without spaces, special characters, \"..\" or a trailing /"
+		[[ $dir == "$mount" || $dir == "$mount"/* ]] || die "BACKUP_DIR ($dir) isn't inside BACKUP_REQUIRE_MOUNT ($mount)"
+	fi
 	local prefix
 	prefix="$(short_host)-system-"
 
@@ -37,14 +47,18 @@ BACKUP_AGE_RECIPIENT="$rcpt"
 BACKUP_PATHS="${BACKUP_PATHS:-/etc /root /home /usr/local /var/lib/cirrusux /var/lib/cirrusux-gateway /srv/cirrusux}"
 BACKUP_EXCLUDE="${BACKUP_EXCLUDE:-}"
 BACKUP_KEEP=$keep
+BACKUP_REQUIRE_MOUNT="$mount"
 EOF
 
 	local units_before=$CHANGES
-	put_file /etc/systemd/system/cirrusux-backup.service 644 root:root <<'EOF'
+	# RequiresMountsFor mounts whatever BACKUP_DIR is on (from fstab) first;
+	# the script still checks, for a disk that isn't in fstab.
+	put_file /etc/systemd/system/cirrusux-backup.service 644 root:root <<EOF
 # Written by cirrusux-setup (backup module).
 [Unit]
 Description=CirrusUX system backup
 After=local-fs.target
+RequiresMountsFor=$dir
 
 [Service]
 Type=oneshot

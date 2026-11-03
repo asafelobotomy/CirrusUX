@@ -127,7 +127,8 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `BACKUP_PATHS` | `/etc /root /home /usr/local /var/lib/cirrusux /var/lib/cirrusux-gateway /srv/cirrusux` | backup: what goes in |
 | `BACKUP_EXCLUDE` | — | backup: what stays out |
 | `BACKUP_SCHEDULE` | `*-*-* 03:30` | backup: systemd `OnCalendar`; the timer wakes a sleeping server |
-| `BACKUP_KEEP` | `7` | backup: newest archives kept; `0` keeps all (the only automatic deletion) |
+| `BACKUP_KEEP` | `7` | backup: newest archives kept, e.g. `14` for two weeks of nightly backups; `0` keeps all (the only automatic deletion) |
+| `BACKUP_REQUIRE_MOUNT` | — | backup: a mount point `BACKUP_DIR` must be on (an external disk's `/mnt/media`). Without the disk mounted, the backup fails instead of filling the system disk. The unit also gets `RequiresMountsFor=` on `BACKUP_DIR`, so systemd mounts it first when it's in fstab |
 | `SEC_FAIL2BAN` | `yes` | security: fail2ban `sshd` jail, reading the journal |
 | `SEC_AV` | `yes` | security: weekly ClamAV scan; signatures update just before it |
 | `SEC_AV_PATHS` | `/home /srv /usr/local /tmp /var/tmp` | security: what the scan covers |
