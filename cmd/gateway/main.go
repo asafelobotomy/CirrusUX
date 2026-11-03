@@ -22,10 +22,17 @@ import (
 
 func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	envFile := flag.String("env", "", "read settings from this NAME=value file, as systemd's EnvironmentFile= would (for runit and other init systems)")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("cirrusux-gateway", version.String())
 		return
+	}
+	if *envFile != "" {
+		if err := gateway.LoadEnvFile(*envFile); err != nil {
+			slog.Error("config", "err", err)
+			os.Exit(2)
+		}
 	}
 	cfg, err := gateway.ConfigFromEnv()
 	if err != nil {

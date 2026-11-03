@@ -1,0 +1,6 @@
+#!/bin/sh
+# /etc/sv/cirrusux-gateway/log/run — root:root, mode 755. The gateway's log,
+# with timestamps, rotated by svlogd in /var/log/cirrusux-gateway.
+set -eu
+install -d -m 750 /var/log/cirrusux-gateway
+exec svlogd -tt /var/log/cirrusux-gateway

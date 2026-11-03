@@ -5,10 +5,16 @@
 #   NET_WOL_IFACE=enp1s0     wired interface to wake on; empty skips Wake-on-LAN
 #   NET_TAILSCALE=yes        check that tailscaled starts at boot and is logged in
 #
-# Logging in to Tailscale needs a browser, so setup only reports it.
+# Logging in to Tailscale needs a browser, so setup only reports it. Without
+# systemd (runit), tailscaled is never started or restarted, and
+# Wake-on-LAN is skipped.
 
 module_network() {
 	local ifc=${NET_WOL_IFACE:-}
+	if [ -n "$ifc" ] && is_runit; then
+		warn "NET_WOL_IFACE: Wake-on-LAN is kept on by a systemd .link file, so it's skipped without systemd"
+		ifc=""
+	fi
 	if [ -n "$ifc" ]; then
 		need_packages ethtool
 		local mac
@@ -41,7 +47,11 @@ EOF2
 			warn "Tailscale isn't installed: see https://tailscale.com/download/linux"
 			return 0
 		fi
-		if unit_enabled tailscaled.service && unit_active tailscaled.service; then
+		if is_runit; then
+			# The machine's own tailscaled (often userspace mode, started its
+			# own way) is never started, restarted or duplicated.
+			ok "tailscaled left as it is (no systemd)"
+		elif unit_enabled tailscaled.service && unit_active tailscaled.service; then
 			ok "tailscaled starts at boot"
 		else
 			change "start tailscaled now and at boot" "systemctl disable --now tailscaled" \

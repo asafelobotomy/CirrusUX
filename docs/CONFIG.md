@@ -116,6 +116,7 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `CIRRUS_ACTIONS` | `yes` | cirrusux: `no` installs a read-only sudoers rule |
 | `CIRRUS_SERVER_NAME`, `CIRRUS_ALLOWED_USERS` | — | cirrusux: written into a new gateway.env |
 | `CIRRUS_RELEASE` | this checkout | cirrusux: folder holding `bin/` and `deploy/` |
+| `CIRRUS_INIT` | `systemd` when it's running, else `runit` | `runit`: a gateway machine without systemd; only base, cirrusux (`CIRRUS_ROLE=gateway`) and network run (see INSTALL.md) |
 | `FIREWALL_ALLOW` | — | firewall: networks allowed in (IPv4 and IPv6) |
 | `FIREWALL_TAILSCALE` | `yes` | firewall: also allow the tailnet |
 | `FIREWALL_PUBLIC_TCP` | — | firewall: ports open to everyone |

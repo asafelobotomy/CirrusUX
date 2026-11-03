@@ -81,6 +81,11 @@ modules=("$@")
 for m in "${modules[@]}"; do
 	f=$(module_file "$m")
 	[ -f "$f" ] || die "no module named $m (see: cirrusux-setup list)"
+	# Without systemd only the gateway's side is supported: the rest uses
+	# its timers, sockets and sleep hooks.
+	if is_runit; then
+		case "$m" in base | cirrusux | network) ;; *) die "the $m module needs systemd; without it (runit), only base, cirrusux (CIRRUS_ROLE=gateway) and network run" ;; esac
+	fi
 done
 
 total=0

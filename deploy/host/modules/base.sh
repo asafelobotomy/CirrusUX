@@ -5,6 +5,9 @@
 #   HOST_TZ=Europe/London        IANA zone; empty leaves it alone
 #   HOST_AUTO_UPDATES=no         no: switch off apt's daily upgrade timer
 #
+# Without systemd (runit), the zone is set through /etc/localtime and
+# /etc/timezone, and there are no apt timers to switch off.
+#
 # SSH is never touched: how people log in stays the owner's business.
 
 module_base() {
@@ -22,13 +25,17 @@ module_base() {
 		now=$(readlink "$ROOT/etc/localtime" 2>/dev/null | sed 's|.*zoneinfo/||')
 		if [ "$now" = "$tz" ]; then
 			ok "time zone $tz"
+		elif is_runit; then
+			change "set the time zone to $tz (was ${now:-unset})" "link /etc/localtime to /usr/share/zoneinfo/${now:-UTC}" \
+				_set_tz_files "$tz"
 		else
 			change "set the time zone to $tz (was ${now:-unset})" "timedatectl set-timezone ${now:-UTC}" \
 				timedatectl set-timezone "$tz"
 		fi
 	fi
 
-	if [ "${HOST_AUTO_UPDATES:-no}" = no ]; then
+	# apt's automatic upgrades are systemd timers: without systemd there are none.
+	if [ "${HOST_AUTO_UPDATES:-no}" = no ] && ! is_runit; then
 		local t
 		for t in apt-daily-upgrade.timer unattended-upgrades.service; do
 			if unit_enabled "$t"; then
@@ -49,6 +56,13 @@ module_base() {
 		change "create /etc/cirrusux (root:cirrusux 750)" "rm -r /etc/cirrusux" \
 			_mkconfdir
 	fi
+}
+
+# _set_tz_files ZONE: what timedatectl does, by hand (no systemd).
+_set_tz_files() {
+	backup "$ROOT/etc/timezone"
+	ln -sfn "/usr/share/zoneinfo/$1" "$ROOT/etc/localtime"
+	echo "$1" >"$ROOT/etc/timezone"
 }
 
 _mkconfdir() {

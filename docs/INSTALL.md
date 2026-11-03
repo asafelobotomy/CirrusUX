@@ -122,6 +122,35 @@ http://127.0.0.1:8064` on the gateway machine, and run `apply` again on
 both: the services start once no `<…>` placeholder is left. Open
 `https://<gateway>.<tailnet>.ts.net/`.
 
+### A gateway machine without systemd (runit)
+
+The gateway also runs on a Debian machine without systemd, under
+[runit](http://smarden.org/runit/): for one, a container whose PID 1 is
+`tini` running `runsvdir -P /etc/service`. Install `runit` (and `sudo`, for
+the router check), then use `cirrusux-setup` as above with
+`HOST_MODULES="base cirrusux"` and `CIRRUS_ROLE=gateway`. Setup notices
+there's no systemd (or set `CIRRUS_INIT=runit`) and:
+
+- installs the service in `/etc/sv/cirrusux-gateway` (`run` and `log/run`)
+  and links it into `/etc/service` once `gateway.env` is filled in; the
+  gateway runs as `cirrusux`, reads `gateway.env` itself (`-env`), and logs
+  to `/var/log/cirrusux-gateway/current` through svlogd;
+- sets the time zone through `/etc/localtime` and `/etc/timezone`;
+- never starts, restarts or duplicates `tailscaled`: the machine's own
+  Tailscale carries `tailscale serve`;
+- refuses the other roles and modules, which need systemd's timers,
+  sockets and sleep hooks.
+
+Undo: `sudo rm /etc/service/cirrusux-gateway` stops it (runsvdir notices),
+then remove `/etc/sv/cirrusux-gateway`.
+
+Tailscale in userspace mode (`tailscaled --tun=userspace-networking`) works
+too: `tailscale serve --bg --https=443 http://127.0.0.1:8064` proxies inside
+tailscaled itself, so it needs no tun device. If that machine reaches the
+server's router only through a proxy (Tailscale's own
+`--socks5-server=localhost:1055`, or a wireproxy tunnel), set
+`ROUTER_PROXY` for the router check and wake (below).
+
 ## What cirrusux-setup does
 
 `deploy/host/cirrusux-setup` changes only what differs from your settings,

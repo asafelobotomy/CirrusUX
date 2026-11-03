@@ -139,8 +139,56 @@ fill_values() {
 # placeholders FILE: lists values still to fill in, e.g. "<set in env>".
 placeholders() { { grep -nE '^[A-Z_]+=.*<[^>]+>' "$1" 2>/dev/null || true; } | cut -d= -f1 | cut -d: -f2 | tr '\n' ' '; }
 
-# unit_enabled UNIT: whether systemd starts it at boot.
-unit_enabled() { systemctl is-enabled --quiet "$1" 2>/dev/null; }
+# init_system prints systemd or runit. CIRRUS_INIT chooses; otherwise it's
+# systemd when systemd is running, else runit (a gateway machine without
+# systemd, e.g. under tini in a container).
+init_system() {
+	case "${CIRRUS_INIT:-}" in
+	systemd | runit) echo "$CIRRUS_INIT" ;;
+	"") if [ -d /run/systemd/system ]; then echo systemd; else echo runit; fi ;;
+	*) die "CIRRUS_INIT must be systemd or runit" ;;
+	esac
+}
+is_runit() { [ "$(init_system)" = runit ]; }
+
+# Under runit a unit NAME.service is the service folder $SV_DIR/NAME, and
+# it runs while linked into runsvdir's folder ($SVDIR, /etc/service).
+SV_DIR=/etc/sv
+SV_LINKS=${SVDIR:-/etc/service}
+sv_name() { echo "${1%.service}"; }
+
+# unit_enabled UNIT: whether it starts at boot.
+unit_enabled() {
+	if is_runit; then
+		[ -L "$ROOT$SV_LINKS/$(sv_name "$1")" ]
+		return
+	fi
+	systemctl is-enabled --quiet "$1" 2>/dev/null
+}
+
+# enable_unit UNIT: start it now and at boot.
+enable_unit() {
+	if is_runit; then
+		mkdir -p "$ROOT$SV_LINKS"
+		ln -sfn "$SV_DIR/$(sv_name "$1")" "$ROOT$SV_LINKS/$(sv_name "$1")"
+		return
+	fi
+	systemctl enable --now "$1"
+}
+
+# disable_how UNIT: the command that undoes enable_unit, for the log.
+disable_how() {
+	if is_runit; then echo "rm $SV_LINKS/$(sv_name "$1")"; else echo "systemctl disable --now $1"; fi
+}
+
+# restart_unit UNIT
+restart_unit() {
+	if is_runit; then
+		sv restart "$ROOT$SV_LINKS/$(sv_name "$1")"
+		return
+	fi
+	systemctl restart "$1"
+}
 
 # release_dir: the folder holding CirrusUX's bin/ and deploy/
 # (CIRRUS_RELEASE, or this checkout).
@@ -156,10 +204,16 @@ start_unit() {
 	if unit_enabled "$1"; then
 		ok "$what on"
 	else
-		change "start $what" "systemctl disable --now $1" systemctl enable --now "$1"
+		change "start $what" "$(disable_how "$1")" enable_unit "$1"
 	fi
 }
-unit_active() { systemctl is-active --quiet "$1" 2>/dev/null; }
+unit_active() {
+	if is_runit; then
+		sv status "$ROOT$SV_LINKS/$(sv_name "$1")" 2>/dev/null | grep -q '^run:'
+		return
+	fi
+	systemctl is-active --quiet "$1" 2>/dev/null
+}
 
 # load_config FILE: source the host settings, refusing a file that anyone
 # but root could have changed.

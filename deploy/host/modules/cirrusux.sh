@@ -9,6 +9,10 @@
 #   CIRRUS_ALLOWED_USERS=     written into a new gateway.env
 #   CIRRUS_RELEASE=           folder holding bin/ and deploy/ (default: this checkout)
 #
+# Without systemd (runit, see lib.sh's init_system) only the gateway role
+# runs: it installs the runit service in /etc/sv/cirrusux-gateway and links
+# it into /etc/service ($SVDIR), where runsvdir starts it.
+#
 # Config files are created once and then left alone: edit them by hand.
 # Services start only when no placeholder (<…>) is left in their config.
 
@@ -16,6 +20,9 @@ module_cirrusux() {
 	local role=${CIRRUS_ROLE:-single} rel
 	rel=$(release_dir)
 	case "$role" in single | server | gateway) ;; *) die "CIRRUS_ROLE must be single, server or gateway" ;; esac
+	if is_runit && [ "$role" != gateway ]; then
+		die "CIRRUS_ROLE=$role needs systemd (the agent's side uses its sockets and jobs); without it only CIRRUS_ROLE=gateway runs"
+	fi
 	[ -d "$rel/bin" ] || die "no binaries in $rel/bin: run make build, or set CIRRUS_RELEASE"
 	id cirrusux >/dev/null 2>&1 || [ "$MODE" = check ] || die "the cirrusux user is missing: apply the base module first"
 
@@ -48,10 +55,18 @@ module_cirrusux() {
 		filter_units=$((CHANGES - filter_units))
 		_cx_sudoers "$rel/deploy/server/sudoers-cirrusux"
 	fi
-	if [ "$role" != server ]; then
+	if [ "$role" != server ] && is_runit; then
+		local svc_before=$CHANGES
+		put_file "$SV_DIR/cirrusux-gateway/run" 755 root:root <"$rel/deploy/gateway/runit/run"
+		put_file "$SV_DIR/cirrusux-gateway/log/run" 755 root:root <"$rel/deploy/gateway/runit/log/run"
+		# runsv reads run afresh at each start; a changed one counts on restart.
+		if [ "$CHANGES" -ne "$svc_before" ] && unit_active cirrusux-gateway.service; then
+			change "restart cirrusux-gateway (new run script)" "—" restart_unit cirrusux-gateway.service
+		fi
+	elif [ "$role" != server ]; then
 		put_file /etc/systemd/system/cirrusux-gateway.service 644 root:root <"$rel/deploy/gateway/cirrusux-gateway.service"
 	fi
-	if [ $((CHANGES - units_before)) -gt 0 ]; then
+	if [ $((CHANGES - units_before)) -gt 0 ] && ! is_runit; then
 		change "reload systemd units" "—" systemctl daemon-reload
 	fi
 	# Changed filter units take effect, and a failed socket recovers, only
@@ -142,8 +157,9 @@ _cx_move_data() {
 	local f
 	mkdir -p "$ROOT/var/lib/cirrusux-gateway"
 	for f; do mv "$STATE_DIR/$f" "$ROOT/var/lib/cirrusux-gateway/"; done
-	# systemd gives the folder to the gateway's user when it next starts.
-	if [ -z "${NO_SYSTEMD:-}" ] && unit_active cirrusux-gateway.service; then systemctl restart cirrusux-gateway.service; fi
+	# systemd (or the runit run script) gives the folder to the gateway's
+	# user when it next starts.
+	if [ -z "${NO_SYSTEMD:-}" ] && unit_active cirrusux-gateway.service; then restart_unit cirrusux-gateway.service; fi
 }
 
 # _cx_service ENVFILE UNIT...: start the units once their config is complete.
@@ -161,7 +177,7 @@ _cx_service() {
 		elif [ -n "$missing" ]; then
 			warn "$u stays off until $env is filled in: $missing"
 		else
-			change "enable and start $u" "systemctl disable --now $u" systemctl enable --now "$u"
+			change "enable and start $u" "$(disable_how "$u")" enable_unit "$u"
 		fi
 	done
 }
@@ -172,7 +188,7 @@ _cx_restart() {
 	[ "$1" != server ] && units+=(cirrusux-gateway.service)
 	for u in "${units[@]}"; do
 		if unit_active "$u"; then
-			change "restart $u (new binary)" "install the previous binary and restart" systemctl restart "$u"
+			change "restart $u (new binary)" "install the previous binary and restart" restart_unit "$u"
 		fi
 	done
 	if unit_active cirrusux-dockerfilter.service; then
