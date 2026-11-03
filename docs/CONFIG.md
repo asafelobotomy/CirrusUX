@@ -54,6 +54,7 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `CIRRUS_POWER_CHECK_CMD` | — | Split only: a command that prints `online` or `offline` for the server, e.g. `sudo -n /usr/local/sbin/cirrusux-router-check` (TR-064). A second opinion beside Tailscale, the fallback when Tailscale can't be read, and a wake's "network up" step |
 | `CIRRUS_POWER_CHECK_SECS` | `60` | How often the power check runs |
 | `CIRRUS_CHANGELOG` | — | Also append every action to this Markdown file |
+| `HTTPS_PROXY` | — (direct) | Check CirrusStore fetches catalogues through this proxy. Only when the owner presses it; verified files are cached in `CIRRUS_DATA_DIR/store/` |
 | `ASSISTANT_PROVIDER` | — (off) | `xai`, `openai`, `anthropic`, `ollama` or `custom` |
 | `ASSISTANT_MODEL` | — | The model; the assistant is off without one |
 | `ASSISTANT_API_KEY` | — | Needed for hosted providers |
@@ -93,6 +94,7 @@ The helper reads `helper.env`, then every `helper.d/*.env` in name order
 | egress | `EGRESS_REPORT` | The outbound-traffic report on the Security page |
 | storage | any of the folders above, `STORAGE_ROOTS` | The Storage page: folder sizes on request, and archive review |
 | apps | `CONTAINER_RUNTIME`, `APPS_DIR`, `APPS_USER`, `MEDIA_ROOTS` (`APPS_ARCHIVE`, `APPS_BIND`) | CirrusStore: installs and removals as background jobs |
+| store | `STORE_OFFICIAL` (`yes`), and the sources in `/etc/cirrusux/store.d/` | CirrusStore's online catalogues: the keys every app from one is checked against before it runs |
 
 Paths must be absolute; unit and jail names may only use letters, digits and
 `- _ . @`. The helper refuses the file otherwise.
@@ -152,6 +154,8 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `APPS_MEDIA_ROOTS` | `/srv/media` | apps: folders media may be chosen from |
 | `APPS_BIND` | — (all) | apps: publish apps' ports on this address only |
 | `APPS_MEDIA_UID`, `APPS_MEDIA_GID` | — | apps: the media's owner. `cirrusux-apps` is created with these IDs, and a `media` group with the GID if no group has it, so files apps write match the rest of the media. Set both. An existing `cirrusux-apps` with other IDs is never changed, only warned about |
+| `STORE_OFFICIAL` | `yes` | store: trust the official CirrusStore catalogue, whose key is built into CirrusUX. `no` leaves only the built-in apps and `STORE_SOURCES` |
+| `STORE_SOURCES` | — | store: third-party catalogues, space-separated, each `name\|https://host/path/\|KEY`, where `KEY` is the last field of the publisher's `NAME.pub`. Each becomes `/etc/cirrusux/store.d/<name>.source` (root, 644); one dropped from the list is removed. See APPS.md, "Hosting your own source" |
 | `SLEEP_IDLE_MIN` | `30` | sleep: quiet minutes before it suspends |
 | `SLEEP_GRACE_MIN` | `15` | sleep: minutes after a wake before it may sleep again |
 | `SLEEP_WATCH_PORTS` | — (all) | sleep: only these local ports count |

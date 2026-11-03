@@ -12,7 +12,7 @@ LDFLAGS := -s -w $(STAMP)
 # Development only: a fixed token for the local gateway and agent.
 DEV_TOKEN := dev-only-token-not-a-secret-0123456789
 
-.PHONY: all web web-stub build test test-host dev-gateway dev-agent bump clean
+.PHONY: all web web-stub build test test-host dev-gateway dev-agent store-site bump clean
 
 all: build
 
@@ -57,6 +57,14 @@ dev-gateway: web-stub
 
 dev-agent:
 	CIRRUS_AGENT_TOKEN=$(DEV_TOKEN) $(GO) run -ldflags '$(STAMP)' ./cmd/agent -gateway http://127.0.0.1:8064/agent/snapshot -demo deploy/dev/demo-snapshot.json -interval 1m
+
+# The official CirrusStore catalogue from the built-in apps, signed with the
+# offline key: make store-site KEY=/media/offline/cirrusstore.key [OUT=site]
+OUT ?= site
+store-site:
+	@test -n "$(KEY)" || { echo "usage: make store-site KEY=cirrusstore.key [OUT=site]"; exit 2; }
+	$(GO) run ./cmd/cirrusstore sign -key $(KEY) -dir $(OUT) internal/catalogue/apps/*.json
+	$(GO) run ./cmd/cirrusstore index -key $(KEY) -dir $(OUT)
 
 # make bump V=0.2.0 — writes the version everywhere; doesn't commit or tag.
 bump:

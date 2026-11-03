@@ -7,6 +7,44 @@ gets a minor version.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-03
+
+### Added
+
+- CirrusStore's online catalogue: apps and newer versions published as
+  signed static files, so they arrive without a CirrusUX release. Each app
+  is an Ed25519-signed envelope with its source, a serial and an expiry;
+  the index is signed too. Nothing is fetched until the owner presses
+  **Check CirrusStore**, through `HTTPS_PROXY` if it's set, and verified
+  files are cached in `CIRRUS_DATA_DIR/store/`.
+- Third-party sources: the `store` setup module writes `STORE_SOURCES` to
+  `/etc/cirrusux/store.d/` (root only), and `STORE_OFFICIAL=no` leaves the
+  official catalogue out. The panel's Sources card lists each source's URL,
+  key fingerprint and status (ok, expired or unreachable), but can't add one.
+- The root helper verifies every signed definition again (signature,
+  source, expiry, serial) before an install or update runs, so a
+  compromised gateway or panel can't add an app or replay an old one. App
+  records keep the source, serial and exact definition installed, plus the
+  previous ones for a rollback.
+- Definition updates: an app whose source has a newer serial (new ports,
+  settings or pin) shows on the Updates page as a new definition.
+- `cirrusstore`, the publisher tool: `keygen`, `sign`, `index` and
+  `verify`. `make store-site KEY=…` builds the official catalogue from the
+  built-in apps.
+- Source badges on apps, search on the CirrusStore page, and apps from two
+  sources with the same id listed with the reason one is unavailable.
+- Docs: APPS.md is now "Publishing to CirrusStore" (envelopes, serials,
+  expiry, hosting your own source), SECURITY.md describes the trust model,
+  and CONFIG.md the store settings.
+
+### Changed
+
+- The app store is called CirrusStore wherever people see it. Routes,
+  packages and settings keep their names.
+- An official definition with the same id as a built-in one replaces it
+  once the catalogue has been checked; the built-in apps stay as the
+  offline fallback.
+
 ## [0.5.2] - 2026-11-03
 
 ### Added

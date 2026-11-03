@@ -1,9 +1,26 @@
-# App definitions
+# Publishing to CirrusStore
 
-Every built-in app in CirrusStore is one JSON file in `internal/catalogue/apps/`,
-named after the app's id (`syncthing.json` for `syncthing`). The files are
-built into the binaries, so adding or changing one means a rebuild and a
-new release. Nothing is downloaded from a catalogue server.
+Every app in CirrusStore is one JSON definition. They come from three
+places:
+
+- **Built in:** `internal/catalogue/apps/<id>.json`, compiled into the
+  binaries. Always there, with no network, and changed only by a release.
+- **The official catalogue** (`cirrusstore`), published as static files at
+  `https://asafelobotomy.github.io/cirrusstore/` and signed with CirrusUX's
+  own key. New apps and newer versions arrive without a CirrusUX release.
+- **Third-party sources** that the server's owner chose to trust, each
+  with its own key (below, "Hosting your own source").
+
+Nothing is fetched until the owner presses **Check CirrusStore**. The
+gateway then fetches each source's index and changed apps, checks every
+signature, and caches them. When an app is installed, the root helper on
+the server checks the signature again against keys only root can change,
+so neither the panel nor the gateway can slip in an app or a source.
+
+The definition format is the same everywhere; this page describes it first,
+then how to sign and publish a catalogue.
+
+## What a definition may say
 
 A definition can only say what CirrusUX knows how to run safely. There is
 no field for privileged mode, host networking, capabilities or arbitrary
@@ -160,15 +177,146 @@ Every container restarts unless stopped, and carries the labels
 
 ## Adding an app
 
-1. Write `internal/catalogue/apps/<id>.json`, with the newest stable tag
-   and its digest.
-2. `go test ./internal/catalogue` checks every definition, and shows the
-   first problem in plain words.
-3. Install it on a test machine from CirrusStore, open it, then update or
-   remove it, and check its folders are where this page says.
-4. Send it as a pull request, saying which tag you tested.
+1. Write `<id>.json`, with the newest stable tag and its digest.
+2. Check it: `cirrusstore sign` refuses a definition with any problem, in
+   plain words. For a built-in app, `go test ./internal/catalogue` checks
+   every file in `internal/catalogue/apps/`.
+3. Install it on a test machine, open it, then update or remove it, and
+   check its folders are where this page says.
+4. For the official catalogue, send it as a pull request to its repository,
+   saying which tag you tested.
 
 Apps that need several containers (Immich, for one) can't be described yet.
+
+## The signed catalogue
+
+A catalogue is a folder of static files, served over HTTPS as it is:
+
+```
+index.json        index.json.sig
+apps/<id>.json    apps/<id>.json.sig
+```
+
+Each `apps/<id>.json` is an **envelope** around one definition:
+
+```json
+{
+  "source": "cirrusstore",
+  "serial": 3,
+  "expires": "2027-05-01T00:00:00Z",
+  "app": { "id": "syncthing", "name": "Syncthing", "...": "..." }
+}
+```
+
+`index.json` lists the apps with their serials, names, groups and icons,
+under its own `source`, `serial` and `expires`. Each `.sig` file is an
+Ed25519 signature of the exact bytes of its file, in base64. A server
+accepts a file only when:
+
+- the signature matches a key it trusts for that source;
+- the file's `source` is the source it was fetched from, so one
+  publisher's signed file can't be passed off as another's;
+- it hasn't expired; and
+- its serial is no older than the one it has already seen (the index's,
+  and an installed app's), so an old file can't be replayed.
+
+An envelope can be at most 8 KB, since it travels to the server with the
+install request. `app` is checked exactly like a built-in definition: a
+field CirrusUX doesn't know is refused.
+
+### Serials
+
+An app's serial goes up by one each time its definition changes: a new tag,
+a port, a variable. An installed app whose source has a higher serial shows
+on the Updates page as a **new definition**; updating moves it to the new
+definition (backed up first, and rolled back if its check fails), and the
+server records which source, serial and definition it runs. Updates,
+rollback and removal use that recorded definition, so an app keeps working
+when its source drops it or goes away. Tag-only updates from the registry
+still appear as before.
+
+The index has its own serial, one up each time it's rebuilt.
+
+### Expiry
+
+Signatures expire (180 days by default), so a catalogue that stops being
+maintained stops offering apps instead of offering stale pins forever. An
+expired source shows as **expired** in the panel's Sources card, and its
+apps can't be installed until the publisher re-signs. Installed apps keep
+running. Re-sign well before the date: `cirrusstore sign` on unchanged
+definitions keeps their serials and only moves the expiry.
+
+## The publisher tool
+
+`cirrusstore` uses only Go's standard library (`go build ./cmd/cirrusstore`,
+or `bin/cirrusstore` in a release):
+
+| Command | What it does |
+|---|---|
+| `cirrusstore keygen -name NAME` | A new key pair: `NAME.key` (mode 600; keep it offline) and `NAME.pub` |
+| `cirrusstore sign -key NAME.key DEF.json…` | Wraps each definition in a signed envelope in `apps/`, keeping the serial if it's unchanged and adding one if not |
+| `cirrusstore index -key NAME.key` | Lists `apps/` in a new signed `index.json`, one serial up |
+| `cirrusstore verify -pub NAME.pub DIR` | Checks a folder the way a server will, including that the index and the envelopes agree |
+
+`-source` names the source (default: the key's name), `-days` sets the
+expiry (default 180), and `-dir` the catalogue folder (default `.`).
+
+A release of a catalogue, from a folder of definitions in `defs/`:
+
+```bash
+cirrusstore sign -key ~/offline/friends.key -dir site defs/*.json
+cirrusstore index -key ~/offline/friends.key -dir site
+cirrusstore verify -pub friends.pub site
+```
+
+Then publish `site/` as it is. Only `NAME.pub` is ever shared.
+
+## Hosting your own source
+
+Any static HTTPS host works (GitHub Pages, a bucket, a plain web server).
+The source's name is the one in your key and every file (lowercase letters,
+digits and `-`; `cirrusstore` and `built-in` are taken).
+
+To trust it, the server's owner adds it to `host.env` and runs the store
+module:
+
+```bash
+# host.env
+STORE_SOURCES="friends|https://apps.example.org/catalogue/|<last field of friends.pub>"
+sudo cirrusux-setup apply store
+```
+
+That writes `/etc/cirrusux/store.d/friends.source` (root, mode 644). The
+panel lists the source with its key's fingerprint (`SHA256:…`): compare it
+with the one `cirrusstore keygen` printed for you, over a channel other
+than the one the key came by. The panel can't add a source; only root on
+the server can.
+
+App ids are unique across sources. If yours has an id that a built-in or
+official app already uses, CirrusStore shows yours as unavailable, with the
+reason, and the other one wins. Choose distinct ids (`friends-navidrome`
+rather than `navidrome`).
+
+## The official key
+
+The official catalogue's public key is built into CirrusUX
+(`internal/store/official.pub`); its signing key is kept offline by the
+maintainers, and only the public half is ever in the code. With no key in that file, the
+official source is listed but never fetched. `STORE_OFFICIAL=no` leaves
+it out altogether.
+
+To move the built-in apps into the official catalogue:
+
+```bash
+make store-site KEY=/path/to/offline/cirrusstore.key OUT=site
+```
+
+which runs `cirrusstore sign` on `internal/catalogue/apps/*.json` and then
+`cirrusstore index`. Publish `site/` to the catalogue's repository.
+
+The built-in definitions stay in the binaries as the offline fallback. An
+official definition with the same id replaces the built-in one once the
+catalogue has been checked.
 
 ## Apps that write to the media
 

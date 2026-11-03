@@ -14,8 +14,10 @@ sleeps to save power, answering from the last report while it does.
 - `cmd/agent` — on the server: collects a snapshot and pushes it (no listening port)
 - `cmd/helper` — on the server, root via sudo: fixed reads plus a few fixed actions, paths from its own config
 - `cmd/dockerfilter` — on the server, root: Docker API on a unix socket, reads plus start/stop/restart only
+- `cmd/cirrusstore` — for publishers: signs a CirrusStore catalogue (`keygen`, `sign`, `index`, `verify`)
 - `deploy/server`, `deploy/gateway` — systemd units, sudoers rules, example config
 - `internal/catalogue` — the built-in CirrusStore catalogue (`apps/*.json`) and its compose/Quadlet renderers
+- `internal/store` — CirrusStore's signed online catalogues: keys, sources, envelopes and their checks
 - `deploy/host` — `cirrusux-setup`: re-runnable host modules (base, firewall, cirrusux) with a check mode
 - `deploy/profiles/cloud64` — the owner's own setup (private; leaves before the repo goes public)
 - `deploy/dev` — the demo snapshot for local runs
