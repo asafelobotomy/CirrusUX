@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gitHref, parseGitRoute, parsePatch, pathTrail, validRepoName } from '../src/lib/git/diff.ts';
+import { fileSize, gitHref, parseGitRoute, parsePatch, pathTrail, validRepoName } from '../src/lib/git/diff.ts';
 
 test('a patch splits into numbered lines', () => {
   const patch = [
@@ -65,4 +65,11 @@ test('git routes round-trip', () => {
 test('repository names follow the gateway rules', () => {
   for (const ok of ['notes', 'my-app', 'a.b_c', 'x', 'a'.repeat(64)]) assert.ok(validRepoName(ok), ok);
   for (const bad of ['', '-x', '.x', 'X', 'a/b', 'x.git', '.trash', 'a'.repeat(65), 'a b']) assert.ok(!validRepoName(bad), bad);
+});
+
+test('file sizes keep small files readable', () => {
+  assert.equal(fileSize(96), '96 B');
+  assert.equal(fileSize(2048), '2.0 kB');
+  assert.equal(fileSize(52_000), '52 kB');
+  assert.equal(fileSize(1_048_577), '1.0 MB');
 });

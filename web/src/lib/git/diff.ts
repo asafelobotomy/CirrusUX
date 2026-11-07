@@ -117,3 +117,10 @@ export function gitHref(r: GitRoute): string {
 export function validRepoName(name: string): boolean {
   return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(name) && !name.endsWith('.git');
 }
+
+/** A file's size: bytes under 1 kB, then as the rest of the panel shows sizes. */
+export function fileSize(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`;
+  if (bytes < 1e6) return `${(bytes / 1e3).toFixed(bytes < 1e4 ? 1 : 0)} kB`;
+  return `${(bytes / 1e6).toFixed(1)} MB`;
+}

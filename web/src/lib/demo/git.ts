@@ -1,8 +1,10 @@
 // Sample repositories for demo mode, shaped like the gateway's answers.
+import { ApiError } from '../api.svelte';
+import { now } from '../time.svelte';
 import type { Blob, Commit, CommitDetail, GitToken, Repo, RepoSummary, Trashed, Tree } from '../git/api';
 
 const day = 86_400_000;
-const ago = (days: number) => new Date(Date.now() - days * day).toISOString();
+const ago = (days: number) => new Date(now().getTime() - days * day).toISOString();
 const sha = (n: number) => n.toString(16).padStart(8, '0').repeat(5);
 const base = 'https://homeserver.example.ts.net/git/';
 
@@ -65,6 +67,7 @@ export async function getTree(name: string, path: string): Promise<Tree> {
   const r = find(name);
   if (r.empty) return { commit: '', empty: true, entries: [] };
   if (name !== 'notes') return { commit: r.branches[0].commit, empty: false, entries: [{ name: 'index.html', type: 'file', size: 2048, mode: '100644' }] };
+  if (path in files) throw new ApiError(400, `${path} is a file`);
   return { commit: sha(3), empty: false, entries: trees[path] ?? [] };
 }
 
