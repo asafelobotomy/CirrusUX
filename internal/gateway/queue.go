@@ -28,6 +28,9 @@ type Command struct {
 	Undo     *ActionReq `json:"undo,omitempty"`
 	ReadOnly bool       `json:"-"`
 	sent     time.Time
+	// local commands run on the gateway itself (Git hosting); the agent
+	// never sees them.
+	local bool
 }
 
 // Queue holds commands in memory. A gateway restart drops pending ones,
@@ -55,6 +58,26 @@ func (q *Queue) Add(c *Command) {
 	case q.notify <- struct{}{}:
 	default:
 	}
+}
+
+// AddLocal adds a command the gateway runs itself: it starts as sent, so
+// the agent's poll never hands it out.
+func (q *Queue) AddLocal(c *Command) {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	c.ID = hex.EncodeToString(b)
+	c.State, c.Created, c.sent, c.local = "sent", time.Now(), time.Now(), true
+	q.mu.Lock()
+	q.cmds = append(q.cmds, c)
+	if len(q.cmds) > keepHistory {
+		q.cmds = q.cmds[len(q.cmds)-keepHistory:]
+	}
+	q.mu.Unlock()
+}
+
+// CompleteLocal records a local command's result, with its undo.
+func (q *Queue) CompleteLocal(id string, ok bool, output []string, errMsg string, undo *ActionReq) (Command, bool) {
+	return q.finish(id, true, ok, output, errMsg, undo)
 }
 
 func (q *Queue) Get(id string) (Command, bool) {
@@ -98,11 +121,18 @@ func (q *Queue) Next(ctx context.Context) *Command {
 // Complete records the agent's result. It returns the finished command, or
 // false if it was unknown or had already expired.
 func (q *Queue) Complete(id string, ok bool, output []string, errMsg string) (Command, bool) {
+	return q.finish(id, false, ok, output, errMsg, nil)
+}
+
+func (q *Queue) finish(id string, local, ok bool, output []string, errMsg string, undo *ActionReq) (Command, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	for _, c := range q.cmds {
-		if c.ID == id && c.State == "sent" {
+		if c.ID == id && c.State == "sent" && c.local == local {
 			c.Output, c.Error = output, errMsg
+			if undo != nil {
+				c.Undo = undo
+			}
 			c.State = "done"
 			if !ok {
 				c.State = "failed"
@@ -118,7 +148,7 @@ func (q *Queue) expire(now time.Time) {
 		switch {
 		case c.State == "pending" && now.Sub(c.Created) > pendingMax:
 			c.State, c.Error = "failed", "the server didn't pick it up (asleep, or the agent isn't running)"
-		case c.State == "sent" && now.Sub(c.sent) > sentMax:
+		case c.State == "sent" && !c.local && now.Sub(c.sent) > sentMax:
 			c.State, c.Error = "failed", "the server took it but didn't report back"
 		}
 	}

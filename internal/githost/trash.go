@@ -141,3 +141,12 @@ func (h *Host) ListTrash() ([]Trashed, error) {
 	})
 	return list, nil
 }
+
+// TrashName is the name of the repository a trash id holds, or "".
+func TrashName(id string) string {
+	name, _, err := parseTrash(id)
+	if err != nil {
+		return ""
+	}
+	return name
+}

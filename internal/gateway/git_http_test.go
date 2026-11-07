@@ -14,7 +14,7 @@ import (
 )
 
 // newGitServer is the test server with Git hosting on.
-func newGitServer(t *testing.T) (*Server, http.Handler) {
+func newGitServer(t *testing.T, tweak ...func(*Config)) (*Server, http.Handler) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git isn't installed")
@@ -26,6 +26,9 @@ func newGitServer(t *testing.T) (*Server, http.Handler) {
 	}
 	cfg := testConfig()
 	cfg.DataDir, cfg.Git, cfg.GitDir, cfg.GitMaxPush = dir, true, filepath.Join(dir, "git"), 64<<20
+	for _, f := range tweak {
+		f(&cfg)
+	}
 	s := NewServer(cfg, store, testPower(), fstest.MapFS{"index.html": {Data: []byte("x")}})
 	if s.git == nil {
 		t.Fatal("git hosting didn't start")

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,6 +33,11 @@ type actionSpec struct {
 	undo  func(args map[string]string) *ActionReq
 	// Read-only actions (reports) don't go in the audit log or changelog.
 	readOnly bool
+	// local actions run on the gateway itself, not on the server (Git
+	// hosting). They return their undo, which may need values found while
+	// running.
+	local        func(s *Server, ctx context.Context, args map[string]string) (undo *ActionReq, out []string, err error)
+	localTimeout time.Duration
 }
 
 var stayLabels = map[string]string{"30": "for 30 min", "120": "for 2 h", "forever": "until allowed to sleep"}
@@ -183,7 +189,8 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 	clean := ActionReq{Action: q.Action}
 	// "signed" is never taken from the panel: postAction adds it from the
 	// verified cache.
-	for _, k := range []string{"minutes", "name", "app", "store", "options", "tag", "digest", "source", "lines", "confirm"} {
+	for _, k := range []string{"minutes", "name", "app", "store", "options", "tag", "digest", "source", "lines", "confirm",
+		"to", "description", "url", "branch", "ref", "sha", "trash"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}
@@ -216,6 +223,10 @@ func (s *Server) postAction(w http.ResponseWriter, r *http.Request) {
 	clean, spec, err := req.Validate(snap)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if spec.local != nil {
+		s.postLocal(w, r, clean, spec)
 		return
 	}
 	if v := s.power.View(time.Now(), snap); v.State != "awake" {
@@ -286,17 +297,23 @@ func (s *Server) agentResults(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown or expired command", http.StatusNotFound)
 		return
 	}
-	if !c.ReadOnly {
-		e := AuditEntry{Who: c.Who, What: c.Label, UndoAction: c.Undo}
-		if c.Undo != nil {
-			e.Undo = s.label(actionSpecs[c.Undo.Action], c.Undo.Args)
-		}
-		if c.State == "failed" {
-			e.What += " (failed)"
-			e.Result = c.Error
-			e.Undo, e.UndoAction = "", nil
-		}
-		s.record(e)
-	}
+	s.recordCommand(c)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// recordCommand writes a finished command to the audit log.
+func (s *Server) recordCommand(c Command) {
+	if c.ReadOnly {
+		return
+	}
+	e := AuditEntry{Who: c.Who, What: c.Label, UndoAction: c.Undo}
+	if c.Undo != nil {
+		e.Undo = s.label(actionSpecs[c.Undo.Action], c.Undo.Args)
+	}
+	if c.State == "failed" {
+		e.What += " (failed)"
+		e.Result = c.Error
+		e.Undo, e.UndoAction = "", nil
+	}
+	s.record(e)
 }
