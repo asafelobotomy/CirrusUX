@@ -1,7 +1,7 @@
 import type { Component } from 'svelte';
 import * as I from '../icons';
 import type { Route } from '../state/ui.svelte';
-import { has } from '../api.svelte';
+import { has, mode } from '../api.svelte';
 
 export interface NavItem { route: Route; label: string; icon: Component; phase?: string; available?: () => boolean }
 
@@ -11,6 +11,7 @@ export const MAIN_NAV: NavItem[] = [
   { route: 'apps', label: 'CirrusStore', icon: I.Store, available: () => has('apps') },
   { route: 'backups', label: 'Backups', icon: I.Archive, available: () => has('backup') },
   { route: 'storage', label: 'Storage', icon: I.HardDrive, available: () => has('storage') },
+  { route: 'git', label: 'Git', icon: I.GitBranch, available: () => mode.git },
   { route: 'security', label: 'Security', icon: I.ShieldCheck, available: () => has('security') || has('av') || has('egress') },
   { route: 'updates', label: 'Updates', icon: I.RefreshCw, available: () => has('apps') },
   { route: 'media', label: 'Media', icon: I.Film },

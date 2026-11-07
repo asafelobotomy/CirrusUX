@@ -22,6 +22,8 @@ export const mode = $state({
   assistant: { enabled: true, name: 'Assistant' },
   /** Modules the server has (sleep, stay-awake, backup, av, security, egress); demo has all. */
   features: ['sleep', 'stay-awake', 'backup', 'av', 'security', 'egress', 'apps', 'os', 'storage'] as string[],
+  /** Git hosting is on (CIRRUS_GIT on the gateway). */
+  git: true,
   /** The gateway's version, e.g. "0.1.0 (a1b2c3d)". */
   version: '',
   /** Showing answers the service worker saved, because the gateway is out of reach. */
@@ -55,6 +57,7 @@ export const sleeps = (): boolean => mode.setup === 'split' && has('sleep');
 interface Me {
   user: string; dev: boolean; version: string; server: string; serverHost: string; gateway: string;
   setup: 'single' | 'split'; tz: string; wake: boolean; wakeVia?: string; assistant: { enabled: boolean; name: string };
+  git?: boolean;
 }
 
 /** Looks for a gateway. Anything but a proper answer means demo mode. */
@@ -64,7 +67,7 @@ export async function detectGateway(): Promise<boolean> {
     Object.assign(mode, {
       live: true, user: me.user, dev: me.dev, version: me.version, server: me.server, serverHost: me.serverHost,
       gateway: me.gateway, setup: me.setup, tz: me.tz || 'UTC', wake: me.wake, wakeVia: me.wakeVia ?? 'wol', assistant: me.assistant,
-      features: [],
+      features: [], git: me.git ?? false,
     });
     return true;
   } catch {

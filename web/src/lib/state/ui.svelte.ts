@@ -5,16 +5,25 @@ import { mode } from '../api.svelte';
 
 export type Route =
   | 'home' | 'services' | 'apps' | 'backups' | 'storage' | 'security'
-  | 'updates' | 'media' | 'logs' | 'changelog'
+  | 'updates' | 'media' | 'logs' | 'changelog' | 'git'
   | 'settings' | 'theme-editor' | 'gallery';
 
+/** The page is the address's first part; the rest (ui.sub) is for the
+ *  page itself, e.g. #/git/notes/commits. */
 function routeFromHash(): Route {
-  const r = location.hash.replace(/^#\/?/, '') as Route;
+  const r = location.hash.replace(/^#\/?/, '').split('/')[0] as Route;
   return r || 'home';
+}
+
+function subFromHash(): string {
+  const h = location.hash.replace(/^#\/?/, '');
+  const i = h.indexOf('/');
+  return i < 0 ? '' : h.slice(i + 1);
 }
 
 export const ui = $state({
   route: routeFromHash(),
+  sub: subFromHash(),
   paletteOpen: false,
   assistantOpen: false,
   editLayout: false,
@@ -24,10 +33,13 @@ export const ui = $state({
   boardDevice: 'desktop' as Device,
 });
 
-addEventListener('hashchange', () => (ui.route = routeFromHash()));
+addEventListener('hashchange', () => {
+  ui.route = routeFromHash();
+  ui.sub = subFromHash();
+});
 
-export function go(route: Route): void {
-  location.hash = '/' + route;
+export function go(route: Route, sub = ''): void {
+  location.hash = '/' + route + (sub ? '/' + sub : '');
 }
 
 // ---- device class, used for per-device layouts (PLAN §4.3) ----

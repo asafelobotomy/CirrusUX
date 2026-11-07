@@ -10,6 +10,7 @@ import { api, mode, sleeps } from '../api.svelte';
 import { loadChangelog, refreshSoon } from '../sync.svelte';
 import { toast } from './ui.svelte';
 import { BUILT_IN, cleanOptions, sourceLabel, type AppOptions, type CatalogueApp } from '../catalogue';
+import { confirmGit } from '../git/actions';
 import { demoJob, installedApp, loadCatalogue, store, type ArchiveEntry } from './store.svelte';
 
 
@@ -29,11 +30,11 @@ function offline(): boolean {
 }
 
 /** Sends an action to the server through the gateway and waits for the result. */
-export async function sendAction(req: ActionReq, label: string, quiet = false): Promise<Command | null> {
+export async function sendAction(req: ActionReq, label: string, quiet = false, opts: { where?: string; waitMs?: number } = {}): Promise<Command | null> {
   try {
     const { id } = await api<{ id: string }>('/api/actions', { method: 'POST', body: JSON.stringify(req) });
-    if (!quiet) toast(`${label}: sent to ${mode.server}…`, 'info');
-    const deadline = Date.now() + 5 * 60_000;
+    if (!quiet) toast(`${label}: sent to ${opts.where ?? mode.server}…`, 'info');
+    const deadline = Date.now() + (opts.waitMs ?? 5 * 60_000);
     let c: Command;
     do {
       await new Promise((r) => setTimeout(r, 1000));
@@ -41,7 +42,7 @@ export async function sendAction(req: ActionReq, label: string, quiet = false): 
     } while ((c.state === 'pending' || c.state === 'sent') && Date.now() < deadline);
     if (!quiet) {
       if (c.state === 'done') toast(`${label}. Logged to CHANGELOG.`, 'ok');
-      else toast(`${label} failed: ${c.error ?? `no answer from ${mode.server}`}`, 'warn');
+      else toast(`${label} failed: ${c.error ?? `no answer from ${opts.where ?? mode.server}`}`, 'warn');
     }
     void loadChangelog();
     refreshSoon();
@@ -362,11 +363,13 @@ export async function confirmAction(req: ActionReq, o: Opts = {}): Promise<void>
       return;
     }
   }
+  if (req.action.startsWith('git_')) return confirmGit(req, undefined, o);
 }
 
 /** Undo for a changelog entry the gateway logged with an undo action. */
 export function confirmUndo(undo: ActionReq): void {
-  if (power.state !== 'awake') {
+  // Git hosting runs on the gateway: no need to wake the server.
+  if (power.state !== 'awake' && !undo.action.startsWith('git_')) {
     toast(`${mode.server} is asleep. Wake it first, then undo.`, 'warn');
     return;
   }
