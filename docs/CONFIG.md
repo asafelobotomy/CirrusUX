@@ -62,6 +62,10 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `ASSISTANT_NAME` | Grok for xai, Claude for anthropic, else Assistant | Name shown in the UI |
 | `CIRRUS_ASSISTANT_DAILY_TOKENS` | `200000` | Daily token budget |
 | `CIRRUS_DIGEST_ASSISTANT` | off | `1` lets the 08:00 digest ask the assistant for a summary |
+| `CIRRUS_GIT` | off | `1` turns on Git hosting (docs/GIT.md). Needs git 2.30 or newer on the gateway |
+| `CIRRUS_GIT_DIR` | `$CIRRUS_DATA_DIR/git` | Where the Git repositories are kept |
+| `CIRRUS_GIT_URL` | the panel's address | The address in clone URLs, e.g. `https://homeserver.example.ts.net` (no path) |
+| `CIRRUS_GIT_MAX_PUSH_MB` | `1024` | The most one push may send |
 | `CIRRUS_DEV` | off | `1` for development only: no sign-in, wakes are pretend |
 
 ## agent.env

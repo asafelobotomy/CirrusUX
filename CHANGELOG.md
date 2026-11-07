@@ -7,6 +7,17 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Added
+
+- Git hosting, off by default (`CIRRUS_GIT=1`): Git repositories kept by the
+  gateway, so your own server is the remote instead of GitHub. Clone, push
+  and pull over HTTPS (`git http-backend`), signed in through `tailscale
+  serve` or with access tokens made in the panel. The new Git page creates,
+  imports, renames and deletes repositories and browses files, commits,
+  branches, tags and diffs. Every change is confirmed, logged and undoable
+  (deleted repositories wait in Deleted repositories), and works while the
+  server sleeps. See docs/GIT.md.
+
 ### Changed
 
 - UI dependencies updated: Svelte 5.57.3, svelte-check 4.7.8, Vite 8.3.6,

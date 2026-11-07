@@ -12,8 +12,8 @@ Self-hosting web panel (power state and wake, services, backups, security, assis
 - `make store-site KEY=...` signs the CirrusStore catalogue and needs the offline key; don't run it.
 
 ## Layout
-- `cmd/`: `gateway`, `agent`, `helper` (root via sudo), `dockerfilter`, `idle`, `cirrusstore`. `internal/`: the Go packages (`gateway`, `agent`, `helperapi`, `catalogue` with `apps/*.json`, `store`, `assistant`, ...).
-- `web/`: Svelte UI (`src`, `tests`, `icons`; `web/embed.go` embeds `dist`). `deploy/`: `server`, `gateway`, `host` (`cirrusux-setup` and tests), `dev` (demo snapshot), `profiles`. `docs/`: INSTALL, CONFIG, APPS, ROADMAP, PLAN.
+- `cmd/`: `gateway`, `agent`, `helper` (root via sudo), `dockerfilter`, `idle`, `cirrusstore`. `internal/`: the Go packages (`gateway`, `agent`, `helperapi`, `catalogue` with `apps/*.json`, `store`, `assistant`, `githost` (Git hosting, docs/GIT.md), ...).
+- `web/`: Svelte UI (`src`, `tests`, `icons`; `web/embed.go` embeds `dist`). `deploy/`: `server`, `gateway`, `host` (`cirrusux-setup` and tests), `dev` (demo snapshot), `profiles`. `docs/`: INSTALL, CONFIG, APPS, GIT, ROADMAP, PLAN.
 
 ## Conventions
 - Go uses only the standard library: no new Go modules. New npm packages need a good reason and an exact pinned version.
