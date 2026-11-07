@@ -7,6 +7,12 @@ gets a minor version.
 
 ## [Unreleased]
 
+### Changed
+
+- UI dependencies updated: Svelte 5.57.3, svelte-check 4.7.8, Vite 8.3.6,
+  Lucide 1.70.0 and the Inter and JetBrains Mono fonts 5.3.0. TypeScript stays
+  on 6.0.3 because svelte-check does not support TypeScript 7 yet.
+
 ## [0.6.1] - 2026-11-03
 
 ### Fixed
