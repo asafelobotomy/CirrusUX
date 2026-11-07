@@ -63,6 +63,12 @@ type Config struct {
 	// written summary. Off by default: the assistant is otherwise only
 	// called when you use it.
 	DigestAssistant bool
+
+	// Git hosting (docs/GIT.md): off unless Git is set.
+	Git        bool
+	GitDir     string // bare repositories
+	GitURL     string // base for clone URLs; "" uses the address the panel was opened on
+	GitMaxPush int64  // bytes
 }
 
 // AssistantConfig picks an OpenAI-compatible chat API.
@@ -164,6 +170,9 @@ func ConfigFromEnv() (Config, error) {
 	}
 
 	if c.Assistant, err = assistantFromEnv(); err != nil {
+		return c, err
+	}
+	if err := c.gitFromEnv(); err != nil {
 		return c, err
 	}
 	return c, nil

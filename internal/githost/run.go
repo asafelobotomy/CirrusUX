@@ -54,9 +54,6 @@ func New(dir, home string) (*Host, error) {
 	return h, nil
 }
 
-// GitPath is the git binary, for the gateway's http-backend.
-func (h *Host) GitPath() string { return h.git }
-
 func (h *Host) path(name string) string { return filepath.Join(h.Dir, name+".git") }
 
 // env is the whole environment git runs with: nothing from the gateway's
@@ -105,11 +102,15 @@ func (h *Host) runIn(ctx context.Context, dir string, stdout io.Writer, args ...
 // exec runs git and turns its failures into Errors. git's stderr goes to
 // the log only; it can name paths and settings.
 func (h *Host) exec(ctx context.Context, dir string, stdout io.Writer, extraEnv []string, args ...string) error {
+	return h.execIn(ctx, dir, nil, stdout, extraEnv, args...)
+}
+
+func (h *Host) execIn(ctx context.Context, dir string, stdin io.Reader, stdout io.Writer, extraEnv []string, args ...string) error {
 	if err := ctx.Err(); err != nil {
 		return errf(Timeout, "git took too long and was stopped")
 	}
 	cmd := exec.CommandContext(ctx, h.git, args...)
-	cmd.Dir, cmd.Stdout, cmd.Env = dir, stdout, h.env(extraEnv...)
+	cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Env = dir, stdin, stdout, h.env(extraEnv...)
 	var stderr limitWriter
 	stderr.n = 16 << 10
 	cmd.Stderr = &stderr

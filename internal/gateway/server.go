@@ -14,11 +14,13 @@ import (
 	"net/http"
 	"net/netip"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"cirrusux/internal/assistant"
+	"cirrusux/internal/githost"
 	"cirrusux/internal/registry"
 	"cirrusux/internal/snapshot"
 	"cirrusux/internal/version"
@@ -40,6 +42,9 @@ type Server struct {
 	registry *registry.Client
 	// storeClient fetches CirrusStore catalogues; tests replace it.
 	storeClient *http.Client
+	// git is Git hosting, nil when off (docs/GIT.md).
+	git       *githost.Host
+	gitTokens *gitTokenStore
 }
 
 func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
@@ -50,6 +55,14 @@ func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 	if cfg.AssistantEnabled() {
 		a := cfg.Assistant
 		s.assistant = &assistant.Client{Base: a.Base, Model: a.Model, Key: a.Key}
+	}
+	if cfg.Git {
+		h, err := githost.New(cfg.GitDir, filepath.Join(cfg.DataDir, "git-home"))
+		if err != nil {
+			slog.Error("git hosting is off", "err", err)
+		} else {
+			s.git, s.gitTokens = h, openGitTokens(filepath.Join(cfg.DataDir, "git-tokens.json"))
+		}
 	}
 	return s
 }
@@ -80,6 +93,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/updates", s.getUpdates)
 	api.HandleFunc("POST /api/updates/check", s.checkUpdates)
 	mux.Handle("/api/", s.auth(api))
+	if s.git != nil {
+		mux.HandleFunc("/git/", s.gitHTTP)
+	}
 
 	mux.Handle("/", s.auth(http.HandlerFunc(s.static)))
 	return securityHeaders(mux)
