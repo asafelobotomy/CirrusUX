@@ -55,6 +55,9 @@ var settings = [][2]string{
 	{"gc.pruneExpire", "30.days.ago"},
 	{"gc.reflogExpireUnreachable", "30.days.ago"},
 	{"http.receivepack", "true"},
+	// Refs that keep a deleted branch's or tag's commits (refs.go) are
+	// never shown to clients.
+	{"transfer.hideRefs", "refs/cirrus"},
 }
 
 // Exists says whether a repository of that name is there.

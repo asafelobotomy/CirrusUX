@@ -55,16 +55,15 @@ type gitCaller struct {
 	CanPush bool
 }
 
-// gitCaller signs a git client in: the trusted identity header first,
-// then a token as the Basic password.
+// gitCaller signs a git client in: Tailscale's identity header first,
+// then a token as the Basic password. A reverse proxy's header (header
+// mode) isn't believed here: /git/ is usually let through without the
+// proxy's login, so a client could send that header itself. Tailscale
+// sets or removes its header on every request it serves.
 func (s *Server) gitCaller(r *http.Request) (gitCaller, bool) {
 	allowed := func(u string) bool { return u != "" && slices.Contains(s.cfg.AllowedUsers, u) }
-	if s.fromTrustedProxy(r) {
-		header := "Tailscale-User-Login"
-		if s.cfg.Auth == "header" {
-			header = s.cfg.AuthHeader
-		}
-		if u := strings.ToLower(strings.TrimSpace(r.Header.Get(header))); allowed(u) {
+	if s.cfg.Auth == "tailscale" && s.fromTrustedProxy(r) {
+		if u := strings.ToLower(strings.TrimSpace(r.Header.Get("Tailscale-User-Login"))); allowed(u) {
 			return gitCaller{User: u, Label: u, CanPush: true}, true
 		}
 	}
@@ -137,6 +136,9 @@ func (s *Server) gitHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("git http-backend", "repo", repo, "err", err)
 	}
 	if push && r.Method == http.MethodPost && err == nil && code == http.StatusOK {
+		if err := s.git.FixHead(context.WithoutCancel(ctx), repo); err != nil {
+			slog.Warn("git default branch", "repo", repo, "err", err)
+		}
 		s.record(AuditEntry{Who: caller.Label, What: "Pushed to " + repo})
 	}
 }

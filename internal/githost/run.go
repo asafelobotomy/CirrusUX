@@ -122,10 +122,19 @@ func (h *Host) execIn(ctx context.Context, dir string, stdin io.Reader, stdout i
 	if ctx.Err() != nil {
 		return errf(Timeout, "git took too long and was stopped")
 	}
-	slog.Warn("git", "args", args, "err", err, "stderr", strings.TrimSpace(stderr.buf.String()))
+	slog.Warn("git", "args", redactArgs(args), "err", err, "stderr", strings.TrimSpace(stderr.buf.String()))
 	e := errf(Failed, "git failed")
 	e.stderr = stderr.buf.String()
 	return e
+}
+
+// redactArgs removes passwords from URLs in git's arguments, for the log.
+func redactArgs(args []string) []string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = redactURL(a)
+	}
+	return out
 }
 
 // lock lets one change at a time run on a repository.

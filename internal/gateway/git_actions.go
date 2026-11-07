@@ -174,7 +174,16 @@ func (s *Server) postLocal(w http.ResponseWriter, r *http.Request, req ActionReq
 		http.Error(w, "Git hosting is off", http.StatusNotFound)
 		return
 	}
-	c := &Command{ActionReq: req, Label: s.label(spec, req.Args), Who: userOf(r), ReadOnly: spec.readOnly}
+	// The stored command (shown by /api/actions) never holds a password
+	// from an import address; the runner gets the address as given.
+	shown := ActionReq{Action: req.Action, Args: map[string]string{}}
+	for k, v := range req.Args {
+		if k == "url" {
+			v = cleanURL(v)
+		}
+		shown.Args[k] = v
+	}
+	c := &Command{ActionReq: shown, Label: s.label(spec, req.Args), Who: userOf(r), ReadOnly: spec.readOnly}
 	s.queue.AddLocal(c)
 	go s.runLocal(c.ID, req.Args, spec)
 	writeJSONStatus(w, http.StatusAccepted, map[string]string{"id": c.ID})

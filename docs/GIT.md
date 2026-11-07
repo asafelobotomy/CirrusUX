@@ -73,7 +73,10 @@ git push homeserver main
   oauth2-proxy), git can't get past the login page. Make an **access token**
   on the Git page and use it as the password when git asks. The user name
   can be anything. Let the reverse proxy pass `/git/` through without its
-  login; the gateway checks the token itself.
+  login; the gateway checks the token itself. On `/git/` the gateway never
+  believes the proxy's identity header (`CIRRUS_AUTH_HEADER`), since a
+  client could send it on a route the proxy doesn't log in: only tokens
+  count there.
 
 Tokens can **read and write** or **read only**. A token is shown once, when
 you make it; only a hash of it is kept. Revoke a token on the Git page when
@@ -112,7 +115,7 @@ Changelog, with an **Undo** where one is possible:
 | Rename | Rename it back |
 | Delete | Restore it from Deleted repositories |
 | Description, default branch | Set the old one again |
-| Delete a branch or tag | Put it back at the same commit. Repositories keep unreachable commits for at least 30 days, so this works for at least that long |
+| Delete a branch or tag | Put it back at the same commit, for 30 days: a hidden ref keeps its commits that long, then goes on a later delete |
 | Delete for good (from Deleted repositories) | None. You type the repository's name to confirm |
 
 Pushes are written to the Changelog too, with who pushed (or which token).

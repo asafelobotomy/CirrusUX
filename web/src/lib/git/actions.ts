@@ -67,7 +67,7 @@ export function confirmGit(req: ActionReq, onDone?: () => void, o: { source?: 'a
   ask({
     ...o,
     ...c,
-    command: `${req.action} ${Object.entries(args).filter(([k]) => k !== 'confirm').map(([k, v]) => `${k}=${v}`).join(' ')}`,
+    command: `${req.action} ${Object.entries(args).filter(([k]) => k !== 'confirm').map(([k, v]) => `${k}=${k === 'url' ? v.replace(/\/\/[^/@]+@/, '//') : v}`).join(' ')}`,
     run: () => {
       if (!mode.live) {
         toast(`${c.changelog} (demo: nothing changed)`, 'info');

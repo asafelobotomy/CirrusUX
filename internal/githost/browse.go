@@ -59,6 +59,14 @@ func (h *Host) resolve(ctx context.Context, name, ref string) (sha string, empty
 			return "", true, nil
 		}
 		ref = "HEAD"
+		if _, err := h.run(ctx, p, 4096, "rev-parse", "--verify", "--quiet", "HEAD^{commit}"); err != nil {
+			// HEAD names a branch nobody pushed: show the newest one.
+			out, err := h.run(ctx, p, 4096, "for-each-ref", "--sort=-committerdate", "--count=1", "--format=%(refname)", "refs/heads")
+			if err != nil {
+				return "", false, err
+			}
+			ref = strings.TrimSpace(string(out))
+		}
 	} else if validBranch(ref) != nil && validCommit(ref) != nil {
 		return "", false, errf(Invalid, "%q isn't a usable branch, tag or commit", ref)
 	}

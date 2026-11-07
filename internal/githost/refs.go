@@ -2,7 +2,9 @@ package githost
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // splitRef checks a full branch or tag ref and returns its kind ("branch"
@@ -52,10 +54,41 @@ func (h *Host) DeleteRef(ctx context.Context, name, ref string) (string, error) 
 			return "", errf(Invalid, "%s is the default branch. Pick another default first", short)
 		}
 	}
+	// Deleting a ref deletes its reflog too, so nothing would hold its
+	// commits through a gc. A hidden ref keeps them for keepFor.
+	if err := h.pruneKeeps(ctx, p); err != nil {
+		return "", err
+	}
+	keep := "refs/cirrus/deleted/" + strconv.FormatInt(h.now().Unix(), 10) + "/" + strings.TrimPrefix(ref, "refs/")
+	if _, err := h.run(ctx, p, 4096, "update-ref", keep, sha); err != nil {
+		return "", err
+	}
 	if _, err := h.run(ctx, p, 4096, "update-ref", "-d", ref, sha); err != nil {
 		return "", err
 	}
 	return sha, nil
+}
+
+// keepFor is how long a deleted branch or tag can be restored.
+const keepFor = 30 * 24 * time.Hour
+
+// pruneKeeps drops keeping refs older than keepFor.
+func (h *Host) pruneKeeps(ctx context.Context, p string) error {
+	out, err := h.run(ctx, p, refsLimit, "for-each-ref", "--format=%(refname)", "refs/cirrus/deleted")
+	if err != nil {
+		return err
+	}
+	for _, ref := range strings.Fields(string(out)) {
+		stamp, _, _ := strings.Cut(strings.TrimPrefix(ref, "refs/cirrus/deleted/"), "/")
+		n, err := strconv.ParseInt(stamp, 10, 64)
+		if err != nil || h.now().Sub(time.Unix(n, 0)) <= keepFor {
+			continue
+		}
+		if _, err := h.run(ctx, p, 4096, "update-ref", "-d", ref); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RestoreRef puts a deleted branch or tag back at sha, if that is still
