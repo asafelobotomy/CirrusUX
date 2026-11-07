@@ -92,6 +92,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/apps/preview", s.previewApp)
 	api.HandleFunc("GET /api/updates", s.getUpdates)
 	api.HandleFunc("POST /api/updates/check", s.checkUpdates)
+	s.gitRoutes(api)
 	mux.Handle("/api/", s.auth(api))
 	if s.git != nil {
 		mux.HandleFunc("/git/", s.gitHTTP)
@@ -215,6 +216,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		"server": c.ServerName, "serverHost": c.ServerHost, "gateway": c.GatewayName,
 		"setup": c.Setup, "tz": c.TZName, "wake": s.power.CanWake(), "wakeVia": c.Wake,
 		"assistant": map[string]any{"enabled": c.AssistantEnabled(), "name": c.Assistant.Name},
+		"git":       s.git != nil,
 	})
 }
 
