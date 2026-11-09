@@ -1,0 +1,62 @@
+{
+  "id": "tinymediamanager",
+  "name": "tinyMediaManager",
+  "description": "Tidy your film and series library: names, artwork and metadata for Jellyfin.",
+  "website": "https://www.tinymediamanager.org",
+  "icon": "Film",
+  "color": "#e56b6f",
+  "group": "Manage",
+  "image": "docker.io/tinymediamanager/tinymediamanager",
+  "tag": "5.3.5",
+  "digest": "sha256:26e80b1b1c524bd5d849b1b7510063b25d5efafa135a4bf450e66efe242bb8c6",
+  "ports": [
+    {
+      "name": "web",
+      "container": 4000,
+      "host": 4000,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "path": "/data",
+      "kind": "config"
+    },
+    {
+      "name": "media",
+      "path": "/media",
+      "kind": "media",
+      "writable": true,
+      "label": "Media folder"
+    }
+  ],
+  "env": [
+    {
+      "name": "USER_ID",
+      "value": "{{uid}}"
+    },
+    {
+      "name": "GROUP_ID",
+      "value": "{{gid}}"
+    },
+    {
+      "name": "UMASK",
+      "value": "0002"
+    },
+    {
+      "name": "ALLOW_DIRECT_VNC",
+      "value": "false"
+    },
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    }
+  ],
+  "check": {
+    "port": "web",
+    "path": "/"
+  },
+  "minMemoryMB": 1024,
+  "notes": "It runs as a desktop in the browser, with no password of its own: keep it to your LAN and tailnet. It renames and writes files in /media as the apps' user (set APPS_MEDIA_UID and APPS_MEDIA_GID to your media's owner). Turn off its update check under Settings → General → Check for updates: CirrusStore updates it."
+}

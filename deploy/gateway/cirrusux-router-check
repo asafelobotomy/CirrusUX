@@ -1,0 +1,100 @@
+#!/bin/sh
+# /usr/local/sbin/cirrusux-router-check on the gateway machine — root:root,
+# mode 755. Talks to a TR-064 router (a FRITZ!Box, for one) about the
+# server, under two names:
+#
+#   cirrusux-router-check   is the server on the network? Prints "online"
+#                           or "offline" (CIRRUS_POWER_CHECK_CMD)
+#   cirrusux-router-wake    asks the router to send the server a magic
+#                           packet (CIRRUS_WAKE=command, CIRRUS_WAKE_CMD);
+#                           install it as a symlink to this file
+#
+# The gateway runs them through one sudoers rule each but never sees the
+# router password: that's in a root-only file, read here.
+#
+# The file (root:root 600) holds:
+#   ROUTER_URL=http://fritz.box:49000
+#   ROUTER_USER=...
+#   ROUTER_PASSWORD=...
+#   SERVER_MAC=aa:bb:cc:dd:ee:ff
+#   ROUTER_PROXY=socks5h://localhost:1055   optional: reach the router
+#                           through a SOCKS5 or HTTP proxy (socks5h://,
+#                           socks5:// or http://), e.g. a machine that's
+#                           only on the tailnet in userspace mode
+set -eu
+
+SECRETS=${CIRRUS_ROUTER_ENV:-/etc/cirrusux/router.env}
+case "$(basename "$0")" in
+*-wake) mode=wake ;;
+*) mode=check ;;
+esac
+
+if [ "$#" -ne 0 ]; then
+	echo "$(basename "$0") takes no arguments" >&2
+	exit 64
+fi
+# Owned by whoever runs this (root, through sudo) and readable by nobody else.
+if [ "$(stat -c '%u %a' "$SECRETS")" != "$(id -u) 600" ]; then
+	echo "$SECRETS must belong to $(id -un) with mode 600" >&2
+	exit 1
+fi
+ROUTER_PROXY=
+# shellcheck disable=SC1090 # the settings file
+. "$SECRETS"
+: "${ROUTER_URL:=http://fritz.box:49000}" "${ROUTER_USER:?}" "${ROUTER_PASSWORD:?}" "${SERVER_MAC:?}"
+case "$SERVER_MAC" in
+*[!0-9A-Fa-f:]* | "") echo "SERVER_MAC must be a MAC address" >&2; exit 1 ;;
+esac
+case "$ROUTER_PROXY" in
+"" | socks5h://* | socks5://* | http://*) ;;
+*) echo "ROUTER_PROXY must start with socks5h://, socks5:// or http://" >&2; exit 1 ;;
+esac
+
+case "$ROUTER_USER$ROUTER_PASSWORD$ROUTER_PROXY" in *"
+"*) echo "ROUTER_USER, ROUTER_PASSWORD and ROUTER_PROXY must be on one line" >&2; exit 1 ;;
+esac
+# curl's config file quotes values: a backslash or a quote in them must be
+# escaped, or the login breaks.
+quote() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
+
+# soap ACTION: one call to the router's Hosts service about SERVER_MAC.
+# The password (and a proxy, which may hold one too) goes to curl on stdin,
+# never on its command line, where other users could read it in the
+# process list.
+soap() {
+	body='<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+<s:Body><u:'"$1"' xmlns:u="urn:dslforum-org:service:Hosts:1">
+<NewMACAddress>'"$SERVER_MAC"'</NewMACAddress>
+</u:'"$1"'></s:Body></s:Envelope>'
+	{
+		printf 'user = "%s:%s"\n' "$(quote "$ROUTER_USER")" "$(quote "$ROUTER_PASSWORD")"
+		[ -z "$ROUTER_PROXY" ] || printf 'proxy = "%s"\n' "$(quote "$ROUTER_PROXY")"
+	} | curl -sS --max-time 10 --anyauth -K - \
+		-H 'Content-Type: text/xml; charset="utf-8"' \
+		-H "SoapAction: urn:dslforum-org:service:Hosts:1#$1" \
+		--data "$body" "$ROUTER_URL/upnp/control/hosts"
+}
+
+if [ "$mode" = wake ]; then
+	reply=$(soap X_AVM-DE_WakeOnLANByMACAddress)
+	case "$reply" in
+	*WakeOnLANByMACAddressResponse*) echo "wake sent" ;;
+	*)
+		echo "the router didn't send the wake" >&2
+		exit 1
+		;;
+	esac
+	exit 0
+fi
+
+reply=$(soap GetSpecificHostEntry)
+case "$reply" in
+*"<NewActive>1</NewActive>"*) echo online ;;
+*"<NewActive>0</NewActive>"*) echo offline ;;
+*NoSuchEntryInArray* | *714*) echo offline ;; # the router doesn't know it at all
+*)
+	echo "unexpected answer from the router" >&2
+	exit 1
+	;;
+esac

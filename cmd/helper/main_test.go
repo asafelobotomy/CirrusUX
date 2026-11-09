@@ -1,0 +1,253 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"cirrusux/internal/helperapi"
+)
+
+func TestTailFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log")
+	var b strings.Builder
+	for i := range 10 {
+		fmt.Fprintf(&b, "line %d\n", i)
+	}
+	os.WriteFile(path, []byte(b.String()), 0o600)
+	got, err := tailFile(path, 3)
+	if err != nil || strings.Join(got.Lines, ",") != "line 7,line 8,line 9" {
+		t.Errorf("tail = %v, %v", got.Lines, err)
+	}
+	if got, _ := tailFile(path, 50); len(got.Lines) != 10 {
+		t.Errorf("short file: %d lines", len(got.Lines))
+	}
+	// Before the first scan or check, there's no log yet: nothing to show.
+	if got, err := tailFile(filepath.Join(t.TempDir(), "missing"), 3); err != nil || got.Lines == nil || len(got.Lines) != 0 {
+		t.Errorf("missing log = %v, %v; want no lines", got.Lines, err)
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	if truncate("abcdef", 3) != "abc" || truncate("ab", 3) != "ab" {
+		t.Error("truncate")
+	}
+}
+
+// Only finished system archives are listed: not .partial files, other
+// names or directories.
+func TestBackupList(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"atlas-system-20261101.tar.zst.age", "atlas-system-20261102.tar.zst.age.partial", "notes.txt"} {
+		os.WriteFile(filepath.Join(dir, name), []byte("12345"), 0o600)
+	}
+	os.Mkdir(filepath.Join(dir, "atlas-system-dir"), 0o700)
+	l, err := backupList(dir, "atlas-system-")
+	if err != nil || len(l.Files) != 1 || l.Files[0].Name != "atlas-system-20261101.tar.zst.age" || l.Files[0].Bytes != 5 || l.Files[0].MTime == 0 {
+		t.Errorf("list = %+v, %v", l.Files, err)
+	}
+	// The folder is made by the first backup.
+	if l, err := backupList(filepath.Join(dir, "not-yet"), "atlas-system-"); err != nil || len(l.Files) != 0 {
+		t.Errorf("missing folder = %+v, %v", l.Files, err)
+	}
+}
+
+func TestTimeoutFor(t *testing.T) {
+	if timeoutFor(helperapi.CmdEgressReport) != 150*time.Second || timeoutFor(helperapi.CmdIdleLog) != 30*time.Second {
+		t.Error("timeouts")
+	}
+}
+
+func TestMain(m *testing.M) {
+	hasApt = func() bool { return false } // whatever this machine has
+	os.Exit(m.Run())
+}
+
+func writeConf(t *testing.T, body string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "helper.env")
+	os.WriteFile(p, []byte(body), 0o600)
+	ownerCheck = func(*os.File) error { return nil }
+	t.Cleanup(func() { ownerCheck = rootOnly })
+	return p
+}
+
+func TestLoadConf(t *testing.T) {
+	c, err := loadConf(writeConf(t, `# comment
+IDLE_STATE_DIR=/run/idle
+IDLE_LOG="/var/log/idle.log"
+STAY_AWAKE_FILE=/run/stay-awake
+STAY_AWAKE_BIN=/usr/local/bin/stay-awake
+ALLOW_SLEEP_BIN=/usr/local/bin/allow-sleep
+BACKUP_UNIT=system-backup.service
+FAIL2BAN_JAIL=sshd
+FIREWALL_CHECKS=DOCKER-USER:LOCKDOWN INPUT-LAN:DROP inet/cirrusux/input:drop
+EGRESS_REPORT=
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"sleep", "stay-awake", "backup", "security"}
+	if got := c.features().Modules; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("features = %v, want %v", got, want)
+	}
+	if len(c.FirewallChecks) != 3 || c.FirewallChecks[1] != (firewallCheck{"INPUT-LAN", "DROP"}) ||
+		strings.Join(c.FirewallChecks[2].chainCommand(), " ") != "nft list chain inet cirrusux input" {
+		t.Errorf("firewall checks = %+v", c.FirewallChecks)
+	}
+	if c, err := loadConf(filepath.Join(t.TempDir(), "missing")); err != nil || len(c.features().Modules) != 0 {
+		t.Errorf("no file should mean no modules: %+v %v", c, err)
+	}
+}
+
+// Paths must be absolute and clean, and words can't smuggle options.
+func TestLoadConfRejects(t *testing.T) {
+	for _, body := range []string{
+		"IDLE_LOG=relative/log",
+		"IDLE_LOG=/var/log/../../etc/shadow",
+		"BACKUP_UNIT=--help",
+		"BACKUP_UNIT=a;b",
+		"FIREWALL_CHECKS=DOCKER-USER",
+		"FIREWALL_CHECKS=inet/cirrusux:drop",
+		"FIREWALL_CHECKS=inet/../input:drop",
+		"SHELL=/bin/sh",
+	} {
+		if _, err := loadConf(writeConf(t, body)); err == nil {
+			t.Errorf("%q should be rejected", body)
+		}
+	}
+}
+
+// Real config files must belong to root; a file the test user owns fails.
+func TestRootOnly(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "helper.env")
+	os.WriteFile(p, nil, 0o600)
+	f, _ := os.Open(p)
+	defer f.Close()
+	if os.Getuid() != 0 && rootOnly(f) == nil {
+		t.Error("a file owned by a normal user passed")
+	}
+}
+
+// The shipped example must load, and switch no module on.
+func TestShippedConfigs(t *testing.T) {
+	ownerCheck = func(*os.File) error { return nil }
+	t.Cleanup(func() { ownerCheck = rootOnly })
+	if c, err := loadConf("../../deploy/server/helper.env.example"); err != nil || len(c.features().Modules) != 0 {
+		t.Errorf("example: %v %v", c.features(), err)
+	}
+}
+
+// Setup modules drop their own files in helper.d; they add to helper.env.
+func TestLoadAll(t *testing.T) {
+	main := writeConf(t, "IDLE_LOG=/var/log/idle.log\nFIREWALL_CHECKS=DOCKER-USER:DROP\nMEDIA_ROOTS=/srv/media\n")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "50-backup.env"), []byte("BACKUP_UNIT=cirrusux-backup.service\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "60-security.env"), []byte("FIREWALL_CHECKS=inet/cirrusux/input:drop DOCKER-USER:DROP\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "70-apps.env"), []byte("MEDIA_ROOTS=/srv/media /srv/music\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignored"), 0o644)
+	c, err := loadAll(main, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Lists add up, and something given in two files counts once.
+	if c.BackupUnit != "cirrusux-backup.service" || c.IdleLog == "" || len(c.FirewallChecks) != 2 || len(c.MediaRoots) != 2 {
+		t.Errorf("merged = %+v", c)
+	}
+	os.WriteFile(filepath.Join(dir, "70-bad.env"), []byte("SHELL=/bin/sh\n"), 0o644)
+	if _, err := loadAll(main, dir); err == nil {
+		t.Error("a bad helper.d file should fail the whole load")
+	}
+}
+
+// The agent writes the requests folder; root reads it. Only the named job's
+// file is read, and a link (to the file or in place of the folder), a big
+// or odd file, or a bad job ID gets nowhere. What was seen is removed.
+func TestReadRequest(t *testing.T) {
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "requests")
+	os.Mkdir(dir, 0o700)
+	os.WriteFile(filepath.Join(dir, "aaaa1111.json"), []byte(`{"first":1}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "bbbb2222.json"), []byte(`{"second":1}`), 0o644)
+	if b, err := readRequest(dir, "bbbb2222"); err != nil || string(b) != `{"second":1}` {
+		t.Errorf("got %s %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "bbbb2222.json")); err == nil {
+		t.Error("request left behind")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "aaaa1111.json")); err != nil {
+		t.Error("another job's request was touched")
+	}
+	if _, err := readRequest(dir, "../../etc/passwd"); err == nil {
+		t.Error("a path as a job ID")
+	}
+	if _, err := readRequest(dir, "cccc3333"); err == nil {
+		t.Error("a missing request")
+	}
+
+	// The folder swapped for a link to somewhere root keeps files.
+	elsewhere := t.TempDir()
+	os.WriteFile(filepath.Join(elsewhere, "dddd4444.json"), []byte(`{"precious":1}`), 0o644)
+	os.RemoveAll(dir)
+	os.Symlink(elsewhere, dir)
+	if _, err := readRequest(dir, "dddd4444"); err == nil {
+		t.Error("followed a linked folder")
+	}
+	if _, err := os.Stat(filepath.Join(elsewhere, "dddd4444.json")); err != nil {
+		t.Error("removed a file through a linked folder")
+	}
+
+	os.Remove(dir)
+	os.Mkdir(dir, 0o700)
+	os.Symlink("/etc/shadow", filepath.Join(dir, "eeee5555.json"))
+	if _, err := readRequest(dir, "eeee5555"); err == nil {
+		t.Error("followed a linked file")
+	}
+	os.WriteFile(filepath.Join(dir, "ffff6666.json"), make([]byte, 17<<10), 0o644)
+	if _, err := readRequest(dir, "ffff6666"); err == nil {
+		t.Error("read a big file")
+	}
+}
+
+func TestHostGroups(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "group")
+	os.WriteFile(p, []byte("root:x:0:\nvideo:x:44:jellyfin\nrender:x:105:\nbroken\n"), 0o644)
+	g := hostGroups(p)
+	if g["video"] != 44 || g["render"] != 105 || len(g) != 3 {
+		t.Errorf("groups = %v", g)
+	}
+}
+
+func TestAppsConfig(t *testing.T) {
+	c, err := loadConf(writeConf(t, "CONTAINER_RUNTIME=podman\nAPPS_DIR=/srv/cirrusux/apps\nAPPS_USER=cirrusux-apps\nMEDIA_ROOTS=/srv/media /mnt\n"))
+	if err != nil || !slices.Contains(c.features().Modules, "apps") || len(c.MediaRoots) != 2 {
+		t.Errorf("%+v %v", c, err)
+	}
+	for _, bad := range []string{"CONTAINER_RUNTIME=lxc", "MEDIA_ROOTS=/srv/../etc", "APPS_DIR=apps", "APPS_BIND=0.0.0.0;id"} {
+		if _, err := loadConf(writeConf(t, bad)); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
+func TestPlaces(t *testing.T) {
+	c, err := loadConf(writeConf(t, "APPS_DIR=/srv/cirrusux/apps\nMEDIA_ROOTS=/srv/media\nBACKUP_UNIT=b.service\nBACKUP_DIR=/srv/backups\nBACKUP_PREFIX=atlas-system-\nSTORAGE_ROOTS=/home\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.places()
+	var got []string
+	for _, r := range p.Roots {
+		got = append(got, r.Label+"="+r.Path)
+	}
+	if strings.Join(got, ",") != "Media=/srv/media,Apps=/srv/cirrusux/apps,Backups=/srv/backups,Archive=/srv/cirrusux/archive,Folder=/home" || p.BackupPrefix != "atlas-system-" {
+		t.Errorf("places = %v %+v", got, p)
+	}
+	if !entryRe.MatchString("navidrome-20261101-120000") || entryRe.MatchString("../etc") || entryRe.MatchString("a b") {
+		t.Error("entry names")
+	}
+}

@@ -1,0 +1,49 @@
+{
+  "id": "home-assistant",
+  "name": "Home Assistant",
+  "description": "Home automation that keeps your devices local.",
+  "website": "https://www.home-assistant.io",
+  "icon": "House",
+  "color": "#18bcf2",
+  "group": "Home",
+  "image": "docker.io/homeassistant/home-assistant",
+  "tag": "2026.10.4",
+  "digest": "sha256:23f4dfbb69ce76315dbc4de7915504f1c2dcecd7ca2648113a493a385972e133",
+  "ports": [
+    {
+      "name": "web",
+      "container": 8123,
+      "host": 8123,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "config",
+      "path": "/config",
+      "kind": "config"
+    }
+  ],
+  "devices": [
+    {
+      "path": "/dev/ttyUSB0",
+      "optional": true,
+      "why": "A Zigbee or Z-Wave USB stick",
+      "hostGroups": [
+        "dialout"
+      ]
+    }
+  ],
+  "env": [
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    }
+  ],
+  "check": {
+    "port": "web",
+    "path": "/manifest.json"
+  },
+  "minMemoryMB": 512,
+  "notes": "It runs without host networking, so devices on your network aren't found by themselves: add them by address."
+}

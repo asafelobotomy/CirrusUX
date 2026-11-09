@@ -1,0 +1,62 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "description": "Stream your films, series and music to any device.",
+  "website": "https://jellyfin.org",
+  "icon": "Clapperboard",
+  "color": "#a35ee8",
+  "group": "Watch & listen",
+  "image": "docker.io/jellyfin/jellyfin",
+  "tag": "12.4.20261026-211555",
+  "digest": "sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+  "ports": [
+    {
+      "name": "web",
+      "container": 8096,
+      "host": 8096,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "config",
+      "path": "/config",
+      "kind": "config"
+    },
+    {
+      "name": "cache",
+      "path": "/cache",
+      "kind": "cache"
+    },
+    {
+      "name": "media",
+      "path": "/media",
+      "kind": "media",
+      "label": "Media folder"
+    }
+  ],
+  "devices": [
+    {
+      "path": "/dev/dri",
+      "optional": true,
+      "why": "Hardware transcoding with the CPU's graphics",
+      "hostGroups": [
+        "render",
+        "video"
+      ]
+    }
+  ],
+  "env": [
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    }
+  ],
+  "runAsUser": true,
+  "check": {
+    "port": "web",
+    "path": "/health"
+  },
+  "minMemoryMB": 1024,
+  "notes": "The first visit walks you through creating the admin account and adding libraries from /media."
+}

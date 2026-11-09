@@ -1,0 +1,37 @@
+# /etc/systemd/system/cirrusux-agent.service on the server
+[Unit]
+Description=CirrusUX agent (pushes snapshots to the gateway)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=cirrusux
+Group=cirrusux
+EnvironmentFile=/etc/cirrusux/agent.env
+ExecStart=/usr/local/bin/cirrusux-agent
+Restart=on-failure
+RestartSec=30s
+Nice=10
+# App-store requests wait here for the helper (cirrusux-helper app-job).
+RuntimeDirectory=cirrusux-agent
+RuntimeDirectoryMode=0700
+# The agent calls the helper through sudo, so NoNewPrivileges and capability
+# limits would break it; keep the protections that don't. The helper's
+# reads run inside this sandbox too, and the stay-awake scripts are the
+# owner's, so /proc/sys, the clock and namespaces are left alone; jobs that
+# change the server run in their own units (systemd-run), outside it.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

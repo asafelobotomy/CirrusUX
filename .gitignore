@@ -1,0 +1,11 @@
+/bin/
+/.dev-data/
+/web/node_modules/
+/web/dist/
+*.env
+!*.env.example
+/helper
+/.claude/
+/deploy/profiles/*
+!/deploy/profiles/example/
+/dist/

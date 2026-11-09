@@ -1,0 +1,5 @@
+# The official CirrusStore signing key's public half, one
+# "cirrusstore-key v1 <name> <base64>" line per key. The signing key itself
+# is kept offline by the publisher (see docs/APPS.md, "The official key").
+# With no key here, the official source is listed but not fetched.
+cirrusstore-key v1 cirrusstore c/h0in4aqXFsDhqv0PwvnOWO1h3j/ntoJonUI1uaF3s=

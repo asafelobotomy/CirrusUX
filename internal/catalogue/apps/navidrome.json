@@ -1,0 +1,56 @@
+{
+  "id": "navidrome",
+  "name": "Navidrome",
+  "description": "Your music collection, streamed to the browser and Subsonic apps.",
+  "website": "https://www.navidrome.org",
+  "icon": "Music",
+  "color": "#3fa7ff",
+  "group": "Watch & listen",
+  "image": "docker.io/deluan/navidrome",
+  "tag": "0.64.2",
+  "digest": "sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52",
+  "ports": [
+    {
+      "name": "web",
+      "container": 4533,
+      "host": 4533,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "path": "/data",
+      "kind": "data"
+    },
+    {
+      "name": "music",
+      "path": "/music",
+      "kind": "media",
+      "label": "Music folder"
+    }
+  ],
+  "env": [
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    },
+    {
+      "name": "ND_SCANSCHEDULE",
+      "choices": [
+        "@every 1h",
+        "@every 24h",
+        "0"
+      ],
+      "default": "@every 24h",
+      "label": "Scan the music folder"
+    }
+  ],
+  "runAsUser": true,
+  "check": {
+    "port": "web",
+    "path": "/ping"
+  },
+  "minMemoryMB": 256,
+  "notes": "The first visit creates the admin account."
+}

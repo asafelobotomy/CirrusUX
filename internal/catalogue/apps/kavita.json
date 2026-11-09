@@ -1,0 +1,45 @@
+{
+  "id": "kavita",
+  "name": "Kavita",
+  "description": "A reading server for books, comics and manga.",
+  "website": "https://www.kavitareader.com",
+  "icon": "BookOpen",
+  "color": "#4cc38a",
+  "group": "Watch & listen",
+  "image": "docker.io/jvmilazz0/kavita",
+  "tag": "0.9.1",
+  "digest": "sha256:31181a32f0dda73cae68721867028a7253d57881b58bea5754cd9e578e75421a",
+  "ports": [
+    {
+      "name": "web",
+      "container": 5000,
+      "host": 5000,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "config",
+      "path": "/kavita/config",
+      "kind": "config"
+    },
+    {
+      "name": "books",
+      "path": "/books",
+      "kind": "media",
+      "label": "Books folder"
+    }
+  ],
+  "env": [
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    }
+  ],
+  "check": {
+    "port": "web",
+    "path": "/api/health"
+  },
+  "minMemoryMB": 256,
+  "notes": "The first visit creates the admin account; add libraries from /books."
+}

@@ -1,0 +1,305 @@
+{
+  "host": "homeserver",
+  "protocol": 1,
+  "actions": ["allow_sleep", "app_install", "app_remove", "app_update", "archive_delete", "backup_run", "container_restart", "container_start", "container_stop", "egress_report", "logs", "os_check", "os_upgrade", "stay_awake", "storage_scan"],
+  "takenAt": "2026-11-01T20:40:00Z",
+  "bootAt": "2026-10-30T09:00:00Z",
+  "power": {
+    "since": "2026-11-01T20:20:00Z",
+    "lastActivity": "2026-11-01T20:28:00Z",
+    "idleMin": 30,
+    "graceMin": 15,
+    "reasons": [],
+    "nextWakes": [
+      {
+        "at": "2026-11-02T03:30:00Z",
+        "unit": "system-backup.timer"
+      },
+      {
+        "at": "2026-11-08T04:30:00Z",
+        "unit": "clamav-weekly-scan.timer"
+      }
+    ]
+  },
+  "containers": [
+    {
+      "name": "jellyfin",
+      "image": "jellyfin/jellyfin",
+      "tag": "10.11.11",
+      "state": "running",
+      "health": "healthy",
+      "status": "Up 20 minutes (healthy)",
+      "ports": [
+        8096
+      ],
+      "upSince": "2026-11-01T20:20:00Z"
+    },
+    {
+      "name": "navidrome",
+      "image": "deluan/navidrome",
+      "tag": "0.64.2",
+      "state": "running",
+      "health": "running",
+      "status": "Up 20 minutes",
+      "ports": [
+        40108
+      ],
+      "upSince": "2026-11-01T20:20:00Z"
+    },
+    {
+      "name": "audiobookshelf",
+      "image": "advplyr/audiobookshelf",
+      "tag": "2.37.2",
+      "state": "running",
+      "health": "running",
+      "status": "Up 20 minutes",
+      "ports": [
+        40096
+      ],
+      "upSince": "2026-11-01T20:20:00Z"
+    },
+    {
+      "name": "kavita",
+      "image": "lscr.io/linuxserver/kavita",
+      "tag": "v0.9.1.4-ls130",
+      "state": "running",
+      "health": "running",
+      "status": "Up 20 minutes",
+      "ports": [
+        5000
+      ],
+      "upSince": "2026-11-01T20:20:00Z"
+    },
+    {
+      "name": "tinymediamanager",
+      "image": "tinymediamanager/tinymediamanager",
+      "tag": "5.3.5",
+      "state": "running",
+      "health": "running",
+      "status": "Up 20 minutes",
+      "ports": [
+        4000
+      ],
+      "upSince": "2026-11-01T20:20:00Z"
+    },
+    {
+      "name": "musicbrainz-picard-1",
+      "image": "mikenye/picard",
+      "tag": "2.13.3",
+      "state": "running",
+      "health": "running",
+      "status": "Up 20 minutes",
+      "ports": [
+        5800
+      ],
+      "upSince": "2026-11-01T20:20:00Z"
+    },
+    {
+      "name": "nginx_server",
+      "image": "nginx",
+      "tag": "latest",
+      "state": "exited",
+      "health": "exited",
+      "status": "Exited (0) 2 days ago",
+      "ports": []
+    }
+  ],
+  "backups": {
+    "files": [
+      {
+        "name": "homeserver-system-2026-11-01_0330.tar.zst.age",
+        "at": "2026-11-01T03:31:00Z",
+        "bytes": 2100000000,
+        "encrypted": true
+      },
+      {
+        "name": "homeserver-system-2026-10-31_0331.tar.zst.age",
+        "at": "2026-10-31T03:32:00Z",
+        "bytes": 2100000000,
+        "encrypted": true
+      },
+      {
+        "name": "homeserver-system-2026-10-30_0935.tar.zst",
+        "at": "2026-10-30T09:36:00Z",
+        "bytes": 2300000000,
+        "encrypted": false
+      }
+    ],
+    "lastRun": {
+      "start": "2026-11-01T03:30:53Z",
+      "end": "2026-11-01T03:31:33Z",
+      "ok": true,
+      "summary": "OK 2.0G"
+    }
+  },
+  "disk": {
+    "mount": "/mnt/media",
+    "totalBytes": 1900000000000,
+    "freeBytes": 554000000000,
+    "linkMbps": 480
+  },
+  "temps": [
+    36,
+    35,
+    35,
+    34,
+    34,
+    35,
+    38,
+    41,
+    44,
+    43,
+    40,
+    39,
+    38,
+    39,
+    41,
+    46,
+    52,
+    49,
+    44,
+    42,
+    41,
+    41,
+    40,
+    41
+  ],
+  "security": {
+    "banned": 0,
+    "clamav": {
+      "at": "2026-11-01T05:11:40Z",
+      "files": 24098,
+      "infected": 0
+    },
+    "firewall": [
+      {
+        "chain": "DOCKER-USER",
+        "ok": true
+      },
+      {
+        "chain": "INPUT-LAN-ONLY",
+        "ok": true
+      }
+    ]
+  },
+  "timeline": [
+    {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-11-01T03:27:00Z",
+      "state": "asleep"
+    },
+    {
+      "from": "2026-11-01T03:27:00Z",
+      "to": "2026-11-01T04:02:00Z",
+      "state": "awake",
+      "reason": "Woken (irq 9)"
+    },
+    {
+      "from": "2026-11-01T04:02:00Z",
+      "to": "2026-11-01T04:35:00Z",
+      "state": "asleep"
+    },
+    {
+      "from": "2026-11-01T04:35:00Z",
+      "to": "2026-11-01T05:41:00Z",
+      "state": "awake",
+      "reason": "Woken (irq 9)"
+    },
+    {
+      "from": "2026-11-01T05:41:00Z",
+      "to": "2026-11-01T09:12:00Z",
+      "state": "asleep"
+    },
+    {
+      "from": "2026-11-01T09:12:00Z",
+      "to": "2026-11-01T12:40:00Z",
+      "state": "awake",
+      "reason": "Woken (irq 122)"
+    },
+    {
+      "from": "2026-11-01T12:40:00Z",
+      "to": "2026-11-01T17:24:00Z",
+      "state": "asleep"
+    },
+    {
+      "from": "2026-11-01T17:24:00Z",
+      "to": "2026-11-01T18:08:00Z",
+      "state": "awake",
+      "reason": "Woken (irq 122)"
+    },
+    {
+      "from": "2026-11-01T18:08:00Z",
+      "to": "2026-11-01T18:16:00Z",
+      "state": "asleep"
+    },
+    {
+      "from": "2026-11-01T18:16:00Z",
+      "to": "2026-11-01T18:33:00Z",
+      "state": "awake",
+      "reason": "Woken (irq 122)"
+    },
+    {
+      "from": "2026-11-01T18:33:00Z",
+      "to": "2026-11-01T19:24:00Z",
+      "state": "asleep"
+    },
+    {
+      "from": "2026-11-01T19:24:00Z",
+      "to": "2026-11-01T19:56:00Z",
+      "state": "awake",
+      "reason": "Woken (irq 122)"
+    },
+    {
+      "from": "2026-11-01T19:56:00Z",
+      "to": "2026-11-01T20:20:00Z",
+      "state": "asleep"
+    },
+    {
+      "from": "2026-11-01T20:20:00Z",
+      "state": "awake",
+      "reason": "Woken (irq 122)"
+    }
+  ],
+  "features": [
+    "sleep",
+    "stay-awake",
+    "backup",
+    "av",
+    "security",
+    "egress",
+    "apps"
+  ],
+  "appsHost": {
+    "runtime": "podman",
+    "appsDir": "/srv/cirrusux/apps",
+    "mediaRoots": [
+      "/srv/media"
+    ],
+    "tz": "Europe/London",
+    "uid": 990,
+    "gid": 990,
+    "groups": {
+      "render": 105,
+      "video": 44,
+      "dialout": 20
+    }
+  },
+  "apps": [
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "tag": "12.4.20261026-211555",
+      "runtime": "podman",
+      "mainPort": 8096,
+      "installed": "2026-11-01T20:40:00Z"
+    },
+    {
+      "id": "navidrome",
+      "name": "Navidrome",
+      "tag": "0.64.2",
+      "runtime": "podman",
+      "mainPort": 4533,
+      "installed": "2026-11-01T20:40:00Z"
+    }
+  ]
+}

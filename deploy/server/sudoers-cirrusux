@@ -1,0 +1,37 @@
+# /etc/sudoers.d/cirrusux on the server (mode 440; check with `visudo -cf`).
+# The agent may run only these helper command lines as root, exactly as
+# written. The wildcards are checked again by the helper: journal's unit
+# against cirrusux-<name>.service, archive-delete's name against the archive.
+
+Defaults:cirrusux !lecture, !requiretty, env_reset
+# The helper runs system tools by name, so root's PATH is set here rather
+# than taken from the agent's (the helper sets it again itself).
+Defaults:cirrusux secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Phase 1: reads.
+Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper features, \
+                         /usr/local/sbin/cirrusux-helper apps-info, \
+                         /usr/local/sbin/cirrusux-helper journal *, \
+                         /usr/local/sbin/cirrusux-helper idle-status, \
+                         /usr/local/sbin/cirrusux-helper idle-log, \
+                         /usr/local/sbin/cirrusux-helper backup-list, \
+                         /usr/local/sbin/cirrusux-helper backup-last, \
+                         /usr/local/sbin/cirrusux-helper av-last, \
+                         /usr/local/sbin/cirrusux-helper security-status, \
+                         /usr/local/sbin/cirrusux-helper egress-report
+
+# Phase 2: the actions you confirm in the panel. Leave this alias out to
+# keep the panel read-only.
+Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
+                        /usr/local/sbin/cirrusux-helper stay-awake 120, \
+                        /usr/local/sbin/cirrusux-helper stay-awake forever, \
+                        /usr/local/sbin/cirrusux-helper allow-sleep, \
+                        /usr/local/sbin/cirrusux-helper nudge-awake, \
+                        /usr/local/sbin/cirrusux-helper backup-run, \
+                        /usr/local/sbin/cirrusux-helper app-job *, \
+                        /usr/local/sbin/cirrusux-helper os-check, \
+                        /usr/local/sbin/cirrusux-helper os-upgrade, \
+                        /usr/local/sbin/cirrusux-helper storage-scan, \
+                        /usr/local/sbin/cirrusux-helper archive-delete *
+
+cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT

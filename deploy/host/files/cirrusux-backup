@@ -1,0 +1,71 @@
+#!/bin/bash
+# cirrusux-backup — one encrypted system backup (cirrusux-setup's backup
+# module installs this and its timer). Settings: /etc/cirrusux/backup.env.
+#
+# The archive is tar + zstd, encrypted with age to the public key(s) in
+# BACKUP_AGE_RECIPIENT; the private key that opens it never goes on this
+# machine. It's written as .partial and renamed only once complete, so a
+# half-written backup never looks like a good one. The last line, "OK <size>
+# <file>", is what the panel shows.
+set -euo pipefail
+
+CONF=${CONF:-/etc/cirrusux/backup.env}
+# shellcheck disable=SC1090 # the settings file
+. "$CONF"
+: "${BACKUP_DIR:?}" "${BACKUP_PREFIX:?}" "${BACKUP_AGE_RECIPIENT:?}" "${BACKUP_PATHS:?}"
+BACKUP_KEEP=${BACKUP_KEEP:-7}
+umask 077
+
+name="${BACKUP_PREFIX}$(date +%Y-%m-%d_%H%M%S).tar.zst.age"
+# BACKUP_DIR must be on its disk: unmounted, the folder would be made on the
+# system disk instead, and fill it. The nearest folder that exists decides.
+if [ -n "${BACKUP_REQUIRE_MOUNT:-}" ]; then
+	probe=$BACKUP_DIR
+	while [ ! -e "$probe" ]; do probe=$(dirname "$probe"); done
+	on=$(findmnt -n -o TARGET -T "$probe" 2>/dev/null || true)
+	case "$on" in
+	"$BACKUP_REQUIRE_MOUNT" | "$BACKUP_REQUIRE_MOUNT"/*) ;;
+	*)
+		echo "FAILED: $BACKUP_DIR isn't on $BACKUP_REQUIRE_MOUNT (it's on ${on:-an unknown filesystem}): is the disk mounted?" >&2
+		exit 1
+		;;
+	esac
+fi
+mkdir -p "$BACKUP_DIR"
+part="$BACKUP_DIR/$name.partial"
+
+recipients=()
+for r in $BACKUP_AGE_RECIPIENT; do recipients+=(-r "$r"); done
+excludes=(--exclude="${BACKUP_DIR#/}")
+for e in ${BACKUP_EXCLUDE:-}; do excludes+=(--exclude="${e#/}"); done
+paths=()
+for p in $BACKUP_PATHS; do [ -e "$p" ] && paths+=("$p"); done
+[ ${#paths[@]} -gt 0 ] || { echo "none of BACKUP_PATHS exist" >&2; exit 1; }
+
+# tar exits 1 when a file changed while it was read: still a usable backup.
+# Paths are stored relative to /, so a restore can go anywhere.
+set +e +o pipefail
+tar --create --file=- --directory=/ --ignore-failed-read --warning=no-file-changed --warning=no-file-removed \
+	"${excludes[@]}" "${paths[@]#/}" | zstd -q -T0 -10 | age "${recipients[@]}" >"$part"
+status=("${PIPESTATUS[@]}")
+set -e -o pipefail
+if [ "${status[0]}" -gt 1 ] || [ "${status[1]}" -ne 0 ] || [ "${status[2]}" -ne 0 ]; then
+	echo "FAILED: tar ${status[0]}, zstd ${status[1]}, age ${status[2]}; kept $part for a look" >&2
+	exit 1
+fi
+mv "$part" "$BACKUP_DIR/$name"
+
+# Retention: the one place CirrusUX deletes anything by itself. 0 keeps all.
+if [ "$BACKUP_KEEP" -gt 0 ]; then
+	mapfile -t old < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name "${BACKUP_PREFIX}*.tar.zst.age" -printf '%f\n' | sort -r | tail -n +$((BACKUP_KEEP + 1)))
+	for f in "${old[@]}"; do
+		rm -f -- "$BACKUP_DIR/$f"
+		echo "removed old backup $f (BACKUP_KEEP=$BACKUP_KEEP)"
+	done
+fi
+
+# Failed runs keep their .partial for a look; not for ever.
+find "$BACKUP_DIR" -maxdepth 1 -type f -name "${BACKUP_PREFIX}*.partial" -mtime +3 -print -delete |
+	sed 's/^.*\//removed stale partial backup /' || true
+
+echo "OK $(du -h "$BACKUP_DIR/$name" | cut -f1) $name"

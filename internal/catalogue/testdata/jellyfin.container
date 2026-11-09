@@ -1,0 +1,27 @@
+# Written by CirrusUX (app store): Jellyfin 12.4.20261026-211555. Change it through the panel;
+# edits here are replaced on the next update.
+[Unit]
+Description=Jellyfin (CirrusUX app store)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=jellyfin
+Image=docker.io/jellyfin/jellyfin:12.4.20261026-211555@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771
+User=990:990
+Environment=TZ=Europe/London
+PublishPort=8096:8096/tcp
+Volume=/srv/cirrusux/apps/jellyfin/config:/config
+Volume=/srv/cirrusux/apps/jellyfin/cache:/cache
+Volume=/srv/media/media:/media:ro
+AddDevice=/dev/dri
+GroupAdd=105
+GroupAdd=44
+Label=io.cirrusux.app=jellyfin
+Label=io.cirrusux.version=12.4.20261026-211555
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

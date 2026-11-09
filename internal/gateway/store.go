@@ -1,0 +1,263 @@
+package gateway
+
+import (
+	"bufio"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"sync"
+	"syscall"
+	"time"
+
+	"cirrusux/internal/fsutil"
+	"cirrusux/internal/snapshot"
+)
+
+// Store keeps the gateway's state as small JSON files in DataDir, written
+// atomically with mode 600. Enough for one household; no database needed.
+type Store struct {
+	dir string
+	mu  sync.Mutex
+
+	snap  *snapshot.Snapshot
+	ui    UIDoc
+	audit []AuditEntry // the newest auditKeep entries, oldest first
+	// zone dates the audit archive and the daily token count; NewServer
+	// sets it (CIRRUS_TZ). UTC by default.
+	zone *time.Location
+}
+
+// UIDoc is the browser's settings and boards (PLAN §4.5), versioned so two
+// devices editing at once don't overwrite each other silently.
+type UIDoc struct {
+	Version int             `json:"version"`
+	SavedAt time.Time       `json:"savedAt"`
+	Data    json.RawMessage `json:"data"`
+}
+
+type AuditEntry struct {
+	At     time.Time `json:"at"`
+	Who    string    `json:"who"`
+	What   string    `json:"what"`
+	Undo   string    `json:"undo,omitempty"`
+	Result string    `json:"result,omitempty"`
+	// The action that reverses this one, for the UI's Undo button.
+	UndoAction *ActionReq `json:"undoAction,omitempty"`
+}
+
+const (
+	uiHistory = 20
+	// The audit log's recent entries are kept in memory; the file is
+	// archived (renamed, never deleted) once it passes auditRotate bytes.
+	auditKeep   = 200
+	auditRotate = 5 << 20
+)
+
+var ErrConflict = errors.New("version conflict")
+
+func OpenStore(dir string) (*Store, error) {
+	if err := os.MkdirAll(filepath.Join(dir, "ui-history"), 0o700); err != nil {
+		return nil, err
+	}
+	s := &Store{dir: dir, zone: time.UTC}
+	var snap snapshot.Snapshot
+	if err := readFileJSON(filepath.Join(dir, "snapshot.json"), &snap); err == nil {
+		s.snap = &snap
+	}
+	_ = readFileJSON(filepath.Join(dir, "ui.json"), &s.ui)
+	s.audit = loadAudit(filepath.Join(dir, "audit.jsonl"))
+	return s, nil
+}
+
+func (s *Store) Snapshot() *snapshot.Snapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.snap
+}
+
+func (s *Store) SaveSnapshot(snap snapshot.Snapshot) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := fsutil.WriteJSON(filepath.Join(s.dir, "snapshot.json"), snap, 0o600); err != nil {
+		return err
+	}
+	s.snap = &snap
+	return nil
+}
+
+func (s *Store) UI() UIDoc {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ui
+}
+
+// SaveUI stores data if base matches the current version, keeping the
+// previous versions in ui-history/ for rollback.
+func (s *Store) SaveUI(base int, data json.RawMessage) (UIDoc, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if base != s.ui.Version {
+		return s.ui, ErrConflict
+	}
+	if s.ui.Version > 0 {
+		_ = fsutil.WriteJSON(filepath.Join(s.dir, "ui-history", fmt.Sprintf("%06d.json", s.ui.Version)), s.ui, 0o600)
+		s.pruneHistory()
+	}
+	doc := UIDoc{Version: s.ui.Version + 1, SavedAt: time.Now(), Data: data}
+	if err := fsutil.WriteJSON(filepath.Join(s.dir, "ui.json"), doc, 0o600); err != nil {
+		return s.ui, err
+	}
+	s.ui = doc
+	return doc, nil
+}
+
+func (s *Store) pruneHistory() {
+	files, _ := filepath.Glob(filepath.Join(s.dir, "ui-history", "*.json"))
+	sort.Strings(files)
+	for len(files) > uiHistory {
+		_ = os.Remove(files[0])
+		files = files[1:]
+	}
+}
+
+func (s *Store) Audit(e AuditEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.audit = append(s.audit, e)
+	if len(s.audit) > auditKeep {
+		s.audit = s.audit[len(s.audit)-auditKeep:]
+	}
+	path := filepath.Join(s.dir, "audit.jsonl")
+	if st, err := os.Stat(path); err == nil && st.Size() >= auditRotate {
+		archive := filepath.Join(s.dir, "audit-"+time.Now().In(s.zone).Format("20060102-150405")+".jsonl")
+		if err := os.Rename(path, archive); err != nil {
+			return err
+		}
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(e)
+}
+
+// RecentAudit returns up to n entries, newest first.
+func (s *Store) RecentAudit(n int) []AuditEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]AuditEntry, 0, min(n, len(s.audit)))
+	for i := len(s.audit) - 1; i >= 0 && len(out) < n; i-- {
+		out = append(out, s.audit[i])
+	}
+	return out
+}
+
+// loadAudit reads the last auditKeep entries of the current audit file.
+func loadAudit(path string) []AuditEntry {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var all []AuditEntry
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64<<10), 1<<20)
+	for sc.Scan() {
+		var e AuditEntry
+		if json.Unmarshal(sc.Bytes(), &e) == nil {
+			all = append(all, e)
+			if len(all) > 2*auditKeep {
+				all = append(all[:0:0], all[len(all)-auditKeep:]...)
+			}
+		}
+	}
+	if len(all) > auditKeep {
+		all = all[len(all)-auditKeep:]
+	}
+	return all
+}
+
+// AssistantUsage adds tokens to today's count and reports the new total.
+// Negative or zero adds just report.
+func (s *Store) AssistantUsage(add int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.adjustUsage(add)
+}
+
+// ReserveAssistant checks today's count against limit and, if there's room,
+// adds est to it, in one step so parallel questions can't all slip under the
+// limit. It reports whether the reservation was made. Settle it afterwards
+// with AssistantUsage(actual - est).
+func (s *Store) ReserveAssistant(est, limit int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.adjustUsage(0) >= limit {
+		return false
+	}
+	s.adjustUsage(est)
+	return true
+}
+
+// adjustUsage changes today's count by delta (never below 0) and returns it.
+// The caller holds s.mu.
+func (s *Store) adjustUsage(delta int) int {
+	var u struct {
+		Day    string `json:"day"`
+		Tokens int    `json:"tokens"`
+	}
+	path := filepath.Join(s.dir, "assistant-usage.json")
+	_ = readFileJSON(path, &u)
+	today := time.Now().In(s.zone).Format("2006-01-02")
+	if u.Day != today {
+		u.Day, u.Tokens = today, 0
+	}
+	if delta != 0 {
+		u.Tokens = max(0, u.Tokens+delta)
+		_ = fsutil.WriteJSON(path, u, 0o600)
+	}
+	return u.Tokens
+}
+
+// appendChangelog adds one line to the admin box's CHANGELOG.md, locking it
+// so other writers (the admin bot) don't interleave.
+func appendChangelog(zone *time.Location, path string, e AuditEntry) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	line := fmt.Sprintf("- %s — %s (CirrusUX): %s", stampIn(zone, e.At), e.Who, e.What)
+	if e.Undo != "" {
+		line += fmt.Sprintf(" — undo: `%s`", e.Undo)
+	}
+	_, err = f.WriteString(line + "\n")
+	return err
+}
+
+func readFileJSON(path string, v any) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
+}
+
+func writeFileJSON(path string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, b)
+}
+
+// writeFileAtomic writes b to path with mode 600, all or nothing.
+func writeFileAtomic(path string, b []byte) error { return fsutil.WriteFile(path, b, 0o600) }

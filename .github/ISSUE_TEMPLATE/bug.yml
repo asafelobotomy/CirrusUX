@@ -1,0 +1,43 @@
+name: Something's wrong
+description: CirrusUX does something it shouldn't, or doesn't do what it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a security problem, please don't use this form: see SECURITY.md.
+        Don't paste tokens, passwords, or your real addresses.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings → About, or `cirrusux-gateway -version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: Setup
+      options:
+        - single (one machine)
+        - split (sleeping server and a gateway)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Server OS and container runtime
+      placeholder: Debian 13, Podman 5.4
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: From the Logs page or `journalctl -u cirrusux-gateway`, with secrets removed.
+      render: text

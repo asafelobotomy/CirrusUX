@@ -1,0 +1,7 @@
+# /etc/sudoers.d/cirrusux-router-wake on the gateway machine (mode 440;
+# check with `visudo -cf`). The gateway may ask the router, as root and
+# with no arguments, to wake the server. Set in gateway.env:
+#   CIRRUS_WAKE=command
+#   CIRRUS_WAKE_CMD=sudo -n /usr/local/sbin/cirrusux-router-wake
+Defaults:cirrusux !lecture, !requiretty, env_reset
+cirrusux ALL=(root) NOPASSWD: /usr/local/sbin/cirrusux-router-wake ""

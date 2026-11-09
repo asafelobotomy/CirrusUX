@@ -1,0 +1,48 @@
+{
+  "id": "vaultwarden",
+  "name": "Vaultwarden",
+  "description": "A password manager server that works with the Bitwarden apps.",
+  "website": "https://github.com/dani-garcia/vaultwarden",
+  "icon": "Lock",
+  "color": "#175ddc",
+  "group": "Home",
+  "image": "docker.io/vaultwarden/server",
+  "tag": "1.37.5",
+  "digest": "sha256:4fe17f415f90087377d37c755e0ea3cf189dcc6794e49cdd2a9adbb4937d9e1f",
+  "ports": [
+    {
+      "name": "web",
+      "container": 80,
+      "host": 8222,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "path": "/data",
+      "kind": "data"
+    }
+  ],
+  "env": [
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    },
+    {
+      "name": "SIGNUPS_ALLOWED",
+      "choices": [
+        "true",
+        "false"
+      ],
+      "default": "true",
+      "label": "Allow new accounts"
+    }
+  ],
+  "check": {
+    "port": "web",
+    "path": "/alive"
+  },
+  "minMemoryMB": 128,
+  "notes": "The Bitwarden apps need HTTPS: reach it through tailscale serve or your reverse proxy. Turn new accounts off once yours exists."
+}

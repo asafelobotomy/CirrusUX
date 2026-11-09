@@ -1,0 +1,41 @@
+# /etc/systemd/system/cirrusux-gateway.service on the gateway machine (the server itself in the single setup)
+[Unit]
+Description=CirrusUX gateway
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=cirrusux
+Group=cirrusux
+EnvironmentFile=/etc/cirrusux/gateway.env
+ExecStart=/usr/local/bin/cirrusux-gateway
+# Its own folder: systemd gives a StateDirectory to the service user, and
+# /var/lib/cirrusux belongs to root (setup and the helper keep state there).
+StateDirectory=cirrusux-gateway
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=5s
+# A wake command or the router check may go through sudo (one fixed rule
+# each), so no NoNewPrivileges; everything else is locked down.
+# It is the one process the internet reaches (and runs git http-backend
+# with Git hosting on). None of these stop sudo; the wake and router
+# scripts only talk to the network. Home folders are read-only, so keep
+# CIRRUS_DATA_DIR and CIRRUS_GIT_DIR outside /home.
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

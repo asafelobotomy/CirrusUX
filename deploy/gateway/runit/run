@@ -1,0 +1,14 @@
+#!/bin/sh
+# /etc/sv/cirrusux-gateway/run on a gateway machine without systemd (runit,
+# e.g. under tini in a container) — root:root, mode 755. The runit version
+# of cirrusux-gateway.service: it starts as root only to make the gateway's
+# data folder, then runs the gateway as cirrusux with gateway.env's
+# settings, read by the gateway itself (-env) just as systemd would.
+#
+# It never starts or restarts tailscaled: the machine's own Tailscale
+# (userspace mode is fine) carries `tailscale serve` to 127.0.0.1:8064.
+set -eu
+exec 2>&1
+# What systemd's StateDirectory= does: the gateway's own folder, owned by it.
+install -d -m 700 -o cirrusux -g cirrusux /var/lib/cirrusux-gateway
+exec chpst -u cirrusux:cirrusux /usr/local/bin/cirrusux-gateway -env /etc/cirrusux/gateway.env

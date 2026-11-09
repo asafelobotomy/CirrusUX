@@ -1,0 +1,143 @@
+#!/bin/bash
+# cirrusux-setup — sets a machine up for CirrusUX, one module at a time.
+# Re-runnable: it changes only what differs from the settings in
+# /etc/cirrusux/host.env.
+#
+#   cirrusux-setup check [MODULE...]   report what apply would change (exit 2 if anything)
+#   cirrusux-setup apply [MODULE...]   make the changes, logged with their undo
+#   cirrusux-setup list                the modules and what they do
+#   cirrusux-setup firewall-confirm    keep a new firewall (see the firewall module)
+#   cirrusux-setup ssh-confirm         keep a new SSH restriction (the ssh module)
+#   cirrusux-setup ftps-passwd         set the FTPS user's password (the ftps module)
+#   cirrusux-setup init                answer a few questions to write host.env, then apply
+#   cirrusux-setup pair                on a split setup's gateway: print a join code
+#   cirrusux-setup join                on its server: enter that code to connect the two
+#   cirrusux-setup upgrade [VERSION] [-y]   download a release, check it, apply it
+#   cirrusux-setup rollback [-y]       go back to the release before
+#
+# Without MODULE it runs the modules in HOST_MODULES. Changes are logged to
+# /var/lib/cirrusux/setup.log; replaced files keep a .bak-YYYYMMDD-HHMM copy
+# (programs keep only their previous version, in /var/lib/cirrusux/previous).
+set -euo pipefail
+
+HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+# shellcheck source=lib.sh
+. "$HERE/lib.sh"
+
+# Root runs this folder's code, now and later (the firewall's rollback, the
+# link in /usr/local/sbin): anyone who can change it could act as root.
+if [ "$(id -u)" = 0 ] && [ -z "${ROOT:-}" ]; then
+	for d in "$HERE" "$HERE/modules"; do
+		read -r owner perms <<<"$(stat -c '%u %A' "$d")"
+		if [ "$owner" != 0 ] || [ "${perms:5:1}" = w ] || [ "${perms:8:1}" = w ]; then
+			warn "$d can be changed by a user other than root, and root runs its code: copy CirrusUX to a root-owned folder such as /opt/cirrusux"
+			break
+		fi
+	done
+fi
+
+CONFIG=${CONFIG:-$ROOT/etc/cirrusux/host.env}
+HOST_MODULES=$DEFAULT_HOST_MODULES
+
+# The comment block at the top, up to `set`.
+usage() { sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//p}' "$0"; }
+
+module_file() { printf '%s/modules/%s.sh' "$HERE" "$1"; }
+
+cmd=${1:-}
+[ $# -gt 0 ] && shift
+case "$cmd" in
+list)
+	for f in "$HERE"/modules/*.sh; do
+		printf '%-10s %s\n' "$(basename "$f" .sh)" "$(sed -n '2s/^# //p' "$f")"
+	done
+	exit 0
+	;;
+check | apply) MODE=$cmd ;;
+firewall-confirm | firewall-rollback | ssh-confirm | ssh-rollback | ftps-passwd) ;;
+init | pair | join | upgrade | rollback) ;;
+-h | --help | help | "")
+	usage
+	exit 0
+	;;
+*)
+	usage >&2
+	exit 64
+	;;
+esac
+
+if [ -z "${NO_CHOWN:-}" ] && [ "$(id -u)" -ne 0 ]; then
+	die "run as root (sudo cirrusux-setup …)"
+fi
+# init writes the config, so it runs before there is one to load.
+if [ "$cmd" = init ]; then
+	# shellcheck source=init.sh
+	. "$HERE/init.sh"
+	setup_init "$@"
+	exit 0
+fi
+load_config "$CONFIG"
+
+case "$cmd" in
+pair | join)
+	MODULE=$cmd
+	MODE=apply
+	# shellcheck source=pair.sh
+	. "$HERE/pair.sh"
+	"setup_$cmd" "$@"
+	exit 0
+	;;
+upgrade | rollback)
+	MODULE=$cmd
+	# shellcheck source=release.sh
+	. "$HERE/release.sh"
+	"setup_$cmd" "$@"
+	exit 0
+	;;
+esac
+
+case "$cmd" in
+firewall-confirm | firewall-rollback | ssh-confirm | ssh-rollback | ftps-passwd)
+	MODULE=${cmd%%-*}
+	MODE=apply
+	# shellcheck source=/dev/null
+	. "$(module_file "$MODULE")"
+	"${cmd//-/_}" "$@"
+	exit 0
+	;;
+esac
+
+modules=("$@")
+# shellcheck disable=SC2206 # a space-separated list from the config
+[ ${#modules[@]} -gt 0 ] || modules=($HOST_MODULES)
+
+for m in "${modules[@]}"; do
+	f=$(module_file "$m")
+	[ -f "$f" ] || die "no module named $m (see: cirrusux-setup list)"
+	# Without systemd only the gateway's side is supported: the rest uses
+	# its timers, sockets and sleep hooks.
+	if is_runit; then
+		case "$m" in base | cirrusux | network) ;; *) die "the $m module needs systemd; without it (runit), only base, cirrusux (CIRRUS_ROLE=gateway) and network run" ;; esac
+	fi
+done
+
+total=0
+for m in "${modules[@]}"; do
+	MODULE=$m
+	CHANGES=0
+	say "$m:"
+	# shellcheck source=/dev/null
+	. "$(module_file "$m")"
+	"module_$m"
+	total=$((total + CHANGES))
+done
+
+if [ "$MODE" = check ]; then
+	if [ "$total" -gt 0 ]; then
+		say "$total change(s) to make. Run: cirrusux-setup apply ${modules[*]}"
+		exit 2
+	fi
+	say "Nothing to change."
+else
+	say "$total change(s) made. Log: /var/lib/cirrusux/setup.log"
+fi

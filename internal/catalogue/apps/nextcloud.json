@@ -1,0 +1,39 @@
+{
+  "id": "nextcloud",
+  "name": "Nextcloud",
+  "description": "Files, calendars and contacts of your own.",
+  "website": "https://nextcloud.com",
+  "icon": "Cloud",
+  "color": "#0082c9",
+  "group": "Files",
+  "image": "docker.io/library/nextcloud",
+  "tag": "35.0.2-apache",
+  "digest": "sha256:e0b1a2af52c82c07b7a0e8e59878bd8769e704447734d5d238a836982f51b9c8",
+  "ports": [
+    {
+      "name": "web",
+      "container": 80,
+      "host": 8080,
+      "main": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "path": "/var/www/html",
+      "kind": "data"
+    }
+  ],
+  "env": [
+    {
+      "name": "TZ",
+      "value": "{{tz}}"
+    }
+  ],
+  "check": {
+    "port": "web",
+    "path": "/status.php"
+  },
+  "minMemoryMB": 512,
+  "notes": "Uses SQLite, which suits a household. The first visit creates the admin account; add this server's address to the trusted domains it suggests."
+}

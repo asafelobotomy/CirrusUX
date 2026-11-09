@@ -1,0 +1,26 @@
+/* Shared by the Git page's parts. Scoped by the .gx class on the page. */
+.gx input[type='text'],
+.gx input:not([type]),
+.gx select,
+.gx textarea {
+  height: 36px; padding: 0 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); background: var(--surface-2); min-width: 0;
+}
+.gx .gx-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.gx .gx-list > li { display: flex; gap: var(--space-3); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.gx .gx-list > li:last-child { border-bottom: 0; }
+.gx .gx-grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gx .gx-grow > * { overflow: hidden; text-overflow: ellipsis; }
+.gx .gx-ic { color: var(--text-muted); display: inline-flex; flex: none; }
+.gx .gx-small { font-size: 0.8rem; }
+.gx .gx-mono { font-family: var(--font-mono); font-size: 0.85rem; }
+.gx .gx-warn { color: var(--warn); }
+.gx .gx-row { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.gx .gx-end { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-5); flex-wrap: wrap; }
+.gx .gx-field { display: flex; flex-direction: column; gap: 6px; margin-top: var(--space-3); font-size: 0.9rem; }
+.gx .gx-code {
+  font-family: var(--font-mono); font-size: 0.82rem; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; white-space: pre; margin: 0;
+}
+.gx a.gx-link { color: inherit; text-decoration: none; }
+.gx a.gx-link:hover strong, .gx a.gx-link:hover span.gx-name { text-decoration: underline; }
