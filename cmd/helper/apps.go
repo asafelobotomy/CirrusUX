@@ -210,19 +210,28 @@ func portFree(port int, proto string) bool {
 	return true
 }
 
+// healthClient is shared by every health check: a client (and transport) per
+// call would leave each check's idle keep-alive connection open for good.
+var healthClient = &http.Client{
+	Timeout: 5 * time.Second,
+	Transport: &http.Transport{
+		// Apps on 127.0.0.1 with their own certificate: only liveness is checked.
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // #nosec G402 — loopback health check
+		DisableKeepAlives: true,
+	},
+	// The answer itself is the signal: a redirect (to a login page, say) is
+	// not followed, so the check never leaves the app's own address.
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
 // healthy is one GET on the app's own address. Anything below 500 means
 // it's answering (a login page or a redirect is fine).
 func healthy(ctx context.Context, url string) error {
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-		// Apps on 127.0.0.1 with their own certificate: only liveness is checked.
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, // #nosec G402 — loopback health check
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	resp, err := client.Do(req)
+	resp, err := healthClient.Do(req)
 	if err != nil {
 		return err
 	}
