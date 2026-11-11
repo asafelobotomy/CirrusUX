@@ -72,6 +72,8 @@ No internet on the machine? Download the `.tar.gz` for its CPU and
 `sudo bash install.sh --from that-folder`. To check where a bundle was
 built, run
 `gh attestation verify cirrusux-vX.Y.Z-linux-amd64.tar.gz --repo asafelobotomy/CirrusUX`.
+Releases from 0.8.0 on carry these attestations; 0.7.1 was built while the
+repository was private and has only `SHA256SUMS`.
 
 Add `firewall` to `HOST_MODULES` once everything works (see "The firewall"
 below). Everything else is in the rest of this guide: every module, every

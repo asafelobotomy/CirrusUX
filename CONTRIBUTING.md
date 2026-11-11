@@ -58,9 +58,15 @@ attests the bundles. It then publishes them, with `install.sh` and
 `cirrusux-setup upgrade` download.
 
 `make bump` does not commit or tag. Releases follow semantic versioning
-(before 1.0.0, one minor version per plan phase). The CirrusStore catalogue
-is signed with `make store-site KEY=...`, which needs the offline key; only
-the maintainer runs it.
+(before 1.0.0, one minor version per plan phase). From 1.0.0, what a
+release must keep working is listed in docs/ROADMAP.md, "What 1.0 keeps
+stable"; breaking it needs a new major version or a migration that runs by
+itself.
+
+The official CirrusStore catalogue lives in its own repository,
+`asafelobotomy/cirrusstore`, published with GitHub Pages. It is signed with
+`make store-site KEY=...` (or that repository's own signing script), which
+needs the offline key; only the maintainer runs it.
 
 ## House rules
 

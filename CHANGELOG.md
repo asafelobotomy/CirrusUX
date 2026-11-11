@@ -3,9 +3,17 @@
 All notable changes to CirrusUX. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/). Before 1.0.0, each plan phase
-gets a minor version.
+gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
+
+### Changed
+
+- The roadmap has a "Road to 1.0" section: the steps left before 1.0.0, and
+  what 1.0 keeps stable (settings, split setups one minor version apart,
+  saved boards, the CirrusStore format and the install layout). `.deb`
+  packages and built-in accounts move to after 1.0.
+- The finished November 2026 audit moved to `docs/history/`.
 
 ## [0.7.1] - 2026-11-09
 
