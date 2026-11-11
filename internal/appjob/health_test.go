@@ -73,3 +73,23 @@ func TestRunCommandSurvivesLongLines(t *testing.T) {
 		t.Errorf("lines = %d, first %q", len(lines), lines)
 	}
 }
+
+// A job shows as running from the moment it's accepted, before its unit
+// starts, so the agent's report straight after the action already has it
+// and keeps reporting every few seconds until it's done.
+func TestQueueShowsTheJobRunningBeforeItStarts(t *testing.T) {
+	e, _, media := testEnv(t)
+	r := navidrome(media)
+	if err := e.Queue(r); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, e, r.Job); st.State != "running" || st.Name != "Navidrome" || st.Step == "" {
+		t.Errorf("queued status = %+v; want running, with a name and a step", st)
+	}
+	if err := e.Run(context.Background(), r); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, e, r.Job); st.State != "done" {
+		t.Errorf("after the run: %+v", st)
+	}
+}

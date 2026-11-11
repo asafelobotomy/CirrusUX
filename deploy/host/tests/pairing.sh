@@ -51,8 +51,8 @@ echo "1 init writes the gateway's host.env from the answers and what it detects"
 
 use srv
 mkdir -p $ROOT/sys/class/net/enp3s0; echo aa:bb:cc:dd:ee:ff > $ROOT/sys/class/net/enp3s0/address
-printf '2\n\nn\nn\n\n\nn\n' | $H/cirrusux-setup init > $T/out 2>&1 || { cat $T/out; fail "init server"; }
-for l in 'CIRRUS_ROLE=server' 'NET_WOL_IFACE=enp3s0' 'HOST_MODULES="base cirrusux network sleep"'; do
+printf '2\n\ny\nn\n\n\nn\n' | $H/cirrusux-setup init > $T/out 2>&1 || { cat $T/out; fail "init server"; }
+for l in 'CIRRUS_ROLE=server' 'NET_WOL_IFACE=enp3s0' 'HOST_MODULES="base cirrusux network apps store sleep"'; do
 	grep -qxF "$l" $CONFIG || fail "server host.env lacks $l: $(cat $CONFIG)"
 done
 grep -q CIRRUS_ALLOWED_USERS $CONFIG && fail "a server has no sign-in"
@@ -61,7 +61,7 @@ grep -q "Replace it" $T/out || fail "an existing host.env should be asked about"
 mv $CONFIG $T/srv.env
 printf '1\n\n\n\nn\nn\nage1bad\n' | $H/cirrusux-setup init > $T/out 2>&1 && fail "a bad age key accepted"
 mv $T/srv.env $CONFIG
-echo "2 the server's host.env: wake card from the default route, sleep; bad answers refused"
+echo "2 the server's host.env: wake card from the default route, apps with the official catalogue, sleep; bad answers refused"
 
 use gw
 $H/cirrusux-setup apply cirrusux > $T/out 2>&1 || { cat $T/out; fail "apply gateway"; }

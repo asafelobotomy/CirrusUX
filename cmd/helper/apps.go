@@ -110,8 +110,10 @@ func appJob(ctx context.Context, c conf, job string) (helperapi.Result, error) {
 	if err := os.WriteFile(saved, b, 0o600); err != nil {
 		return helperapi.Result{}, err
 	}
+	_ = env.Queue(req) // shows as running in the agent's next report
 	unit, err := launchJob(ctx, req.Job, []string{"RuntimeMaxSec=45min"}, helperapi.CmdAppRun, req.Job)
 	if err != nil {
+		_ = env.Refuse(req, err)
 		return helperapi.Result{}, err
 	}
 	return helperapi.Result{Output: []string{fmt.Sprintf("%s %s: started as %s", req.Action, req.App, unit)}}, nil

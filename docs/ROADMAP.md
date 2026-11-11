@@ -36,7 +36,7 @@ What carries forward:
 | Git | Git hosting in the gateway ([GIT.md](GIT.md)) | Done |
 | Releases | Binaries with checksums, an install script, upgrade and rollback | Done: bundles, `install.sh`, `upgrade` and `rollback` since v0.7.0; v0.7.1 is the first published release. `.deb` packages moved to after 1.0 |
 | Clean first commit | The public repository starts from a scrubbed tree | Done (9 November 2026); the repository is public |
-| Official catalogue | CirrusStore's signed catalogue at `asafelobotomy.github.io/cirrusstore/` | In progress: public key built in since v0.7.1; the `cirrusstore` repository has 19 apps (the 11 built in, and a Downloads group); not signed or published yet |
+| Official catalogue | CirrusStore's signed catalogue at `asafelobotomy.github.io/cirrusstore/` | Done (11 November 2026): 19 apps (the 11 built in, and a Downloads group), each installed, opened and removed through a panel on a Debian 13 test VM first; the signed site verified, and a 0.7.1 panel installed an app from it |
 | 8 | Reinstall a real server on the public tooling | Private; its outcome gates 1.0 (§5) |
 | 1.0 | The first stable release | Not started; what is left is in §5 |
 
@@ -147,7 +147,7 @@ real machines. In order:
 | # | Step | Who | Status |
 |---|---|---|---|
 | 1 | Turn on GitHub's private vulnerability reporting, which `SECURITY.md` points to | Maintainer (repository setting) | Done (11 November 2026) |
-| 2 | Publish the official catalogue: the `cirrusstore` repository with Pages, its first site signed offline with `make store-site`, and a fresh panel that fetches and verifies it | Maintainer (offline key) | In progress |
+| 2 | Publish the official catalogue: the `cirrusstore` repository with Pages, its first site signed offline with `make store-site`, and a fresh panel that fetches and verifies it | Maintainer (offline key) | Done (11 November 2026) |
 | 3 | Release 0.8.0 and confirm its bundles carry build attestations | Maintainer | Not done |
 | 4 | Install 0.8.0 from `install.sh` on clean machines: both setups, Debian 13 and Ubuntu LTS, amd64 and arm64 where possible; then `upgrade`, `rollback`, `pair` and `join` | Maintainer, real hardware or VMs | Not done |
 | 5 | Phase 8: reinstall a real server on 0.8.x and watch the idle log for 24 hours | Maintainer | Private |

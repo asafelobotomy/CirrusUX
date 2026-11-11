@@ -114,7 +114,9 @@ skopeo inspect --raw docker://docker.io/syncthing/syncthing:2.1.7 | sha256sum
 
 Updates (the Updates page) offer newer tags of the same shape as this one:
 the same suffix (`-alpine` stays `-alpine`), and never betas, release
-candidates or dev builds. So pin a plain release tag.
+candidates or dev builds. So pin a plain release tag. The version numbers
+must rise: a rebuild of the same version (`-ls5` after `-ls4`) isn't
+offered, because some publishers restart their build counter.
 
 ## Ports
 

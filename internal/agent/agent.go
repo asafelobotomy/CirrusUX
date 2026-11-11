@@ -64,10 +64,8 @@ func (a *Agent) Run(ctx context.Context) error {
 	defer tick.Stop()
 
 	go a.commandLoop(ctx)
-	a.cycle(ctx)
+	nextPush, retryUntil := firstSchedule(a.cycle(ctx), time.Now(), a.cfg.Interval)
 	last := time.Now().Round(0)
-	nextPush := time.Now().Add(a.cfg.Interval)
-	retryUntil := time.Time{}
 
 	for {
 		select {
@@ -103,6 +101,19 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// firstSchedule says when to push after the first report at start-up, and
+// until when to keep retrying quickly. A first report that failed usually
+// means the gateway is still starting: setup starts both at once, and at
+// boot the agent can come up first. So it tries again every 15 s for three
+// minutes, then once a minute, instead of leaving the panel without a
+// report for a whole interval.
+func firstSchedule(ok bool, now time.Time, interval time.Duration) (next, retryUntil time.Time) {
+	if ok {
+		return now.Add(interval), time.Time{}
+	}
+	return now.Add(15 * time.Second), now.Add(3 * time.Minute)
 }
 
 func (a *Agent) cycle(ctx context.Context) bool {
