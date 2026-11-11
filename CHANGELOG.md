@@ -7,6 +7,8 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-11
+
 ### Changed
 
 - The roadmap has a "Road to 1.0" section: the steps left before 1.0.0, and
