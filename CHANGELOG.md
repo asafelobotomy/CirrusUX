@@ -7,6 +7,22 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Fixed
+
+- On a fresh server, setup stopped at the `sleep` module with "cannot stat
+  /proc/sys/net/netfilter/nf_conntrack_acct": the kernel hadn't loaded
+  connection tracking yet. Setup now loads `nf_conntrack` first, and at
+  boot through `/etc/modules-load.d/`. Found on a clean Debian 13 install;
+  running `sudo cirrusux-setup apply` after upgrading finishes the setup.
+- Setup stopped on Ubuntu 26.04, whose sudo is sudo-rs: it rejected
+  CirrusUX's sudoers files over `!requiretty`, a setting it doesn't know,
+  and nothing was applied. The files no longer set it (Debian and Ubuntu
+  never turn `requiretty` on). Tested on Ubuntu 26.04.1: setup, the agent's
+  root calls, logs and app installs all work under sudo-rs.
+- A gateway without Tailscale (a reverse proxy signs people in) logged a
+  warning every 20 seconds; it now logs it once. The panel's notice about
+  it is unchanged.
+
 ## [0.8.0] - 2026-11-11
 
 ### Changed
@@ -29,9 +45,10 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   status was only written once it started, so it didn't report again until
   a whole interval later. The job now shows as running as soon as it's
   accepted.
-- `cirrusux-setup init` turned on apps without the `store` module, so a new
-  install never fetched the official CirrusStore catalogue. Answering yes
-  to apps now adds both, as do the examples in INSTALL.md.
+- `cirrusux-setup init` now adds the `store` module along with apps, as do
+  the examples in INSTALL.md, so `host.env` shows the catalogue setting.
+  (Corrected after release: the official catalogue was already trusted
+  without the module; it's only needed to turn it off or add others.)
 - Updates could offer an older build as an update: LinuxServer restarts its
   build counter, so Sonarr `4.0.20.3014-ls329` came before `-ls4`. An update
   now has to raise the version numbers; a rebuild of the same version isn't

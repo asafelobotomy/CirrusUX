@@ -148,8 +148,8 @@ real machines. In order:
 |---|---|---|---|
 | 1 | Turn on GitHub's private vulnerability reporting, which `SECURITY.md` points to | Maintainer (repository setting) | Done (11 November 2026) |
 | 2 | Publish the official catalogue: the `cirrusstore` repository with Pages, its first site signed offline with `make store-site`, and a fresh panel that fetches and verifies it | Maintainer (offline key) | Done (11 November 2026) |
-| 3 | Release 0.8.0 and confirm its bundles carry build attestations | Maintainer | Not done |
-| 4 | Install 0.8.0 from `install.sh` on clean machines: both setups, Debian 13 and Ubuntu LTS, amd64 and arm64 where possible; then `upgrade`, `rollback`, `pair` and `join` | Maintainer, real hardware or VMs | Not done |
+| 3 | Release 0.8.0 and confirm its bundles carry build attestations | Maintainer | Done (11 November 2026): `gh attestation verify` passes for both bundles and `install.sh` |
+| 4 | Install 0.8.0 from `install.sh` on clean machines: both setups, Debian 13 and Ubuntu LTS, amd64 and arm64 where possible; then `upgrade`, `rollback`, `pair` and `join` | Maintainer, real hardware or VMs | In progress: amd64 VMs passed on 11 November 2026 (Debian 13 single and split, Ubuntu 26.04.1 single, 0.7.1 → 0.8.0 upgrade and rollback) once three setup fixes are in, for 0.8.1; arm64 not tried |
 | 5 | Phase 8: reinstall a real server on 0.8.x and watch the idle log for 24 hours | Maintainer | Private |
 | 6 | Fix what steps 4 and 5 find, in 0.8.x releases | Anyone | — |
 | 7 | Tag 1.0.0 after about a week of quiet running on the real server | Maintainer | — |

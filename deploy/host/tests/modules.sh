@@ -33,6 +33,7 @@ S
 printf '#!/bin/sh\necho "tailscale $*" >> "$STUBDIR/calls"\necho "{\\"BackendState\\": \\"NeedsLogin\\"}"\n' > $T/stub/tailscale
 printf '#!/bin/sh\necho atlas\n' > $T/stub/hostname
 printf '#!/bin/sh\necho "sysctl $*" >> "$STUBDIR/calls"\n' > $T/stub/sysctl
+printf '#!/bin/sh\necho "modprobe $*" >> "$STUBDIR/calls"\n' > $T/stub/modprobe
 # A stand-in for age: checks it got a recipient, passes the data through.
 printf '#!/bin/sh\n[ "$1" = -r ] || exit 9\ncat\n' > $T/stub/age
 chmod +x $T/stub/*
@@ -145,6 +146,10 @@ printf 'CIRRUS_ROLE=server\nCIRRUS_RELEASE=%s\nSLEEP_IDLE_MIN=20\nSLEEP_IGNORE_C
 $H/cirrusux-setup apply sleep > $T/out 2>&1 || { cat $T/out; fail "sleep apply"; }
 grep -qx "IGNORE_CLIENTS_PLAY_MB=5" $ROOT/etc/cirrusux/sleep.env && grep -qx "IGNORE_WAKE_GRACE_MIN=5" $ROOT/etc/cirrusux/sleep.env || fail "sleep.env: TV settings"
 grep -qx "net.netfilter.nf_conntrack_acct=1" $ROOT/etc/sysctl.d/60-cirrusux-conntrack.conf && grep -q "sysctl -q -p" $T/calls || fail "conntrack byte counts"
+# A fresh kernel has no nf_conntrack yet, so no nf_conntrack_acct to set:
+# load it now, and at boot before sysctl runs.
+grep -qx nf_conntrack $ROOT/etc/modules-load.d/cirrusux-conntrack.conf || fail "nf_conntrack not loaded at boot"
+grep -q "modprobe nf_conntrack" $T/calls || fail "nf_conntrack not loaded before the sysctl"
 [ "$(readlink $ROOT/usr/local/sbin/cirrusux-stay-awake)" = cirrusux-idle ] && [ "$(readlink $ROOT/usr/local/sbin/cirrusux-allow-sleep)" = cirrusux-idle ] || fail "stay-awake links"
 grep -q "^IDLE_MIN=20" $ROOT/etc/cirrusux/sleep.env && grep -q 'IGNORE_CLIENTS="192.0.2.23"' $ROOT/etc/cirrusux/sleep.env || fail "sleep.env"
 [ "$(stat -c %a $ROOT/usr/lib/systemd/system-sleep/cirrusux-idle)" = 755 ] || fail "sleep hook"

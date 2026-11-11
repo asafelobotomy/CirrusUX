@@ -1,5 +1,5 @@
 # /etc/sudoers.d/cirrusux-router-check on the gateway machine (mode 440;
 # check with `visudo -cf`). The gateway may run the router check, as root,
 # with no arguments.
-Defaults:cirrusux !lecture, !requiretty, env_reset
+Defaults:cirrusux !lecture, env_reset
 cirrusux ALL=(root) NOPASSWD: /usr/local/sbin/cirrusux-router-check ""

@@ -29,6 +29,11 @@
 # Only for the server side of a split setup: in the single setup the
 # server runs the panel itself and must stay up.
 
+# _sleep_conntrack_acct SYSCTL_FILE: load nf_conntrack, then apply the file.
+_sleep_conntrack_acct() {
+	modprobe nf_conntrack && sysctl -q -p "$1"
+}
+
 module_sleep() {
 	[ "${CIRRUS_ROLE:-single}" != single ] ||
 		die "the sleep module is for a split setup (CIRRUS_ROLE=server): in the single setup the panel runs here and must stay up"
@@ -47,9 +52,16 @@ module_sleep() {
 # SLEEP_IGNORE_CLIENTS_PLAY_MB.
 net.netfilter.nf_conntrack_acct=1
 EOF2
+	# The setting exists only once nf_conntrack is loaded, which a fresh
+	# kernel may not have done yet: load it now, and at boot before sysctl.
+	put_file /etc/modules-load.d/cirrusux-conntrack.conf 644 root:root <<'EOF2'
+# Written by cirrusux-setup (sleep module): connection tracking, for the
+# byte counts in /etc/sysctl.d/60-cirrusux-conntrack.conf.
+nf_conntrack
+EOF2
 	if [ "$CHANGES" -ne "$before" ]; then
 		change "count bytes per connection now (nf_conntrack_acct)" "sysctl -w net.netfilter.nf_conntrack_acct=0" \
-			sysctl -q -p "$ROOT$sysctl"
+			_sleep_conntrack_acct "$ROOT$sysctl"
 	fi
 	put_file /usr/local/sbin/cirrusux-idle 755 root:root <"$rel/bin/cirrusux-idle"
 	put_link /usr/local/sbin/cirrusux-stay-awake cirrusux-idle
