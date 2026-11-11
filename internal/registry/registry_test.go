@@ -23,6 +23,11 @@ func TestNewest(t *testing.T) {
 		{"1.37.5", []string{"1.37.5-alpine", "1.37.6-alpine", "1.37.4"}, ""},
 		{"2.1.7", []string{"2.1.10", "2.1.9"}, "2.1.10"},
 		{"latest", []string{"1.0"}, ""},
+		// LinuxServer restarts its build counter: ls329 came before ls4.
+		// Only a higher version is offered, never another build of this one.
+		{"4.0.20.3014-ls4", []string{"4.0.20.3014-ls329", "4.0.20.3014-ls3", "4.0.19.2979-ls324"}, ""},
+		{"4.0.19.2979-ls324", []string{"4.0.19.2979-ls325", "4.0.20.3014-ls4", "4.0.20.3014-ls3"}, "4.0.20.3014-ls4"},
+		{"5.3.0_v2.1.2-ls487", []string{"5.3.0_v2.1.3-ls488", "5.3.1_v2.1.2-ls490"}, "5.3.1_v2.1.2-ls490"},
 	}
 	for _, c := range cases {
 		if got := Newest(c.pinned, c.tags); got != c.want {

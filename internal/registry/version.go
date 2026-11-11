@@ -10,7 +10,10 @@ import (
 // shape: the same number of version numbers and the same suffix with its
 // digits ignored ("35.0.2-apache" accepts "36.0.0-apache", never
 // "36.0.0-fpm-alpine"; "12.4.20261026-211555" accepts "12.5.20261110-090000").
-// Pre-releases are never offered.
+// Pre-releases are never offered, and neither is another build of the same
+// version: the version numbers must rise. Digits in the suffix only choose
+// between builds of a higher version, because some publishers restart their
+// build counter (LinuxServer's "-ls329" came before "-ls4").
 
 var (
 	numsRe = regexp.MustCompile(`^v?(\d+(?:\.\d+)*)(.*)$`)
@@ -49,24 +52,27 @@ func parse(tag string) (version, bool) {
 	return v, true
 }
 
-// less compares two versions of the same shape.
-func less(a, b version) bool {
-	for _, pair := range [][2][]int{{a.nums, b.nums}, {a.extra, b.extra}} {
-		x, y := pair[0], pair[1]
-		for i := 0; i < len(x) && i < len(y); i++ {
-			if x[i] != y[i] {
-				return x[i] < y[i]
-			}
-		}
-		if len(x) != len(y) {
-			return len(x) < len(y)
+// cmpInts compares two lists of numbers, a shorter one first when one starts
+// the other.
+func cmpInts(x, y []int) int {
+	for i := 0; i < len(x) && i < len(y); i++ {
+		if x[i] != y[i] {
+			return x[i] - y[i]
 		}
 	}
-	return false
+	return len(x) - len(y)
 }
 
-// Newest returns the highest tag of the pinned tag's shape that is newer
-// than it, or "" when there is none.
+// less compares two versions of the same shape.
+func less(a, b version) bool {
+	if c := cmpInts(a.nums, b.nums); c != 0 {
+		return c < 0
+	}
+	return cmpInts(a.extra, b.extra) < 0
+}
+
+// Newest returns the highest tag of the pinned tag's shape whose version
+// numbers are higher than its, or "" when there is none.
 func Newest(pinned string, tags []string) string {
 	cur, ok := parse(pinned)
 	if !ok {
@@ -75,7 +81,7 @@ func Newest(pinned string, tags []string) string {
 	best, bestTag := cur, ""
 	for _, t := range tags {
 		v, ok := parse(t)
-		if !ok || v.pre || v.shape != cur.shape || !less(best, v) {
+		if !ok || v.pre || v.shape != cur.shape || cmpInts(cur.nums, v.nums) >= 0 || !less(best, v) {
 			continue
 		}
 		best, bestTag = v, t
