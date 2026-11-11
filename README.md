@@ -17,7 +17,7 @@ sudo bash install.sh  # checks the release, then asks a few questions
 - `docs/APPS.md` — writing and publishing apps for CirrusStore
 - `docs/GIT.md` — Git hosting in the gateway
 - `docs/ROADMAP.md` — the status of every phase and what comes next
-- `docs/history/` — the original design and how phases 4–6 were built
+- `docs/history/` — the original design, how phases 4–6 were built, and the November 2026 audit
 - `CONTRIBUTING.md` — building, testing, house rules and the release steps
 - `web/` — the UI (Svelte 5); runs on sample data when no gateway answers
 - `cmd/gateway` — serves the UI, caches reports, wakes a sleeping server, runs the assistant, hosts Git

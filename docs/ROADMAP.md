@@ -34,13 +34,15 @@ What carries forward:
 | 6 | Maintenance: app and OS updates, logs, storage and archive review, router power check, custom widgets | Done |
 | 7 | Public release: licence, docs, CI, project files | Done |
 | Git | Git hosting in the gateway ([GIT.md](GIT.md)) | Done |
-| Releases | Binaries with checksums, an install script, `.deb` packages | In progress: bundles, `install.sh`, `upgrade` and `rollback` in v0.7.0; `.deb` packages not started |
-| Clean first commit | The public repository starts from a scrubbed tree | Not started (decided) |
-| 8 | Reinstall a real server on the public tooling | Private; not tracked here |
+| Releases | Binaries with checksums, an install script, upgrade and rollback | Done: bundles, `install.sh`, `upgrade` and `rollback` since v0.7.0; v0.7.1 is the first published release. `.deb` packages moved to after 1.0 |
+| Clean first commit | The public repository starts from a scrubbed tree | Done (9 November 2026); the repository is public |
+| Official catalogue | CirrusStore's signed catalogue at `asafelobotomy.github.io/cirrusstore/` | In progress: public key built in since v0.7.1; the `cirrusstore` repository has 19 apps (the 11 built in, and a Downloads group); not signed or published yet |
+| 8 | Reinstall a real server on the public tooling | Private; its outcome gates 1.0 (§5) |
+| 1.0 | The first stable release | Not started; what is left is in §5 |
 
-Later, not started: a wake-on-LAN proxy on an always-on LAN device, offsite
-backup status, an AVI re-encode queue, and multi-container apps (for example
-Immich).
+Later, not started: `.deb` packages, built-in accounts (D11), a wake-on-LAN
+proxy on an always-on LAN device, offsite backup status, an AVI re-encode
+queue, and multi-container apps (for example Immich).
 
 ## 2. Phases
 
@@ -81,8 +83,8 @@ What was tied to one server, and what replaced it:
 - **Licence** (D10): AGPL-3.0-or-later, in `LICENSE`. Done.
 - **Docs:** an install guide for both setups ([INSTALL.md](INSTALL.md)), a full
   configuration reference ([CONFIG.md](CONFIG.md)) and an app-definition
-  reference ([APPS.md](APPS.md)). Done; the install guide builds from source
-  until releases ship binaries.
+  reference ([APPS.md](APPS.md)). Done; the install guide starts from the
+  released `install.sh`, and building from source is the fallback.
 - **CI:** GitHub Actions running `make test`, the race detector, the host
   script tests and the build on every push (`.github/workflows/test.yml`,
   actions pinned to commits). Done.
@@ -92,11 +94,11 @@ What was tied to one server, and what replaced it:
   2026-11-02); the nearest are Cirrus CI, Cirrus Logic and CirrusLabs, none
   of them in self-hosting. Done.
 - **History:** the public repository starts from a clean first commit of the
-  scrubbed tree; this private repository keeps the full history. Decided,
-  not started.
-- **Releases:** binaries with checksums; an install script and `.deb`
-  packages for Debian and Ubuntu. In progress.
-- **Still to do:** add the official CirrusStore signing key before release.
+  scrubbed tree; the full earlier history is kept privately. Done.
+- **Releases:** bundles with checksums for amd64 and arm64, `install.sh`,
+  and `cirrusux-setup upgrade` and `rollback`. Done; `.deb` packages come
+  after 1.0.
+- **Official key:** the public half is built in since v0.7.1. Done.
 
 ### Phase 8 — reinstall a real server
 
@@ -134,3 +136,41 @@ the config.
 | D11 | Sign-in providers for v1 of the public release | Tailscale and a reverse proxy's trusted header (`CIRRUS_AUTH=tailscale\|header`). **Decided.** Built-in accounts with passkeys or TOTP: **Not started** |
 | D12 | Config format | Plain `NAME=value` env files, one per part (gateway, agent, helper). **Decided:** Go's standard library has no TOML reader, and systemd reads env files natively |
 
+
+## 5. Road to 1.0
+
+The code is in place: the audit of 7 November 2026
+([history/AUDIT-2026-11-07.md](history/AUDIT-2026-11-07.md)) is fully fixed,
+and CI passes. What is left before 1.0.0 is publishing and proving it on
+real machines. In order:
+
+| # | Step | Who | Status |
+|---|---|---|---|
+| 1 | Turn on GitHub's private vulnerability reporting, which `SECURITY.md` points to | Maintainer (repository setting) | Done (11 November 2026) |
+| 2 | Publish the official catalogue: the `cirrusstore` repository with Pages, its first site signed offline with `make store-site`, and a fresh panel that fetches and verifies it | Maintainer (offline key) | In progress |
+| 3 | Release 0.8.0 and confirm its bundles carry build attestations | Maintainer | Not done |
+| 4 | Install 0.8.0 from `install.sh` on clean machines: both setups, Debian 13 and Ubuntu LTS, amd64 and arm64 where possible; then `upgrade`, `rollback`, `pair` and `join` | Maintainer, real hardware or VMs | Not done |
+| 5 | Phase 8: reinstall a real server on 0.8.x and watch the idle log for 24 hours | Maintainer | Private |
+| 6 | Fix what steps 4 and 5 find, in 0.8.x releases | Anyone | — |
+| 7 | Tag 1.0.0 after about a week of quiet running on the real server | Maintainer | — |
+
+Not in 1.0: `.deb` packages and built-in accounts (D11). Both stay on the
+"Later" list.
+
+### What 1.0 keeps stable
+
+From 1.0.0, these change only in a new major version, or with a migration
+that runs by itself and is noted in the changelog:
+
+- **Settings:** the names and meanings of the env-file settings in
+  [CONFIG.md](CONFIG.md) and `host.env`. A renamed setting keeps working
+  under its old name for at least one minor release.
+- **Split setups:** a gateway and an agent one minor version apart work
+  together (`snapshot.Protocol`, and the actions list for anything newer).
+- **Saved boards and settings:** migrated when their shape changes, never
+  reset.
+- **CirrusStore:** the definition format, envelopes, signatures and key
+  format in [APPS.md](APPS.md). New fields arrive behind `minVersion`.
+- **The install layout:** `/opt/cirrusux/releases`, `/opt/cirrusux/current`
+  and `/etc/cirrusux`, so `upgrade` and `rollback` keep working across
+  releases.
