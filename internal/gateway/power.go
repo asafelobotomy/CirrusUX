@@ -53,6 +53,7 @@ type Power struct {
 	online   bool
 	lastSeen time.Time
 	waking   *wakeState
+	tsErr    string // the last error reading Tailscale's status, logged once
 
 	// The router's view (PowerCheckCmd): a second opinion, and the first
 	// sign of a wake, before Tailscale or the agent are back.
@@ -137,11 +138,15 @@ func (p *Power) pollTailscale(ctx context.Context) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
-		slog.Warn("tailscale status", "err", err)
+		if err.Error() != p.tsErr { // once, not every poll
+			slog.Warn("tailscale status", "err", err)
+			p.tsErr = err.Error()
+		}
 		p.tsKnown = false
 		p.notice = "The gateway can't read Tailscale's status, so awake/asleep comes from the agent's last report only."
 		return
 	}
+	p.tsErr = ""
 	st := parseStatus(out, p.opt.Peer)
 	if !st.selfOK {
 		// The gateway's own tailscaled has dropped off the coordination
