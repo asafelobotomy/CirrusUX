@@ -111,7 +111,7 @@ sudo nano /etc/cirrusux/host.env
 Set at least:
 
 ```sh
-HOST_MODULES="base cirrusux network backup security apps"
+HOST_MODULES="base cirrusux network backup security apps store"
 HOST_TZ=Europe/London                 # your time zone
 CIRRUS_ROLE=single
 CIRRUS_ALLOWED_USERS=you@example.com  # your Tailscale login
@@ -142,7 +142,7 @@ When everything works, add `firewall` to `HOST_MODULES` and apply again
 **On the server,** in `/etc/cirrusux/host.env`:
 
 ```sh
-HOST_MODULES="base cirrusux network backup security apps sleep"
+HOST_MODULES="base cirrusux network backup security apps store sleep"
 CIRRUS_ROLE=server
 NET_WOL_IFACE=enp1s0                  # the wired card; `ip link` lists them
 ```

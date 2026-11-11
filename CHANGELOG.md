@@ -27,6 +27,9 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   status was only written once it started, so it didn't report again until
   a whole interval later. The job now shows as running as soon as it's
   accepted.
+- `cirrusux-setup init` turned on apps without the `store` module, so a new
+  install never fetched the official CirrusStore catalogue. Answering yes
+  to apps now adds both, as do the examples in INSTALL.md.
 - Updates could offer an older build as an update: LinuxServer restarts its
   build counter, so Sonarr `4.0.20.3014-ls329` came before `-ls4`. An update
   now has to raise the version numbers; a rebuild of the same version isn't

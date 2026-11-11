@@ -104,7 +104,7 @@ setup_init() {
 	local mods="base cirrusux network"
 	[ -z "$age" ] || mods="$mods backup"
 	[ "$security" = no ] || mods="$mods security"
-	[ "$apps" = no ] || mods="$mods apps"
+	[ "$apps" = no ] || mods="$mods apps store" # store: the official catalogue
 	[ "$role" != server ] || mods="$mods sleep"
 
 	local tmp
