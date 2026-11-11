@@ -36,7 +36,7 @@ What carries forward:
 | Git | Git hosting in the gateway ([GIT.md](GIT.md)) | Done |
 | Releases | Binaries with checksums, an install script, upgrade and rollback | Done: bundles, `install.sh`, `upgrade` and `rollback` since v0.7.0; v0.7.1 is the first published release. `.deb` packages moved to after 1.0 |
 | Clean first commit | The public repository starts from a scrubbed tree | Done (9 November 2026); the repository is public |
-| Official catalogue | CirrusStore's signed catalogue at `asafelobotomy.github.io/cirrusstore/` | In progress: public key built in since v0.7.1; the `cirrusstore` repository has 19 apps (the 11 built in, and a Downloads group); not signed or published yet |
+| Official catalogue | CirrusStore's signed catalogue at `asafelobotomy.github.io/cirrusstore/` | In progress: public key built in since v0.7.1; the `cirrusstore` repository has 19 apps (the 11 built in, and a Downloads group), each installed, opened, and removed through a panel on a Debian 13 test VM on 11 November 2026, with an update tested on Sonarr; not signed or published yet |
 | 8 | Reinstall a real server on the public tooling | Private; its outcome gates 1.0 (§5) |
 | 1.0 | The first stable release | Not started; what is left is in §5 |
 
