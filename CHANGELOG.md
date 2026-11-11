@@ -7,6 +7,8 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-11
+
 ### Fixed
 
 - On a fresh server, setup stopped at the `sleep` module with "cannot stat
