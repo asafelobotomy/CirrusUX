@@ -68,3 +68,10 @@ grep -qx "CIRRUS_DATA_DIR=/var/lib/cirrusux-gateway" $E/gateway.env && grep -q "
 [ -f $ROOT/var/lib/cirrusux-gateway/ui.json ] && [ ! -e $ROOT/var/lib/cirrusux/ui.json ] || fail "gateway files not moved"
 $H/cirrusux-setup check cirrusux > /dev/null 2>&1 || fail "re-check after the move"
 echo "6 an older gateway's files move to its own folder"
+
+# sudo-rs (Ubuntu 26.04's sudo) rejects a whole file over one setting it
+# doesn't know, such as requiretty, so setup would stop at visudo.
+for f in $H/../server/sudoers-cirrusux $H/../gateway/sudoers-cirrusux-router-*; do
+	grep -q requiretty "$f" && fail "$(basename "$f") uses requiretty, which sudo-rs rejects"
+done
+echo "7 the sudoers files use only settings sudo-rs knows too"

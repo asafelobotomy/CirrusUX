@@ -3,7 +3,7 @@
 # written. The wildcards are checked again by the helper: journal's unit
 # against cirrusux-<name>.service, archive-delete's name against the archive.
 
-Defaults:cirrusux !lecture, !requiretty, env_reset
+Defaults:cirrusux !lecture, env_reset
 # The helper runs system tools by name, so root's PATH is set here rather
 # than taken from the agent's (the helper sets it again itself).
 Defaults:cirrusux secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
