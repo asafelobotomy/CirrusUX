@@ -206,6 +206,16 @@ func (e *Env) Refuse(r Request, reason error) error {
 	return e.finish(&st, reason)
 }
 
+// Queue records a checked request as running before its job starts. The
+// job's own first status comes a moment later, from its own unit; without
+// this, the agent's report straight after the action could miss the job
+// and wait a whole interval to report again.
+func (e *Env) Queue(r Request) error {
+	app, _ := e.find(r.App)
+	st := Status{Job: r.Job, Action: r.Action, App: r.App, Name: app.Name, State: "running", Step: "Starting", Started: e.Now()}
+	return e.writeStatus(&st)
+}
+
 func (e *Env) install(ctx context.Context, st *Status, app catalogue.App, o catalogue.Options, from origin) error {
 	p, err := catalogue.Resolve(app, o, e.Host)
 	if err != nil {
