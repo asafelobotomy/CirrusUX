@@ -15,6 +15,13 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   packages and built-in accounts move to after 1.0.
 - The finished November 2026 audit moved to `docs/history/`.
 
+### Fixed
+
+- Right after setup, or at boot when the agent starts before the gateway,
+  the panel said the server wasn't awake for up to 5 minutes: the agent's
+  first report failed and it waited a full interval to try again. It now
+  retries every 15 seconds for 3 minutes.
+
 ## [0.7.1] - 2026-11-09
 
 ### Added
