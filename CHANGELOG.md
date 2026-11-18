@@ -7,6 +7,8 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-18
+
 ### Added
 
 - CirrusUX can be upgraded from the panel. The Updates page shows the
