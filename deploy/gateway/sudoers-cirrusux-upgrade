@@ -1,0 +1,10 @@
+# /etc/sudoers.d/cirrusux-upgrade on the gateway machine of a split setup
+# (mode 440; check with `visudo -cf`). The gateway may start CirrusUX's own
+# upgrade or rollback on this machine, as root, when you confirm it in the
+# panel. The helper checks the release again (vX.Y.Z) and runs
+# `cirrusux-setup upgrade` or `rollback`; it allows nothing else here.
+# Setup leaves this file out with CIRRUS_ACTIONS=no.
+Defaults:cirrusux !lecture, env_reset
+Defaults:cirrusux secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+cirrusux ALL=(root) NOPASSWD: /usr/local/sbin/cirrusux-helper self-upgrade *, \
+                              /usr/local/sbin/cirrusux-helper self-rollback

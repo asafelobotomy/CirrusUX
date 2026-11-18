@@ -4,7 +4,8 @@
 # Settings (host.env):
 #   CIRRUS_ROLE=single        single: gateway and agent here; server: the agent
 #                             side of a split setup; gateway: the gateway side
-#   CIRRUS_ACTIONS=yes        no: the sudoers rule allows reads only
+#   CIRRUS_ACTIONS=yes        no: the sudoers rule allows reads only, and the
+#                             panel can't upgrade CirrusUX on a gateway machine
 #   CIRRUS_SERVER_NAME=       written into a new gateway.env (default: host name)
 #   CIRRUS_ALLOWED_USERS=     written into a new gateway.env
 #   CIRRUS_RELEASE=           folder holding bin/ and deploy/ (default: this checkout)
@@ -44,6 +45,9 @@ module_cirrusux() {
 		put_file /usr/local/bin/cirrusux-gateway 755 root:root <"$rel/bin/cirrusux-gateway"
 	fi
 	local binaries_changed=$((CHANGES - before))
+	if [ "$role" = gateway ] && ! is_runit; then
+		_cx_gateway_upgrade "$rel"
+	fi
 	# So `sudo cirrusux-setup …`, as setup's own messages say, works anywhere.
 	put_link /usr/local/sbin/cirrusux-setup "$rel/deploy/host/cirrusux-setup"
 
@@ -94,7 +98,7 @@ module_cirrusux() {
 # _cx_sudoers checks the rule with visudo before it goes anywhere near
 # /etc/sudoers.d: a broken file there locks sudo out entirely.
 _cx_sudoers() {
-	local src=$1 tmp
+	local src=$1 dest=${2:-/etc/sudoers.d/cirrusux} tmp
 	tmp=$(mktemp)
 	if [ "${CIRRUS_ACTIONS:-yes}" = no ]; then
 		sed 's/NOPASSWD: CIRRUS_READ, CIRRUS_ACT$/NOPASSWD: CIRRUS_READ/' "$src" >"$tmp"
@@ -109,8 +113,27 @@ _cx_sudoers() {
 		die "visudo is missing although sudo was just installed"
 	fi
 	visudo -cqf "$tmp" || die "visudo rejects $src; nothing changed"
-	put_file /etc/sudoers.d/cirrusux 440 root:root <"$tmp"
+	put_file "$dest" 440 root:root <"$tmp"
 	rm -f "$tmp"
+}
+
+# _cx_gateway_upgrade: on a split setup's gateway machine, the root helper
+# and the one rule that lets the panel upgrade CirrusUX here or put the
+# release before back (the helper runs `cirrusux-setup upgrade`/`rollback`
+# as a job). The server has both already. It needs systemd for the job, so
+# a runit gateway is upgraded at a terminal.
+_cx_gateway_upgrade() {
+	local rel=$1 dest=/etc/sudoers.d/cirrusux-upgrade
+	if [ "${CIRRUS_ACTIONS:-yes}" = no ]; then
+		if [ -e "$ROOT$dest" ]; then
+			change "remove $dest (CIRRUS_ACTIONS=no)" "set CIRRUS_ACTIONS=yes and apply again" rm -f "$ROOT$dest"
+		else
+			ok "the panel can't upgrade CirrusUX here (CIRRUS_ACTIONS=no)"
+		fi
+		return 0
+	fi
+	put_file /usr/local/sbin/cirrusux-helper 755 root:root <"$rel/bin/cirrusux-helper"
+	_cx_sudoers "$rel/deploy/gateway/sudoers-cirrusux-upgrade" "$dest"
 }
 
 _cx_configs() {

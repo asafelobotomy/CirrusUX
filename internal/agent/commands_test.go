@@ -88,6 +88,9 @@ func TestExecuteValidates(t *testing.T) {
 		{Action: "stay_awake", Args: map[string]string{"minutes": "100000"}},
 		{Action: "container_restart", Args: map[string]string{"name": "not-there"}},
 		{Action: "shell", Args: map[string]string{"cmd": "rm -rf /"}},
+		{Action: "self_upgrade"},
+		{Action: "self_upgrade", Args: map[string]string{"version": "latest"}},
+		{Action: "self_upgrade", Args: map[string]string{"version": "v0.9.0 --from /tmp"}},
 	}
 	for _, c := range bad {
 		if res := a.run(ctx, c); res.OK {
@@ -117,6 +120,25 @@ func TestExecuteActions(t *testing.T) {
 	}
 	if p := posts(); len(p) != 1 || p[0] != "/containers/kavita/restart" {
 		t.Errorf("docker posts = %v", p)
+	}
+}
+
+// CirrusUX's own upgrade and rollback reach the helper with the release
+// tag only, after a nudge so the server stays awake for the job.
+func TestExecuteSelfUpgrade(t *testing.T) {
+	a, calls, _ := testAgent(t)
+	ctx := context.Background()
+	for _, c := range []command{
+		{Action: "self_upgrade", Args: map[string]string{"version": "v0.9.0", "extra": "ignored"}},
+		{Action: "self_rollback", Args: map[string]string{"version": "v0.1.0"}},
+	} {
+		if res := a.run(ctx, c); !res.OK {
+			t.Errorf("%+v failed: %s", c, res.Error)
+		}
+	}
+	want := []string{"nudge-awake", "self-upgrade_v0.9.0", "nudge-awake", "self-rollback"}
+	if strings.Join(calls(), ",") != strings.Join(want, ",") {
+		t.Errorf("helper calls = %v, want %v", calls(), want)
 	}
 }
 

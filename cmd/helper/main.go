@@ -25,6 +25,7 @@ import (
 
 	"cirrusux/internal/execx"
 	"cirrusux/internal/helperapi"
+	"cirrusux/internal/selfupgrade"
 	"cirrusux/internal/version"
 )
 
@@ -47,6 +48,14 @@ var argChecks = map[string]func(a []string) bool{
 	helperapi.CmdAppRun: func(a []string) bool { return len(a) == 1 && helperapi.JobRe.MatchString(a[0]) },
 	helperapi.CmdOSRun: func(a []string) bool {
 		return len(a) == 2 && (a[0] == "check" || a[0] == "upgrade") && helperapi.JobRe.MatchString(a[1])
+	},
+	// CirrusUX's own upgrade: a release tag, nothing else.
+	helperapi.CmdSelfUpgrade: func(a []string) bool { return len(a) == 1 && selfupgrade.VersionRe.MatchString(a[0]) },
+	helperapi.CmdSelfRun: func(a []string) bool {
+		if len(a) != 3 || !helperapi.JobRe.MatchString(a[1]) {
+			return false
+		}
+		return a[0] == "upgrade" && selfupgrade.VersionRe.MatchString(a[2]) || a[0] == "rollback" && a[2] == "-"
 	},
 	helperapi.CmdStorageRun: func(a []string) bool {
 		return len(a) == 3 && (a[0] == "scan" || a[0] == "delete") && helperapi.JobRe.MatchString(a[1]) && entryRe.MatchString(a[2])
@@ -140,6 +149,12 @@ func main() {
 	case helperapi.CmdOSRun:
 		need(helperapi.ModOS)
 		out, err = osRun(os.Args[2], os.Args[3])
+	case helperapi.CmdSelfUpgrade:
+		out, err = selfJob(ctx, "upgrade", os.Args[2])
+	case helperapi.CmdSelfRollback:
+		out, err = selfJob(ctx, "rollback", "-")
+	case helperapi.CmdSelfRun:
+		out, err = selfRun(os.Args[2], os.Args[3], os.Args[4])
 	case helperapi.CmdStorageScan:
 		need(helperapi.ModStorage)
 		out, err = startJob(ctx, "scan", "-")

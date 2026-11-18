@@ -1,7 +1,7 @@
 // Package helperapi is the contract between the agent (unprivileged) and
 // cirrusux-helper (root, via sudo). Every subcommand is fixed. The only
 // things the caller supplies are a job ID, a unit name, an archive entry's
-// name and a stay-awake length, each matched against a fixed pattern in
+// name, a stay-awake length and a release tag, each matched against a fixed pattern in
 // the helper; paths come from root's own config file. The helper prints one
 // JSON value on stdout.
 package helperapi
@@ -48,13 +48,24 @@ const (
 	CmdStorageScan   = "storage-scan"
 	CmdArchiveDelete = "archive-delete"
 	CmdStorageRun    = "storage-run" // the jobs themselves; never sudo
+	// CirrusUX's own release: upgrade takes the release tag (vX.Y.Z),
+	// rollback goes back to the one before. Each starts a background job
+	// that runs `cirrusux-setup upgrade` or `rollback`.
+	CmdSelfUpgrade  = "self-upgrade"
+	CmdSelfRollback = "self-rollback"
+	CmdSelfRun      = "self-run" // the job itself; never sudo
 )
 
 var Commands = []string{
 	CmdFeatures, CmdAppsInfo, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
 	CmdOSCheck, CmdOSUpgrade, CmdJournal, CmdStorageScan, CmdArchiveDelete,
+	CmdSelfUpgrade, CmdSelfRollback,
 }
+
+// GatewayCommands are the only ones the gateway's machine allows in a split
+// setup, where the helper is installed just to upgrade CirrusUX there.
+var GatewayCommands = []string{CmdSelfUpgrade, CmdSelfRollback}
 
 // StorageFile holds the last measurement and the archive list.
 const StorageFile = "/var/lib/cirrusux/storage.json"

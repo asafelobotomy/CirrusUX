@@ -1,7 +1,8 @@
 # /etc/sudoers.d/cirrusux on the server (mode 440; check with `visudo -cf`).
 # The agent may run only these helper command lines as root, exactly as
 # written. The wildcards are checked again by the helper: journal's unit
-# against cirrusux-<name>.service, archive-delete's name against the archive.
+# against cirrusux-<name>.service, archive-delete's name against the archive,
+# self-upgrade's release against vX.Y.Z.
 
 Defaults:cirrusux !lecture, env_reset
 # The helper runs system tools by name, so root's PATH is set here rather
@@ -32,6 +33,8 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
                         /usr/local/sbin/cirrusux-helper os-check, \
                         /usr/local/sbin/cirrusux-helper os-upgrade, \
                         /usr/local/sbin/cirrusux-helper storage-scan, \
-                        /usr/local/sbin/cirrusux-helper archive-delete *
+                        /usr/local/sbin/cirrusux-helper archive-delete *, \
+                        /usr/local/sbin/cirrusux-helper self-upgrade *, \
+                        /usr/local/sbin/cirrusux-helper self-rollback
 
 cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT

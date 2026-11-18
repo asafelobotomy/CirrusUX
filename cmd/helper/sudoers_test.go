@@ -15,16 +15,26 @@ const helperBin = "/usr/local/sbin/cirrusux-helper"
 // sudoersRules reads the command rules of deploy/server/sudoers-cirrusux:
 // every item of every Cmnd_Alias, with "\" continuations joined.
 func sudoersRules(t *testing.T) (rules []string, text string) {
+	return rulesOf(t, "../../deploy/server/sudoers-cirrusux", "Cmnd_Alias")
+}
+
+// rulesOf reads the command lines a sudoers file allows: the lists on the
+// lines that start with prefix.
+func rulesOf(t *testing.T, file, prefix string) (rules []string, text string) {
 	t.Helper()
-	b, err := os.ReadFile("../../deploy/server/sudoers-cirrusux")
+	b, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
 	text = string(b)
 	joined := strings.ReplaceAll(text, "\\\n", " ")
 	for _, line := range strings.Split(joined, "\n") {
-		_, list, ok := strings.Cut(line, "=")
-		if !ok || !strings.HasPrefix(strings.TrimSpace(line), "Cmnd_Alias") {
+		sep := "="
+		if prefix != "Cmnd_Alias" {
+			sep = "NOPASSWD:"
+		}
+		_, list, ok := strings.Cut(line, sep)
+		if !ok || !strings.HasPrefix(strings.TrimSpace(line), prefix) {
 			continue
 		}
 		for _, r := range strings.Split(list, ",") {
@@ -47,10 +57,11 @@ var sampleArgs = map[string][]string{
 	helperapi.CmdAppJob:        {"0123456789abcdef"},
 	helperapi.CmdArchiveDelete: {"navidrome-20261101-120000"},
 	helperapi.CmdJournal:       {"cirrusux-agent.service"},
+	helperapi.CmdSelfUpgrade:   {"v0.9.0"},
 }
 
 // internalCommands are started by systemd, never through sudo.
-var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun}
+var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun, helperapi.CmdSelfRun}
 
 // agentLines is every command line the agent builds for the helper.
 func agentLines() [][]string {
@@ -150,5 +161,35 @@ func TestSudoersStayAwakeRulesAreExact(t *testing.T) {
 		if strings.HasPrefix(r, helperBin+" stay-awake") && strings.Contains(r, "*") {
 			t.Errorf("stay-awake rule %q has a wildcard", r)
 		}
+	}
+}
+
+// The gateway machine's rule (split setup) allows the upgrade and the
+// rollback, each as the helper accepts it, and nothing else.
+func TestGatewaySudoersAllowsOnlyUpgrades(t *testing.T) {
+	rules, text := rulesOf(t, "../../deploy/gateway/sudoers-cirrusux-upgrade", "cirrusux ALL=(root)")
+	var subs []string
+	for _, r := range rules {
+		f := strings.Fields(r)
+		if len(f) < 2 || f[0] != helperBin {
+			t.Fatalf("rule %q is not a helper command line", r)
+		}
+		subs = append(subs, f[1])
+		args := f[2:]
+		if len(args) == 1 && args[0] == "*" {
+			args = sampleArgs[f[1]]
+		}
+		if !validArgs(append([]string{f[1]}, args...)) {
+			t.Errorf("rule %q: the helper would refuse this command line", r)
+		}
+	}
+	slices.Sort(subs)
+	want := slices.Clone(helperapi.GatewayCommands)
+	slices.Sort(want)
+	if !slices.Equal(subs, want) {
+		t.Errorf("the gateway's rule allows %v, want %v", subs, want)
+	}
+	if !strings.Contains(text, `secure_path="`+rootPath+`"`) {
+		t.Error("the gateway's secure_path differs from the helper's rootPath")
 	}
 }

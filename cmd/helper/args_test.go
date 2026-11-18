@@ -16,6 +16,8 @@ func TestValidArgs(t *testing.T) {
 		"storage-run scan aaaa1111 -", "storage-run delete aaaa1111 old-photos",
 		"archive-delete old-photos",
 		"journal cirrusux-agent.service",
+		"self-upgrade v0.9.0", "self-rollback",
+		"self-run upgrade aaaa1111 v0.9.0", "self-run rollback aaaa1111 -",
 	}
 	bad := []string{
 		"", "features extra",
@@ -25,6 +27,10 @@ func TestValidArgs(t *testing.T) {
 		"storage-run", "storage-run scan aaaa1111", "storage-run wipe aaaa1111 -",
 		"archive-delete", "archive-delete ../etc",
 		"journal", "journal sshd.service",
+		"self-upgrade", "self-upgrade latest", "self-upgrade 0.9.0", "self-upgrade v0.9.0 -y", "self-upgrade --from=/tmp",
+		"self-rollback v0.8.1", "self-rollback -y",
+		"self-run", "self-run upgrade aaaa1111", "self-run upgrade aaaa1111 -", "self-run rollback aaaa1111 v0.9.0",
+		"self-run apply aaaa1111 -", "self-run upgrade ../x v0.9.0",
 	}
 	for _, s := range ok {
 		if !validArgs(strings.Fields(s)) {

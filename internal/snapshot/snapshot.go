@@ -8,6 +8,7 @@ import (
 
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/osupdate"
+	"cirrusux/internal/selfupgrade"
 	"cirrusux/internal/storage"
 )
 
@@ -27,6 +28,9 @@ type Snapshot struct {
 	Actions  []string `json:"actions,omitempty"`
 	// Version of the agent that took it, to spot a mismatch with the gateway.
 	AgentVersion string `json:"agentVersion,omitempty"`
+	// Install is the server's own CirrusUX install: the release in use,
+	// the one before, and whether the panel can move between them.
+	Install *selfupgrade.Info `json:"install,omitempty"`
 	// WakeIface and WakeMAC are the network interface the server is woken
 	// on and its MAC address, so the gateway can send Wake-on-LAN without
 	// the owner copying the address over.
@@ -141,7 +145,7 @@ type App struct {
 // Job is an app-store install or removal, running or recent.
 type Job struct {
 	ID       string     `json:"id"`
-	Action   string     `json:"action"` // install, remove, update, os-check, os-upgrade, storage-scan, archive-delete
+	Action   string     `json:"action"` // install, remove, update, os-check, os-upgrade, storage-scan, archive-delete, self-upgrade, self-rollback
 	App      string     `json:"app"`
 	Name     string     `json:"name"`
 	State    string     `json:"state"` // running, done, failed

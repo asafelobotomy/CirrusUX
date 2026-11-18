@@ -71,7 +71,24 @@ echo "6 an older gateway's files move to its own folder"
 
 # sudo-rs (Ubuntu 26.04's sudo) rejects a whole file over one setting it
 # doesn't know, such as requiretty, so setup would stop at visudo.
-for f in $H/../server/sudoers-cirrusux $H/../gateway/sudoers-cirrusux-router-*; do
+for f in $H/../server/sudoers-cirrusux $H/../gateway/sudoers-cirrusux-*; do
 	grep -q requiretty "$f" && fail "$(basename "$f") uses requiretty, which sudo-rs rejects"
 done
 echo "7 the sudoers files use only settings sudo-rs knows too"
+
+# A split setup's gateway machine gets the helper and one rule, so the
+# panel can upgrade CirrusUX there; CIRRUS_ACTIONS=no takes the rule away.
+G=$T/groot; mkdir -p $G/etc/cirrusux
+printf 'CIRRUS_ROLE=gateway\nCIRRUS_ALLOWED_USERS=me@example.com\n' > $G/etc/cirrusux/host.env
+ROOT=$G CONFIG=$G/etc/cirrusux/host.env $H/cirrusux-setup apply cirrusux > $T/out 2>&1 || { cat $T/out; fail "apply on a gateway"; }
+U=$G/etc/sudoers.d/cirrusux-upgrade
+[ -f $U ] && [ "$(stat -c %a $U)" = 440 ] || fail "no upgrade rule on the gateway: $(cat $T/out)"
+grep -q "cirrusux-helper self-upgrade \*" $U && grep -q "cirrusux-helper self-rollback$" $U || fail "upgrade rule content"
+[ "$(grep -c cirrusux-helper $U | tr -d ' ')" -ge 2 ] && ! grep -v '^#' $U | grep -q "app-job\|os-upgrade\|journal" || fail "the gateway's rule allows more than upgrades"
+grep -q "binary helper" $G/usr/local/sbin/cirrusux-helper || fail "no helper on the gateway"
+[ ! -e $G/etc/sudoers.d/cirrusux ] && [ ! -e $G/usr/local/bin/cirrusux-agent ] || fail "the gateway got the server's files"
+ROOT=$G CONFIG=$G/etc/cirrusux/host.env $H/cirrusux-setup check cirrusux > /dev/null 2>&1 || fail "gateway re-check not clean"
+printf 'CIRRUS_ROLE=gateway\nCIRRUS_ALLOWED_USERS=me@example.com\nCIRRUS_ACTIONS=no\n' > $G/etc/cirrusux/host.env
+ROOT=$G CONFIG=$G/etc/cirrusux/host.env $H/cirrusux-setup apply cirrusux > $T/out 2>&1 || { cat $T/out; fail "apply with CIRRUS_ACTIONS=no"; }
+[ ! -e $U ] || fail "CIRRUS_ACTIONS=no left the upgrade rule"
+echo "8 a gateway machine gets the helper and only the upgrade rule; CIRRUS_ACTIONS=no removes it"

@@ -17,6 +17,7 @@ import (
 	"cirrusux/internal/appjob"
 	"cirrusux/internal/catalogue"
 	"cirrusux/internal/helperapi"
+	"cirrusux/internal/selfupgrade"
 	"cirrusux/internal/snapshot"
 	"cirrusux/internal/store"
 )
@@ -130,7 +131,8 @@ var containerVerbs = map[string]string{"container_start": "start", "container_st
 // come on top. Actions() reports both, and execute() refuses anything else, so
 // what the agent says it can do and what it does stay one list.
 var fixedActions = []string{"stay_awake", "allow_sleep", "backup_run", "egress_report", "storage_scan",
-	"archive_delete", "os_check", "os_upgrade", "logs", "app_install", "app_remove", "app_update"}
+	"archive_delete", "os_check", "os_upgrade", "logs", "app_install", "app_remove", "app_update",
+	"self_upgrade", "self_rollback"}
 
 // Actions is every action this agent runs, sorted. It goes in each snapshot.
 func Actions() []string {
@@ -191,6 +193,16 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		return helper(helperapi.CmdOSCheck)
 	case "os_upgrade":
 		return helper(helperapi.CmdOSUpgrade)
+	case "self_upgrade":
+		// The helper checks the release tag again; this saves it the call.
+		if !selfupgrade.VersionRe.MatchString(c.Args["version"]) {
+			return nil, fmt.Errorf("bad version %q", c.Args["version"])
+		}
+		a.nudgeAwake(ctx)
+		return helper(helperapi.CmdSelfUpgrade, c.Args["version"])
+	case "self_rollback":
+		a.nudgeAwake(ctx)
+		return helper(helperapi.CmdSelfRollback)
 	case "logs":
 		return a.logs(ctx, c.Args["source"], c.Args["lines"])
 	case "app_install", "app_remove", "app_update":

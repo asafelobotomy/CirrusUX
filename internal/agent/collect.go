@@ -18,6 +18,7 @@ import (
 	"cirrusux/internal/appjob"
 	"cirrusux/internal/helperapi"
 	"cirrusux/internal/osupdate"
+	"cirrusux/internal/selfupgrade"
 	"cirrusux/internal/snapshot"
 	"cirrusux/internal/storage"
 	"cirrusux/internal/sysinfo"
@@ -159,7 +160,10 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 			}
 		}
 	}
-	if has(helperapi.ModApps) || has(helperapi.ModOS) || has(helperapi.ModStorage) {
+	// CirrusUX's own upgrade is a job too, on a server with no modules.
+	inst := selfupgrade.Read(selfupgrade.SetupLink)
+	s.Install = &inst
+	if has(helperapi.ModApps) || has(helperapi.ModOS) || has(helperapi.ModStorage) || inst.Managed {
 		s.Jobs = recentJobs(helperapi.JobsDir, now)
 	}
 	if has(helperapi.ModStorage) {
