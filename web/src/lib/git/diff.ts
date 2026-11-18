@@ -45,7 +45,7 @@ export function pathTrail(path: string): { name: string; path: string }[] {
   return parts.map((name, i) => ({ name, path: parts.slice(0, i + 1).join('/') }));
 }
 
-export type GitTab = 'files' | 'commits' | 'commit' | 'branches' | 'tags' | 'settings';
+export type GitTab = 'files' | 'commits' | 'commit' | 'builds' | 'build' | 'branches' | 'tags' | 'settings';
 
 export interface GitRoute {
   repo?: string;
@@ -53,6 +53,7 @@ export interface GitRoute {
   ref?: string;
   path?: string;
   sha?: string;
+  build?: string;
 }
 
 const dec = (s: string) => {
@@ -84,6 +85,10 @@ export function parseGitRoute(sub: string): GitRoute {
     case 'commit':
       if (!parts[2]) return r;
       return { repo, tab: 'commit', sha: dec(parts[2]) };
+    case 'build':
+      if (!parts[2]) return { repo, tab: 'builds' };
+      return { repo, tab: 'build', build: dec(parts[2]) };
+    case 'builds':
     case 'branches':
     case 'tags':
     case 'settings':
@@ -106,6 +111,9 @@ export function gitHref(r: GitRoute): string {
       break;
     case 'commit':
       segs.push('commit', enc(r.sha ?? ''));
+      break;
+    case 'build':
+      segs.push('build', enc(r.build ?? ''));
       break;
     default:
       segs.push(r.tab);

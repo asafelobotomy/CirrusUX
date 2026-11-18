@@ -11,7 +11,7 @@ Full build, test, local-run and release steps are in `CONTRIBUTING.md`. For agen
 - `scripts/sign-release.sh vX.Y.Z` signs a published release with the release key, which an SSH agent holds (CONTRIBUTING.md, Releases). A release installs nowhere until it is signed.
 
 ## Layout
-- `cmd/`: `gateway`, `agent`, `helper` (root via sudo), `dockerfilter`, `idle`, `cirrusstore`. `internal/`: the Go packages (`gateway`, `agent`, `helperapi`, `catalogue` with `apps/*.json`, `store`, `assistant`, `idle`, `githost` (Git hosting, docs/GIT.md), ...).
+- `cmd/`: `gateway`, `agent`, `helper` (root via sudo), `dockerfilter`, `idle`, `cirrusstore`. `internal/`: the Go packages (`gateway`, `agent`, `helperapi`, `catalogue` with `apps/*.json`, `store`, `assistant`, `idle`, `githost` (Git hosting, docs/GIT.md), `build` (builds, docs/BUILDS.md), ...).
 - `web/`: Svelte UI (`src`, `tests`, `icons`; `web/embed.go` embeds `dist`). `deploy/`: `server`, `gateway`, `host` (`cirrusux-setup` and tests), `dev` (demo snapshot), `profiles` (git-ignored except `example`). `docs/`: INSTALL, CONFIG, APPS, GIT, ROADMAP (the status table), `history/` (superseded design).
 
 ## Conventions
