@@ -46,6 +46,7 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `CIRRUS_AUTH_HEADER` | `Remote-User` | The header a reverse proxy sets (header mode) |
 | `CIRRUS_TRUSTED_PROXIES` | `127.0.0.1,::1` | Addresses or prefixes the identity header is believed from |
 | `CIRRUS_ALLOWED_USERS` | — (required) | Comma-separated logins allowed in |
+| `CIRRUS_HOSTS` | — | Names the panel answers on, besides addresses, short names (`homeserver`), `*.ts.net`, this machine's name and `CIRRUS_GIT_URL`'s host. A name starting with `.` takes every name under it. Other names get 421, which stops a web page that points its own name at 127.0.0.1 (DNS rebinding) from using the panel. Header mode: list your reverse proxy's name here; until you do, any name is answered and the gateway warns at start |
 | `CIRRUS_WAKE` | `none` (`command` if a command is set) | Split only: `wol`, `command` or `none` |
 | `CIRRUS_WAKE_MAC` | — (the agent reports it) | `wol`, optional: the server's MAC address. Without it the gateway uses the one the agent last reported; set it only to override that, or if the agent hasn't reported yet |
 | `CIRRUS_WAKE_BROADCAST` | `255.255.255.255:9` | `wol`: where the magic packet goes |

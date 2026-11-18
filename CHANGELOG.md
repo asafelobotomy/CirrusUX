@@ -7,6 +7,28 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Security
+
+- The panel answers only on names it knows: addresses, short names,
+  `*.ts.net`, this machine's name, `CIRRUS_GIT_URL`'s host and the new
+  `CIRRUS_HOSTS`. A web page that points its own name at 127.0.0.1 (DNS
+  rebinding) could otherwise reach the gateway from a browser on the same
+  machine, set the identity header itself and use the panel and Git
+  hosting. With a reverse proxy (`CIRRUS_AUTH=header`), set `CIRRUS_HOSTS`
+  to its name: until then any name is still answered, and the gateway
+  warns at start.
+- `CIRRUS_DEV=1`, which signs everyone in, is refused unless
+  `CIRRUS_LISTEN` is a loopback address.
+- The agent refuses a `CIRRUS_GATEWAY_URL` that would send its token
+  unencrypted (plain `http://` to anything but this machine or a Tailscale
+  address), and follows no redirects, which could carry the token along.
+- A Git import no longer lets git follow redirects: the gateway follows
+  them itself, refusing any that lead inside your network, so a public
+  address can't redirect an import to the router or another LAN service.
+  Renamed repositories that redirect still import.
+- An app definition's `website` must be an `https://` address, so a
+  third-party CirrusStore source can't put a `javascript:` link in the panel.
+
 ## [0.9.0] - 2026-11-18
 
 ### Added

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +29,8 @@ type Host struct {
 	// AllowPrivateImport lets Import reach loopback, private and
 	// link-local addresses (CIRRUS_GIT_IMPORT_PRIVATE).
 	AllowPrivateImport bool
+	// insideFn replaces insideNetwork in tests, whose servers are on loopback.
+	insideFn func(netip.Addr) bool
 
 	mu    sync.Mutex
 	locks map[string]*sync.RWMutex

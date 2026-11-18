@@ -24,7 +24,11 @@ These are design rules; a way around any of them is a security problem:
 
 - Secrets never reach the browser, URLs or logs, and the router password
   never reaches the panel at all.
-- The panel is reachable only from the LAN and the tailnet by default.
+- The panel is reachable only from the LAN and the tailnet by default,
+  and answers only on names it knows (`CIRRUS_HOSTS`), so a DNS-rebinding
+  page can't reach it through a local browser.
+- The agent's token travels only over HTTPS, or to this machine or a
+  Tailscale address.
 - Every change is confirmed by a person; the assistant only proposes.
 - The gateway reaches the server's root only through the helper's fixed
   sudoers lines, and the helper checks every argument it's given.

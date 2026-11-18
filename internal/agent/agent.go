@@ -45,12 +45,14 @@ func New(cfg Config, c *Collector) *Agent {
 		cfg:       cfg,
 		collector: c,
 		client: &http.Client{
-			Timeout:   20 * time.Second,
-			Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
+			Timeout:       20 * time.Second,
+			Transport:     &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
+			CheckRedirect: noRedirects,
 		},
 		poll: &http.Client{
-			Timeout:   45 * time.Second,
-			Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
+			Timeout:       45 * time.Second,
+			Transport:     &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
+			CheckRedirect: noRedirects,
 		},
 		pushNow: make(chan struct{}, 1),
 	}
