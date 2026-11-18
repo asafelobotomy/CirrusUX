@@ -7,6 +7,13 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Changed
+
+- The built-in catalogue matches the official CirrusStore catalogue again:
+  Home Assistant 2026.11.1, Nextcloud 35.0.2-apache's rebuilt digest, and
+  Picard from `jlesage/musicbrainz-picard` v26.11.1 (Picard 3.0.4), which
+  also runs on arm64.
+
 ## [0.9.0] - 2026-11-18
 
 ### Added
