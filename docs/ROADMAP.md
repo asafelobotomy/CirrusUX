@@ -34,7 +34,7 @@ What carries forward:
 | 6 | Maintenance: app and OS updates, logs, storage and archive review, router power check, custom widgets | Done |
 | 7 | Public release: licence, docs, CI, project files | Done |
 | Git | Git hosting in the gateway ([GIT.md](GIT.md)) | Done |
-| Releases | Binaries with checksums, an install script, upgrade and rollback | Done: bundles, `install.sh`, `upgrade` and `rollback` since v0.7.0; v0.7.1 is the first published release. Upgrading from the panel, the daily release check and signed releases are done and unreleased. `.deb` packages moved to after 1.0 |
+| Releases | Binaries with checksums, an install script, upgrade and rollback | Done: bundles, `install.sh`, `upgrade` and `rollback` since v0.7.0; v0.7.1 is the first published release. Upgrading from the panel, the daily release check and signed releases since v0.9.0. `.deb` packages moved to after 1.0 |
 | Clean first commit | The public repository starts from a scrubbed tree | Done (9 November 2026); the repository is public |
 | Official catalogue | CirrusStore's signed catalogue at `asafelobotomy.github.io/cirrusstore/` | Done (11 November 2026): 19 apps (the 11 built in, and a Downloads group), each installed, opened and removed through a panel on a Debian 13 test VM first; the signed site verified, and a 0.7.1 panel installed an app from it |
 | 8 | Reinstall a real server on the public tooling | Private; its outcome gates 1.0 (§5) |
