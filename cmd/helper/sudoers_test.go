@@ -58,10 +58,14 @@ var sampleArgs = map[string][]string{
 	helperapi.CmdArchiveDelete: {"navidrome-20261101-120000"},
 	helperapi.CmdJournal:       {"cirrusux-agent.service"},
 	helperapi.CmdSelfUpgrade:   {"v0.9.0"},
+	helperapi.CmdSSHKeyAdd:     {"alice", "c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUE"},
+	helperapi.CmdSSHKeyRemove:  {"alice", "SHA256:" + strings.Repeat("A", 43)},
+	helperapi.CmdAccountLock:   {"alice"},
+	helperapi.CmdAccountUnlock: {"alice"},
 }
 
 // internalCommands are started by systemd, never through sudo.
-var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun, helperapi.CmdSelfRun}
+var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun, helperapi.CmdSelfRun, helperapi.CmdKeysIO}
 
 // agentLines is every command line the agent builds for the helper.
 func agentLines() [][]string {
@@ -114,12 +118,9 @@ func TestSudoersRulesAreReal(t *testing.T) {
 		if slices.Contains(internalCommands, sub) {
 			t.Errorf("rule %q allows an internal subcommand", r)
 		}
-		for i, a := range args {
-			if a == "*" {
-				if s, ok := sampleArgs[sub]; ok && i == 0 {
-					args[i] = s[0]
-				}
-			}
+		// A lone "*" stands for the whole argument list.
+		if len(args) == 1 && args[0] == "*" {
+			args = sampleArgs[sub]
 		}
 		if !validArgs(append([]string{sub}, args...)) {
 			t.Errorf("rule %q: the helper would refuse this command line", r)

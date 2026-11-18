@@ -12,10 +12,12 @@ import { confirmGit } from '../git/actions';
 import { installedApp, loadCatalogue, store } from './store.svelte';
 import { d3, offline, sendAction, type ActionReq, type Opts } from './send';
 import { confirmRemove, confirmUpdate } from './actionsStore';
+import { confirmAddKey, confirmLock, confirmRemoveKey } from './actionsAccess';
 
 export { sendAction, type ActionReq } from './send';
 export * from './actionsStore';
 export * from './actionsRelease';
+export * from './actionsAccess';
 
 async function liveWake(): Promise<void> {
   try {
@@ -167,6 +169,17 @@ export async function confirmAction(req: ActionReq, o: Opts = {}): Promise<void>
       toast(`Can't undo: ${a.app} isn't in the app catalogue`, 'warn');
       return;
     }
+    case 'ssh_key_add':
+      return confirmAddKey(a.user, a.key, o);
+    case 'ssh_key_remove': {
+      const k = live.access?.users.find((u) => u.name === a.user)?.keys.find((x) => x.fingerprint === a.fingerprint);
+      if (k) return confirmRemoveKey(a.user, k, o);
+      toast(`Can't undo: ${a.user} no longer has that key`, 'warn');
+      return;
+    }
+    case 'account_lock':
+    case 'account_unlock':
+      return confirmLock(a.user, req.action === 'account_lock', o);
   }
   if (req.action.startsWith('git_')) return confirmGit(req, undefined, o);
 }

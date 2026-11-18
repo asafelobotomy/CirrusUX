@@ -282,8 +282,10 @@ The steps below do what the `cirrusux` module does, for a system where
 Check: `sudo -u cirrusux cirrusux-agent -once | head -40` prints a snapshot.
 `features` lists the modules from `helper.env`, and `errors` should be empty.
 
-The sudoers file has two parts: `CIRRUS_READ` and `CIRRUS_ACT`. Leave
-`CIRRUS_ACT` off its last line to keep the panel read-only.
+The sudoers file has three parts: `CIRRUS_READ`, `CIRRUS_ACT` and
+`CIRRUS_ACCOUNTS` (SSH keys and account locking, with `ACCESS=yes`). Leave
+`CIRRUS_ACT` and `CIRRUS_ACCOUNTS` off its last line to keep the panel
+read-only, or only `CIRRUS_ACCOUNTS` to keep accounts read-only.
 
 ### The gateway
 

@@ -1,7 +1,7 @@
 {
   "host": "homeserver",
   "protocol": 1,
-  "actions": ["allow_sleep", "app_install", "app_remove", "app_update", "archive_delete", "backup_run", "container_restart", "container_start", "container_stop", "egress_report", "logs", "os_check", "os_upgrade", "stay_awake", "storage_scan"],
+  "actions": ["account_lock", "account_unlock", "allow_sleep", "app_install", "app_remove", "app_update", "archive_delete", "backup_run", "container_restart", "container_start", "container_stop", "egress_report", "logs", "os_check", "os_upgrade", "ssh_key_add", "ssh_key_remove", "stay_awake", "storage_scan"],
   "takenAt": "2026-11-01T20:40:00Z",
   "bootAt": "2026-10-30T09:00:00Z",
   "power": {
@@ -267,7 +267,8 @@
     "av",
     "security",
     "egress",
-    "apps"
+    "apps",
+    "access"
   ],
   "appsHost": {
     "runtime": "podman",
@@ -301,5 +302,149 @@
       "mainPort": 4533,
       "installed": "2026-11-01T20:40:00Z"
     }
-  ]
+  ],
+  "access": {
+    "ssh": {
+      "installed": true,
+      "running": true,
+      "ports": [
+        22
+      ],
+      "passwordAuth": false,
+      "pubkeyAuth": true,
+      "kbdInteractive": true,
+      "rootLogin": "prohibit-password",
+      "authMethods": "publickey",
+      "sftp": true,
+      "allowUsers": [
+        "alice@192.0.2.0/24",
+        "alice@100.64.0.0/10"
+      ],
+      "totp": true,
+      "keysFile": ".ssh/authorized_keys .ssh/authorized_keys2"
+    },
+    "users": [
+      {
+        "name": "root",
+        "uid": 0,
+        "home": "/root",
+        "shell": "/bin/bash",
+        "canLogin": true,
+        "admin": true,
+        "password": false,
+        "locked": false,
+        "keys": [],
+        "totp": false
+      },
+      {
+        "name": "alice",
+        "uid": 1000,
+        "home": "/home/alice",
+        "shell": "/bin/bash",
+        "canLogin": true,
+        "admin": true,
+        "password": true,
+        "locked": false,
+        "totp": true,
+        "keys": [
+          {
+            "type": "ssh-ed25519",
+            "fingerprint": "SHA256:Hl2k1ZcmRv5Y0QfmGq4u7X8nB3cD9eF0aB1cD2eF3gH",
+            "comment": "alice@laptop",
+            "public": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHl2k1ZcmRv5Y0QfmGq4u7X8nB3cD9eF0aB1cD2eF3gH"
+          },
+          {
+            "type": "sk-ssh-ed25519@openssh.com",
+            "fingerprint": "SHA256:Zk9Pz2YubiKeyQfmGq4u7X8nB3cD9eF0aB1cD2eF3gH",
+            "comment": "alice@yubikey",
+            "securityKey": true,
+            "public": "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29t"
+          }
+        ]
+      },
+      {
+        "name": "media",
+        "uid": 1001,
+        "home": "/srv/media",
+        "shell": "/usr/sbin/nologin",
+        "canLogin": false,
+        "admin": false,
+        "password": false,
+        "locked": false,
+        "keys": [],
+        "totp": false
+      },
+      {
+        "name": "guest",
+        "uid": 1002,
+        "home": "/home/guest",
+        "shell": "/bin/bash",
+        "canLogin": true,
+        "admin": false,
+        "password": true,
+        "locked": true,
+        "lockedByPanel": true,
+        "keys": [],
+        "totp": false
+      }
+    ],
+    "ftps": {
+      "installed": true,
+      "running": true,
+      "tls": 3,
+      "user": "media",
+      "userSet": true,
+      "home": "/mnt/media",
+      "passivePorts": "39000 40000",
+      "anonymous": false,
+      "certSha256": "AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89"
+    }
+  },
+  "network": {
+    "hostname": "homeserver",
+    "interfaces": [
+      {
+        "name": "lo",
+        "kind": "loopback",
+        "state": "up",
+        "mtu": 65536,
+        "addrs": [
+          "127.0.0.1/8",
+          "::1/128"
+        ]
+      },
+      {
+        "name": "enp1s0",
+        "kind": "ethernet",
+        "state": "up",
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "mtu": 1500,
+        "mbps": 1000,
+        "addrs": [
+          "192.0.2.10/24"
+        ]
+      },
+      {
+        "name": "tailscale0",
+        "kind": "tailscale",
+        "state": "up",
+        "mtu": 1280,
+        "addrs": [
+          "100.64.0.10/32"
+        ]
+      }
+    ],
+    "gateway": "192.0.2.1",
+    "gatewayIface": "enp1s0",
+    "dns": [
+      "192.0.2.1"
+    ],
+    "search": [
+      "lan"
+    ],
+    "tailscale": [
+      "100.64.0.10"
+    ],
+    "hidden": 4
+  }
 }

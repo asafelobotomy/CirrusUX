@@ -24,6 +24,10 @@
   import Logs from './pages/Logs.svelte';
   import Storage from './pages/Storage.svelte';
   import Git from './pages/Git.svelte';
+  import Accounts from './pages/Accounts.svelte';
+  import Network from './pages/Network.svelte';
+  import FileTransfer from './pages/FileTransfer.svelte';
+  import Terminal from './pages/Terminal.svelte';
   import { ui, assistantModal } from './lib/state/ui.svelte';
   import { applyTheme, settings } from './lib/state/settings.svelte';
   import { mode } from './lib/api.svelte';
@@ -48,7 +52,7 @@
     if (ui.route !== 'home') ui.editLayout = false;
   });
 
-  const PAGES = { services: Services, apps: Store, updates: Updates, logs: Logs, storage: Storage, git: Git, backups: Backups, changelog: Changelog, security: Security, settings: Settings, 'theme-editor': ThemeEditor, gallery: Gallery };
+  const PAGES = { services: Services, apps: Store, updates: Updates, logs: Logs, storage: Storage, git: Git, backups: Backups, changelog: Changelog, security: Security, accounts: Accounts, network: Network, files: FileTransfer, terminal: Terminal, settings: Settings, 'theme-editor': ThemeEditor, gallery: Gallery };
   const Page = $derived(PAGES[ui.route as keyof typeof PAGES] ?? Placeholder);
 </script>
 

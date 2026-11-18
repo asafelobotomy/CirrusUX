@@ -76,6 +76,9 @@ type Config struct {
 	// GitImportPrivate lets an import reach addresses inside this
 	// machine's network (CIRRUS_GIT_IMPORT_PRIVATE=1).
 	GitImportPrivate bool
+
+	// Terminal: SSH and SFTP in the browser (terminal.go), off by default.
+	Terminal TerminalConfig
 }
 
 // AssistantConfig picks an OpenAI-compatible chat API.
@@ -190,6 +193,9 @@ func ConfigFromEnv() (Config, error) {
 		return c, fmt.Errorf("CIRRUS_UPDATE_CHECK must be daily or off, not %q", v)
 	}
 	if err := c.gitFromEnv(); err != nil {
+		return c, err
+	}
+	if err := c.terminalFromEnv(); err != nil {
 		return c, err
 	}
 	return c, nil

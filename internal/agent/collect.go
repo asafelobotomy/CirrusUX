@@ -15,8 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"cirrusux/internal/access"
 	"cirrusux/internal/appjob"
 	"cirrusux/internal/helperapi"
+	"cirrusux/internal/netinfo"
 	"cirrusux/internal/osupdate"
 	"cirrusux/internal/selfupgrade"
 	"cirrusux/internal/snapshot"
@@ -188,7 +190,25 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 		}
 		s.Security.ClamAV = parseClamAV(av.Lines)
 	}
+	if has(helperapi.ModAccess) {
+		var st access.Status
+		if err := c.helper(ctx, helperapi.CmdAccessStatus, &st); err != nil {
+			errf("accounts: %v", err)
+		} else {
+			s.Access = &st
+		}
+	}
+	net := netinfo.Read(c.netPaths())
+	s.Network = &net
 	return s
+}
+
+// netPaths are where the Network page's facts are read from.
+func (c *Collector) netPaths() netinfo.Paths {
+	p := netinfo.DefaultPaths
+	p.Route = cmp.Or(c.RoutePath, p.Route)
+	p.Sys = cmp.Or(c.NetSysPath, p.Sys)
+	return p
 }
 
 // collectSleep reads the idle checker: its config, log and state files.

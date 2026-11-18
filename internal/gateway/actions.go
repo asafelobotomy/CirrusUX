@@ -190,7 +190,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 	// "signed" is never taken from the panel: postAction adds it from the
 	// verified cache.
 	for _, k := range []string{"minutes", "name", "app", "store", "options", "tag", "digest", "source", "lines", "confirm",
-		"to", "description", "url", "branch", "ref", "sha", "trash", "version"} {
+		"to", "description", "url", "branch", "ref", "sha", "trash", "version", "user", "key", "fingerprint"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}
