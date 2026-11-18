@@ -59,6 +59,7 @@ func main() {
 
 	gw := gateway.NewServer(cfg, store, power, web.Dist())
 	go gw.RunDigest(ctx)
+	go gw.RunReleaseCheck(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,

@@ -171,7 +171,7 @@ func init() {
 
 // postLocal starts a local action and answers as postAction does.
 func (s *Server) postLocal(w http.ResponseWriter, r *http.Request, req ActionReq, spec actionSpec) {
-	if s.git == nil {
+	if s.git == nil && strings.HasPrefix(req.Action, "git_") {
 		http.Error(w, "Git hosting is off", http.StatusNotFound)
 		return
 	}
@@ -206,8 +206,11 @@ func (s *Server) runLocal(c Command, args gitArgs, spec actionSpec) {
 	if err != nil {
 		undo = nil
 		var e *githost.Error
+		var le localErr
 		if errors.As(err, &e) {
 			msg = e.Msg
+		} else if errors.As(err, &le) {
+			msg = string(le)
 		} else {
 			slog.Error("git action", "err", err)
 			msg = "git failed"

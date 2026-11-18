@@ -190,7 +190,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 	// "signed" is never taken from the panel: postAction adds it from the
 	// verified cache.
 	for _, k := range []string{"minutes", "name", "app", "store", "options", "tag", "digest", "source", "lines", "confirm",
-		"to", "description", "url", "branch", "ref", "sha", "trash"} {
+		"to", "description", "url", "branch", "ref", "sha", "trash", "version"} {
 		if v, ok := q.Args[k]; ok {
 			if clean.Args == nil {
 				clean.Args = map[string]string{}
@@ -208,7 +208,7 @@ func (q ActionReq) Validate(snap *snapshot.Snapshot) (ActionReq, actionSpec, err
 
 // label is the action's audit text with the server's name filled in.
 func (s *Server) label(spec actionSpec, args map[string]string) string {
-	return strings.ReplaceAll(spec.label(args), "{server}", s.cfg.ServerName)
+	return strings.NewReplacer("{server}", s.cfg.ServerName, "{gateway}", s.cfg.GatewayName).Replace(spec.label(args))
 }
 
 // ---- HTTP ----
@@ -223,6 +223,10 @@ func (s *Server) postAction(w http.ResponseWriter, r *http.Request) {
 	clean, spec, err := req.Validate(snap)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.checkSelf(clean, snap); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 	if spec.local != nil {

@@ -39,6 +39,14 @@ const upgradeCmd = "sudo cirrusux-setup upgrade"
 // agentRefuses says why an action can't go to the agent, or "" if it can.
 func (s *Server) agentRefuses(action string, snap *snapshot.Snapshot) string {
 	c := compatOf(s.protocol, snap)
+	if isSelfAction(action) {
+		// Upgrading is the way out of a mismatch, so it isn't held back by
+		// one: it only needs an agent that knows the action.
+		if snap != nil && len(snap.Actions) > 0 && !slices.Contains(snap.Actions, action) {
+			return "The server's CirrusUX is too old to be upgraded from the panel: run " + upgradeCmd + " there once."
+		}
+		return ""
+	}
 	switch {
 	case c.GatewayTooOld:
 		return "The gateway's CirrusUX is too old for " + s.cfg.ServerName + "'s: update it on " + s.cfg.GatewayName + " (" + upgradeCmd + "), then try again."

@@ -63,6 +63,10 @@ type Config struct {
 	// written summary. Off by default: the assistant is otherwise only
 	// called when you use it.
 	DigestAssistant bool
+	// UpdateCheck lets the gateway ask GitHub once a day whether a newer
+	// CirrusUX release is out (CIRRUS_UPDATE_CHECK=off stops it; the
+	// panel's Check button still works).
+	UpdateCheck bool
 
 	// Git hosting (docs/GIT.md): off unless Git is set.
 	Git        bool
@@ -177,6 +181,13 @@ func ConfigFromEnv() (Config, error) {
 
 	if c.Assistant, err = assistantFromEnv(); err != nil {
 		return c, err
+	}
+	switch v := env("CIRRUS_UPDATE_CHECK", "daily"); v {
+	case "daily":
+		c.UpdateCheck = true
+	case "off":
+	default:
+		return c, fmt.Errorf("CIRRUS_UPDATE_CHECK must be daily or off, not %q", v)
 	}
 	if err := c.gitFromEnv(); err != nil {
 		return c, err

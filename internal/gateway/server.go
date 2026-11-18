@@ -54,6 +54,12 @@ type Server struct {
 	checkingUpdates sync.Mutex
 	// refreshingStore lets one CirrusStore check run at a time.
 	refreshingStore sync.Mutex
+	// checkingRelease lets one check for a CirrusUX release run at a time.
+	checkingRelease sync.Mutex
+	// Where releases are looked up, this machine's install and jobs, and
+	// how its root helper is reached (release.go); tests replace them.
+	releaseURL, setupLink, jobsDir string
+	selfCmd                        []string
 	// zone is the time zone every stamp the gateway writes uses (CIRRUS_TZ).
 	zone *time.Location
 	// protocol is the agent protocol this gateway speaks; tests change it to
@@ -79,6 +85,7 @@ func (s *Server) Close() {
 func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 	s := &Server{zone: time.UTC, protocol: snapshot.Protocol, cfg: cfg, store: store, power: power, web: web, queue: NewQueue(), registry: &registry.Client{}, storeClient: newStoreClient()}
 	s.ctx, s.stop = context.WithCancel(context.Background())
+	s.newReleaseDefaults()
 	if cfg.TZ != nil {
 		s.zone = cfg.TZ
 		store.zone = cfg.TZ
@@ -124,6 +131,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/apps/preview", s.previewApp)
 	api.HandleFunc("GET /api/updates", s.getUpdates)
 	api.HandleFunc("POST /api/updates/check", s.checkUpdates)
+	api.HandleFunc("GET /api/release", s.getRelease)
+	api.HandleFunc("POST /api/release/check", s.postReleaseCheck)
 	s.gitRoutes(api)
 	mux.Handle("/api/", s.auth(api))
 	if s.git != nil {
