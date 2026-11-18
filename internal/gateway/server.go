@@ -128,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/catalogue", s.getCatalogue)
 	api.HandleFunc("GET /api/store", s.getStore)
 	api.HandleFunc("POST /api/store/refresh", s.refreshStore)
+	api.HandleFunc("POST /api/store/preview", s.previewSource)
 	api.HandleFunc("POST /api/apps/preview", s.previewApp)
 	api.HandleFunc("GET /api/updates", s.getUpdates)
 	api.HandleFunc("POST /api/updates/check", s.checkUpdates)

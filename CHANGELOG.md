@@ -7,6 +7,19 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Added
+
+- CirrusStore: **Add a source** in the Store's Sources card checks a
+  third-party catalogue before you trust it. Give its URL and the
+  publisher's public key (the whole `NAME.pub` line, or its last field);
+  the gateway fetches the catalogue once, checks every file against that
+  key exactly as Check CirrusStore would, and lists its apps with any that
+  would be left out or clash with an app you already have. It shows the
+  key's fingerprint to compare with the publisher's, and the
+  `STORE_SOURCES` entry to add on the server. Nothing is kept and nothing
+  changes on the server: trusting a source is still done by root, with
+  `cirrusux-setup apply store`.
+
 ## [0.9.0] - 2026-11-18
 
 ### Added

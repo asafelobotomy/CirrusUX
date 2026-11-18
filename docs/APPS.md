@@ -300,6 +300,16 @@ Any static HTTPS host works (GitHub Pages, a bucket, a plain web server).
 The source's name is the one in your key and every file (lowercase letters,
 digits and `-`; `cirrusstore` and `built-in` are taken).
 
+To check it first, open **Add a source** in the Store's Sources card and
+give the catalogue's URL and `friends.pub` (the whole line, or just its last
+field). The gateway fetches the catalogue once and checks every file
+against that key, as Check CirrusStore would. It lists the apps it offers,
+marks any that would be left out (a bad signature, a definition CirrusUX
+refuses, such as one asking for privileged mode or host networking) or that
+clash with an app id you already have, and shows the key's fingerprint and
+the exact `STORE_SOURCES` entry to use. Nothing is cached, and nothing
+changes on the server.
+
 To trust it, the server's owner adds it to `host.env` and runs the store
 module:
 
@@ -312,8 +322,10 @@ sudo cirrusux-setup apply store
 That writes `/etc/cirrusux/store.d/friends.source` (root, mode 644). The
 panel lists the source with its key's fingerprint (`SHA256:…`): compare it
 with the one `cirrusstore keygen` printed for you, over a channel other
-than the one the key came by. The panel can't add a source; only root on
-the server can.
+than the one the key came by. The panel can check a source but can't add
+one; only root on the server can. To drop a source, take it out of
+`STORE_SOURCES` and apply the store module again (a dated copy of its file
+stays).
 
 App ids are unique across sources. If yours has an id that a built-in or
 official app already uses, CirrusStore shows yours as unavailable, with the

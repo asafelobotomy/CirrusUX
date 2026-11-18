@@ -1,6 +1,8 @@
 <script lang="ts">
   // CirrusStore's sources: what the server trusts, and how the last check
-  // went. Adding one is done on the server, never from the panel.
+  // went. The panel can check a new source, but trusting it is done on the
+  // server, never from the panel.
+  import AddSource from './AddSource.svelte';
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import { mode } from '../api.svelte';
@@ -42,14 +44,8 @@
   {/if}
   <details>
     <summary>Add a source</summary>
-    <p class="small">
-      Sources are added on {mode.server}, so the panel can't add one. Get the source's URL and the last field of its public key
-      (<code>NAME.pub</code>) from its publisher, compare the fingerprint shown here with theirs afterwards, and on {mode.server} run:
-    </p>
-    <pre>sudo nano /etc/cirrusux/host.env
-#   STORE_SOURCES="name|https://example.org/catalogue/|KEY"
-sudo cirrusux-setup apply store</pre>
-    <p class="small faint">Every app from a source is checked against its key on {mode.server} again before it's installed. <code>STORE_OFFICIAL=no</code> leaves CirrusStore's own catalogue out.</p>
+    <AddSource />
+    <p class="small faint">Removing one: take it out of <code>STORE_SOURCES</code> and apply the store module again. <code>STORE_OFFICIAL=no</code> leaves CirrusStore's own catalogue out.</p>
   </details>
 </Card>
 
@@ -62,6 +58,5 @@ sudo cirrusux-setup apply store</pre>
   .fp { word-break: break-all; }
   .err { color: var(--bad); }
   summary { cursor: pointer; color: var(--text-muted); font-size: 0.88rem; }
-  details p { margin: var(--space-2) 0; }
-  pre { margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); font-size: 0.78rem; overflow: auto; }
+  details > p { margin: var(--space-2) 0; }
 </style>
