@@ -160,7 +160,7 @@
       <p class="adj"><TriangleAlert size={15} /> The parts run different versions. Install the same release everywhere.</p>
     {/if}
     {#if live.agentTooOld || live.gatewayTooOld}
-      <p class="adj"><TriangleAlert size={15} /> {live.agentTooOld ? `${mode.server} runs an older CirrusUX than the gateway` : `${mode.gateway} runs an older CirrusUX than ${mode.server}`}, so changes are off. Run <code>sudo cirrusux-setup upgrade</code> there.</p>
+      <p class="adj"><TriangleAlert size={15} /> {live.agentTooOld ? `${mode.server} runs an older CirrusUX than the gateway` : `${mode.gateway} runs an older CirrusUX than ${mode.server}`}, so changes are off. Upgrade it on the Updates page, or run <code>sudo cirrusux-setup upgrade</code> there.</p>
     {/if}
   </Card>
 

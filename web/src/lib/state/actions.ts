@@ -15,6 +15,7 @@ import { confirmRemove, confirmUpdate } from './actionsStore';
 
 export { sendAction, type ActionReq } from './send';
 export * from './actionsStore';
+export * from './actionsRelease';
 
 async function liveWake(): Promise<void> {
   try {

@@ -154,3 +154,10 @@ test('an action is offered only when the agent lists it', () => {
   assert.equal(agentRuns(['backup_run'], false, 'backup_run'), true);
   assert.equal(agentRuns([], true, 'backup_run'), false, 'a protocol mismatch turns actions off');
 });
+
+test("CirrusUX's own upgrade needs an agent that lists it, and works across a mismatch", () => {
+  assert.equal(agentRuns([], false, 'self_upgrade'), false, 'an agent that lists nothing predates panel upgrades');
+  assert.equal(agentRuns(['backup_run'], false, 'self_upgrade'), false);
+  assert.equal(agentRuns(['self_upgrade'], true, 'self_upgrade'), true, 'upgrading is the way out of a mismatch');
+  assert.equal(agentRuns(['self_upgrade'], true, 'self_rollback'), false);
+});

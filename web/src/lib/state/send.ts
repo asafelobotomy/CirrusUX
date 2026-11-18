@@ -20,7 +20,7 @@ export function offline(action?: string): boolean {
     return true;
   }
   if (mode.live && action && !agentCan(action)) {
-    toast(`${UPDATE_HINT}: run sudo cirrusux-setup upgrade there.`, 'warn');
+    toast(`${UPDATE_HINT}: upgrade it on the Updates page, or run sudo cirrusux-setup upgrade there.`, 'warn');
     return true;
   }
   return false;
@@ -28,7 +28,7 @@ export function offline(action?: string): boolean {
 
 /** Sends an action to the server through the gateway and waits for the result. */
 export async function sendAction(req: ActionReq, label: string, quiet = false, opts: { where?: string; waitMs?: number } = {}): Promise<Command | null> {
-  if (mode.live && !agentCan(req.action) && !req.action.startsWith('git_')) {
+  if (mode.live && !agentCan(req.action) && !req.action.startsWith('git_') && !req.action.startsWith('gateway_')) {
     // The gateway refuses it too; this saves the round trip and says why.
     toast(`${label}: ${UPDATE_HINT}.`, 'warn');
     return null;

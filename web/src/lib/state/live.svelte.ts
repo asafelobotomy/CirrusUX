@@ -2,6 +2,7 @@
 // is replaced from the gateway's snapshot in live mode (lib/sync.svelte.ts).
 import * as data from '../demo/data';
 import { agentRuns } from './agentActions';
+import type { Install } from '../release';
 
 export type Health = 'healthy' | 'running' | 'starting' | 'unhealthy' | 'exited';
 
@@ -41,6 +42,8 @@ export const live = $state({
   problems: [] as string[],
   /** Version of the agent that sent the last snapshot. */
   agentVersion: '',
+  /** The server's own CirrusUX install; null when the agent didn't say (an older agent). */
+  install: { managed: true, current: 'v0.8.1', previous: 'v0.8.0' } as Install | null,
   /** Actions the agent runs; empty when it didn't say (an older agent), which allows all. */
   actions: [] as string[],
   /** The agent speaks an older protocol than the gateway, or a newer one. */

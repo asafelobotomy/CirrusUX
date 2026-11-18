@@ -14,7 +14,7 @@
     <TriangleAlert size={15} />
     <span>
       CirrusUX on <strong>{where}</strong> is older than the other half, so changes are turned off for now.
-      Upgrade it there with <code>sudo cirrusux-setup upgrade</code>, then reload.
+      Upgrade it on the <a href="#/updates">Updates</a> page, or there with <code>sudo cirrusux-setup upgrade</code>, then reload.
     </span>
   </p>
 {/if}

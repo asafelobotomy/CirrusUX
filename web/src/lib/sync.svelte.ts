@@ -18,6 +18,7 @@ import type { Health } from './state/live.svelte';
 interface Snap {
   takenAt: string;
   agentVersion?: string;
+  install?: { managed: boolean; current?: string; previous?: string };
   protocol?: number;
   actions?: string[];
   bootAt: string;
@@ -37,7 +38,7 @@ interface Snap {
   apps?: { id: string; name: string; tag: string; digest?: string; previousTag?: string; previousDigest?: string; runtime: string; mainPort: number; https?: boolean; installed: string; source?: string; serial?: number }[];
   storage?: { measured: string; roots: StorageResult['roots']; archive: (Omit<ArchiveEntry, 'modified'> & { modified: string })[] };
   osUpdates?: { checked: string; packages: { name: string; from: string; to: string; security?: boolean }[]; rebootRequired?: boolean; upgraded?: string; upgradedCount?: number };
-  jobs?: { id: string; action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
+  jobs?: { id: string; action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete' | 'self-upgrade' | 'self-rollback'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
   appsHost?: AppsHost;
 }
 
@@ -73,7 +74,10 @@ function apply(st: StateResp): void {
   live.agentTooOld = st.compat?.agentTooOld ?? false;
   live.gatewayTooOld = st.compat?.gatewayTooOld ?? false;
   const s = st.snapshot;
-  if (!s) return;
+  if (!s) {
+    live.install = null; // no report yet: the sample install isn't this server's
+    return;
+  }
   const taken = new Date(s.takenAt);
   power.lastSnapshot = taken;
   if (mode.offline) {
@@ -108,6 +112,7 @@ function apply(st: StateResp): void {
   live.timeline = s.timeline.map((t) => ({ from: new Date(t.from), to: d(t.to), state: t.state, reason: t.reason }));
   live.problems = s.errors ?? [];
   live.agentVersion = s.agentVersion ?? '';
+  live.install = s.install ?? null;
   live.actions = s.actions ?? [];
   mode.features = s.features ?? [];
   store.installed = (s.apps ?? []).map((a) => ({ ...a, installed: new Date(a.installed) }));

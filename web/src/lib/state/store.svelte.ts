@@ -26,7 +26,7 @@ export interface InstalledApp {
 
 export interface Job {
   id: string;
-  action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete';
+  action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete' | 'self-upgrade' | 'self-rollback';
   app: string;
   name: string;
   state: 'running' | 'done' | 'failed';

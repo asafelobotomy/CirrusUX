@@ -4,6 +4,7 @@
   import Badge from '../lib/components/Badge.svelte';
   import Button from '../lib/components/Button.svelte';
   import JobList from '../lib/store/JobList.svelte';
+  import ReleaseCard from '../lib/release/ReleaseCard.svelte';
   import { mode } from '../lib/api.svelte';
   import { agentCan, needsAgent } from '../lib/state/live.svelte';
   import { power } from '../lib/state/power.svelte';
@@ -30,7 +31,7 @@
     store.installed.map((a) => ({ a, u: store.updates.apps.find((u) => u.app === a.id && u.current === a.tag) })),
   );
   const waiting = $derived(rows.filter((r) => r.u?.latest).length);
-  const updateJobs = $derived(store.jobs.filter((j) => j.action === 'update' || j.action.startsWith('os-')));
+  const updateJobs = $derived(store.jobs.filter((j) => j.action === 'update' || j.action.startsWith('os-') || j.action.startsWith('self-')));
   const osJob = $derived(store.jobs.find((j) => j.app === 'os' && j.state === 'running'));
   const security = $derived(store.os?.packages.filter((p) => p.security).length ?? 0);
   // Updates need the server awake; checking doesn't.
@@ -43,6 +44,9 @@
     <Card title={updateJobs.some((j) => j.state === 'running') ? 'Updates in progress' : 'Recent updates'}><JobList /></Card>
   {/if}
 
+  <ReleaseCard />
+
+  {#if has('apps')}
   <Card title="App updates" subtitle={store.updates.checked ? `Checked ${fmtAgo(store.updates.checked)} (${fmtDayTime(store.updates.checked)})` : 'Not checked yet. Nothing is checked unless you ask.'}>
     {#snippet actions()}
       <Button size="sm" disabled={checking || !store.installed.length} onclick={check}>{#snippet icon()}<RefreshCw />{/snippet}{checking ? 'Checking…' : 'Check now'}</Button>
@@ -94,6 +98,7 @@
       {/if}
     {/if}
   </Card>
+  {/if}
 
   {#if has('os')}
     <Card title="Operating system" subtitle={store.os ? `Checked ${fmtAgo(store.os.checked)} (${fmtDayTime(store.os.checked)})` : 'Not checked yet. Nothing is checked or installed unless you ask.'}>
@@ -123,11 +128,13 @@
     </Card>
   {/if}
 
+  {#if has('apps')}
   <p class="faint note">
     Checks ask the registries from the gateway, so a sleeping server isn't woken. Newer app definitions appear here after Check CirrusStore on the CirrusStore page.
     An update backs up the app's settings and data first, and if the new version doesn't answer, the old one and its settings come back by themselves.
     Only same-shaped release versions are offered: never betas, never :latest.
   </p>
+  {/if}
 </div>
 
 <style>
