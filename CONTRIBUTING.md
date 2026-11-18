@@ -45,11 +45,13 @@ stop the agent for about 7 minutes to see the asleep state.
 `## [Unreleased]` in `CHANGELOG.md` as you go. To release:
 
 ```bash
+scripts/sign-release.sh --check-agent   # the agent offers the release key (fix it now, not after tagging)
 make bump V=x.y.z                       # VERSION, web/package.json, a dated CHANGELOG section
 git commit -am 'Release vX.Y.Z'
 git tag -a vX.Y.Z -m 'CirrusUX X.Y.Z'
 git push origin main vX.Y.Z
 scripts/sign-release.sh vX.Y.Z          # once the release workflow has finished
+scripts/verify-release.sh vX.Y.Z        # what install.sh will check, from GitHub
 ```
 
 The tag starts `.github/workflows/release.yml`. It builds a bundle for each
@@ -69,6 +71,49 @@ disk, and GitHub never has it, so a release changed on GitHub fails the
 check. Replacing the key means a release with a new `RELEASE_KEY`; machines
 on older releases then upgrade once with `install.sh --unsigned` or a fresh
 `install.sh`.
+
+### Signing a release, step by step
+
+1. **Before tagging**, unlock the password manager (or plug in the hardware
+   key), point `SSH_AUTH_SOCK` at its agent and run
+   `scripts/sign-release.sh --check-agent`. It prints the release key's
+   fingerprint and passes only if the agent offers that key. It reads
+   public keys only (`ssh-add -L`).
+2. **Tag and push**, then wait for the release workflow to finish
+   (`gh run watch`).
+3. **Sign:** `scripts/sign-release.sh vX.Y.Z`. It checks the agent again,
+   downloads the release, checks it against `SHA256SUMS` and the build
+   attestations, asks the agent to sign `SHA256SUMS` (a password manager
+   may ask you to approve this), verifies the signature locally, uploads
+   `SHA256SUMS.sig` and then checks the copy GitHub serves.
+4. **Verify:** `scripts/verify-release.sh vX.Y.Z` downloads the release as
+   a stranger would and checks the signature against `RELEASE_KEY` in your
+   checkout's `install.sh`, then every file against `SHA256SUMS`. It
+   needs no key and no sign-in, so anyone can run it. `--from DIR` checks a
+   folder you already have; `--sums-only` skips downloading the bundles.
+
+`deploy/host/tests/release-signing.sh` (part of `make test-host`) runs
+the same steps with a throwaway key in a scratch `ssh-agent`.
+
+### When the agent doesn't offer the key
+
+`sign-release.sh` stops before it downloads anything and lists the keys the
+agent does offer (fingerprints only). Check, in order:
+
+- `echo $SSH_AUTH_SOCK` names the password manager's agent, not another
+  `ssh-agent` or a forwarded one from an SSH session.
+- `ssh-add -l` lists `SHA256:x+sDW0ML8OfvNNrIWXZHSrxe1xFCwhs8Pox/7Bdjxhg`
+  (the fingerprint of `RELEASE_KEY`). If it doesn't, the agent hasn't
+  loaded the key. With Proton Pass, make sure the SSH key item is in a
+  vault the agent serves and that the agent is turned on in the app's
+  settings, then restart the agent (or the app) so it loads a key added
+  since it started, and unlock the app.
+- Run `scripts/sign-release.sh --check-agent` again until it passes.
+
+Don't work around it by exporting the private key to a file: the key is
+only ever in the agent, never on disk or in the repository. If the agent
+can't be fixed, the release waits; it installs nowhere until it is signed,
+so waiting is safe.
 
 `make bump` does not commit or tag. Releases follow semantic versioning
 (before 1.0.0, one minor version per plan phase). From 1.0.0, what a

@@ -9,6 +9,7 @@ Full build, test, local-run and release steps are in `CONTRIBUTING.md`. For agen
 - Run locally with demo data, two terminals: `make dev-gateway` (http://127.0.0.1:8064) and `make dev-agent`.
 - `make store-site KEY=...` signs the CirrusStore catalogue and needs the offline key; don't run it.
 - `scripts/sign-release.sh vX.Y.Z` signs a published release with the release key, which an SSH agent holds (CONTRIBUTING.md, Releases). A release installs nowhere until it is signed.
+- `scripts/verify-release.sh vX.Y.Z` checks a release's signature and checksums as `install.sh` does; it needs no key. Never read, export or commit the release key's private half.
 
 ## Layout
 - `cmd/`: `gateway`, `agent`, `helper` (root via sudo), `dockerfilter`, `idle`, `cirrusstore`. `internal/`: the Go packages (`gateway`, `agent`, `helperapi`, `catalogue` with `apps/*.json`, `store`, `assistant`, `idle`, `githost` (Git hosting, docs/GIT.md), ...).

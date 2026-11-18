@@ -7,6 +7,16 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/verify-release.sh vX.Y.Z` checks a published release the way
+  `install.sh` does (signature, then every file's checksum) without
+  installing it. `scripts/sign-release.sh --check-agent` checks that the
+  SSH agent offers the release key before a release is tagged, and signing
+  now checks the agent first, shows why the agent refused, and verifies the
+  signature GitHub serves afterwards. CONTRIBUTING.md walks through signing
+  and what to do when the agent doesn't offer the key.
+
 ## [0.9.0] - 2026-11-18
 
 ### Added

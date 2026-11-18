@@ -10,14 +10,21 @@
 #
 # The private key never touches this machine's disk: an SSH agent holds it
 # and does the signing. Which key is the one in install.sh (RELEASE_KEY).
+# Before anything is downloaded it checks that the agent offers that key;
+# `--check-agent` makes only that check, so you can fix the agent before
+# the release is tagged. Afterwards scripts/verify-release.sh checks the
+# signature GitHub now serves, as install.sh will.
 #
 #   SSH_AUTH_SOCK   the agent that holds the key (a password manager's, a
 #                   hardware key's, or ssh-agent)
 #   CIRRUS_REPO     another repository than asafelobotomy/CirrusUX
+#   CIRRUS_SIGNERS  another allowed-signers line than install.sh's (tests,
+#                   or a fork's own key)
 #   --no-attestation  skip the attestation check (a private repository
 #                   keeps none)
+#   --check-agent   only check that the agent offers the release key
 #
-# Needs gh (signed in), ssh-keygen and sha256sum.
+# Needs gh (signed in), ssh-add, ssh-keygen, sha256sum and curl.
 set -euo pipefail
 REPO=${CIRRUS_REPO:-asafelobotomy/CirrusUX}
 SIGN_AS=release@cirrusux SIGN_NS=cirrusux-release
@@ -28,21 +35,23 @@ die() {
 	exit 1
 }
 
-version="" attest=yes
+usage="usage: scripts/sign-release.sh vX.Y.Z [--no-attestation] | --check-agent"
+version="" attest=yes check_only=no
 for a; do
 	case "$a" in
 	--no-attestation) attest=no ;;
+	--check-agent) check_only=yes ;;
 	v[0-9]*) version=$a ;;
-	*) die "usage: scripts/sign-release.sh vX.Y.Z [--no-attestation]" ;;
+	*) die "$usage" ;;
 	esac
 done
-[[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: scripts/sign-release.sh vX.Y.Z [--no-attestation]"
-for tool in gh ssh-keygen sha256sum; do
-	command -v "$tool" >/dev/null || die "needs $tool"
+[ "$check_only" = yes ] || [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "$usage"
+for tool in ssh-add ssh-keygen; do
+	command -v "$tool" >/dev/null || die "needs $tool (openssh-client)"
 done
 
 # The key to sign with is the one install.sh checks against.
-signers=$(sed -n "s/^RELEASE_KEY='\(.*\)'\$/\1/p" "$here/install.sh")
+signers=${CIRRUS_SIGNERS-$(sed -n "s/^RELEASE_KEY='\(.*\)'\$/\1/p" "$here/install.sh")}
 [ -n "$signers" ] || die "install.sh holds no release key yet (RELEASE_KEY)"
 key=$(printf '%s\n' "$signers" | grep -o 'ssh-[a-z0-9-]* [A-Za-z0-9+/=]*' | head -1)
 [ -n "$key" ] || die "RELEASE_KEY in install.sh isn't an allowed-signers line"
@@ -51,6 +60,29 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 printf '%s\n' "$key" >"$tmp/release.pub"
 printf '%s\n' "$signers" >"$tmp/signers"
+fp=$(ssh-keygen -lf "$tmp/release.pub" | cut -d' ' -f2)
+
+# The agent must offer the release key. Only public keys are listed here.
+[ -n "${SSH_AUTH_SOCK:-}" ] || die "SSH_AUTH_SOCK is unset: point it at the agent that holds the release key ($fp)"
+offered=$(ssh-add -L 2>/dev/null) || offered=""
+if ! grep -qF "$key" <<<"$offered"; then
+	{
+		echo "sign-release.sh: the agent at $SSH_AUTH_SOCK doesn't offer the release key $fp."
+		if [ -n "$offered" ]; then
+			echo "It offers:"
+			ssh-add -l 2>/dev/null | sed 's/^/  /'
+		else
+			echo "It offers no keys, or isn't running."
+		fi
+		echo "See CONTRIBUTING.md, \"When the agent doesn't offer the key\". Don't export the private key to a file."
+	} >&2
+	exit 1
+fi
+echo "Agent: offers the release key $fp."
+[ "$check_only" = no ] || exit 0
+for tool in gh sha256sum curl; do
+	command -v "$tool" >/dev/null || die "needs $tool"
+done
 
 gh release download "$version" -R "$REPO" -D "$tmp/r" || die "couldn't download $version from $REPO"
 [ -f "$tmp/r/SHA256SUMS" ] || die "$version has no SHA256SUMS: has the release workflow finished?"
@@ -68,9 +100,14 @@ if [ "$attest" = yes ]; then
 fi
 
 rm -f "$tmp/r/SHA256SUMS.sig"
-ssh-keygen -Y sign -U -f "$tmp/release.pub" -n "$SIGN_NS" "$tmp/r/SHA256SUMS" >/dev/null 2>&1 ||
-	die "signing failed: is the release key's agent running and unlocked (SSH_AUTH_SOCK=${SSH_AUTH_SOCK:-unset})?"
+# A password manager's agent may ask you to approve this signature.
+if ! out=$(ssh-keygen -Y sign -U -f "$tmp/release.pub" -n "$SIGN_NS" "$tmp/r/SHA256SUMS" 2>&1); then
+	printf '%s\n' "$out" >&2
+	die "the agent didn't sign: was the request approved, and is the agent unlocked?"
+fi
 ssh-keygen -Y verify -f "$tmp/signers" -I "$SIGN_AS" -n "$SIGN_NS" -s "$tmp/r/SHA256SUMS.sig" <"$tmp/r/SHA256SUMS" >/dev/null ||
 	die "the new signature doesn't verify against install.sh's key: not uploaded"
 gh release upload "$version" "$tmp/r/SHA256SUMS.sig" -R "$REPO" --clobber
-echo "Signed $version: SHA256SUMS.sig is on the release."
+echo "Signed $version: SHA256SUMS.sig is on the release. Checking what GitHub serves now:"
+"$here/scripts/verify-release.sh" "$version" --sums-only ||
+	die "the uploaded signature doesn't check out from GitHub: look at the release before anyone upgrades"
