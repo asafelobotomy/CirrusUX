@@ -31,7 +31,7 @@ PREFIX=${CIRRUS_PREFIX:-/opt/cirrusux}
 # The release key's public half, as an OpenSSH allowed-signers line.
 # scripts/sign-release.sh signs with the private half. (CIRRUS_SIGNERS
 # replaces it for the tests and for a fork's own releases.)
-RELEASE_KEY=''
+RELEASE_KEY='release@cirrusux namespaces="cirrusux-release" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHKO54uGI9UtKlTWv1REPMLHWQnCMzsDEX521PL59AcT'
 SIGNERS=${CIRRUS_SIGNERS-$RELEASE_KEY}
 SIGN_AS=release@cirrusux SIGN_NS=cirrusux-release
 version="" from="" init=yes unsigned=no
