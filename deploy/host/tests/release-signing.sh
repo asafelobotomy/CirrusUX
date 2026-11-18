@@ -53,7 +53,7 @@ grep -q "doesn't offer the release key" "$T/out" || fail "no clear message for a
 grep -q "ED25519" "$T/out" || fail "it should list what the agent offers: $(cat "$T/out")"
 "$H/scripts/sign-release.sh" v1.2.3 --no-attestation >"$T/out" 2>&1 && fail "signed without the key"
 [ ! -e "$R/SHA256SUMS.sig" ] || fail "a signature was uploaded without the key"
-(unset SSH_AUTH_SOCK; "$H/scripts/sign-release.sh" --check-agent >"$T/out" 2>&1) && fail "--check-agent passed with no agent"
+(unset SSH_AUTH_SOCK; HOME=$T "$H/scripts/sign-release.sh" --check-agent >"$T/out" 2>&1) && fail "--check-agent passed with no agent"
 grep -q "SSH_AUTH_SOCK is unset" "$T/out" || fail "no clear message for no agent: $(cat "$T/out")"
 echo "1 an agent without the release key is refused before signing"
 
@@ -86,3 +86,9 @@ cp -r "$R" "$T/wrongns"; rm "$T/wrongns/SHA256SUMS.sig"
 ssh-keygen -q -Y sign -f "$T/key" -n file "$T/wrongns/SHA256SUMS" 2>/dev/null
 "$H/scripts/verify-release.sh" --from "$T/wrongns" >/dev/null 2>&1 && fail "verified a signature in another namespace"
 echo "4 a changed bundle, an unlisted file, another key and another namespace are refused"
+
+# 5. No SSH_AUTH_SOCK: Proton Pass's socket is used when it's there.
+mkdir -p "$T/home/.ssh"; ln -s "$T/agent.sock" "$T/home/.ssh/proton-pass-agent.sock"
+(unset SSH_AUTH_SOCK; HOME=$T/home "$H/scripts/sign-release.sh" --check-agent >"$T/out" 2>&1) || fail "Proton Pass's socket: $(cat "$T/out")"
+grep -q "using Proton Pass's" "$T/out" || fail "it should say it uses Proton Pass's agent: $(cat "$T/out")"
+echo "5 with SSH_AUTH_SOCK unset, Proton Pass's agent socket is used"

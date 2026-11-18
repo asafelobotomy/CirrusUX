@@ -12,7 +12,7 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 - `scripts/verify-release.sh vX.Y.Z` checks a published release the way
   `install.sh` does (signature, then every file's checksum) without
   installing it. `scripts/sign-release.sh --check-agent` checks that the
-  SSH agent offers the release key before a release is tagged, and signing
+  SSH agent (Proton Pass's by default) offers the release key before a release is tagged, and signing
   now checks the agent first, shows why the agent refused, and verifies the
   signature GitHub serves afterwards. CONTRIBUTING.md walks through signing
   and what to do when the agent doesn't offer the key.

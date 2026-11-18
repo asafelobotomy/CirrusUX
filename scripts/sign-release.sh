@@ -15,8 +15,8 @@
 # the release is tagged. Afterwards scripts/verify-release.sh checks the
 # signature GitHub now serves, as install.sh will.
 #
-#   SSH_AUTH_SOCK   the agent that holds the key (a password manager's, a
-#                   hardware key's, or ssh-agent)
+#   SSH_AUTH_SOCK   the agent that holds the key; unset, Proton Pass's
+#                   (~/.ssh/proton-pass-agent.sock) if it is running
 #   CIRRUS_REPO     another repository than asafelobotomy/CirrusUX
 #   CIRRUS_SIGNERS  another allowed-signers line than install.sh's (tests,
 #                   or a fork's own key)
@@ -63,7 +63,14 @@ printf '%s\n' "$signers" >"$tmp/signers"
 fp=$(ssh-keygen -lf "$tmp/release.pub" | cut -d' ' -f2)
 
 # The agent must offer the release key. Only public keys are listed here.
-[ -n "${SSH_AUTH_SOCK:-}" ] || die "SSH_AUTH_SOCK is unset: point it at the agent that holds the release key ($fp)"
+# Without SSH_AUTH_SOCK, Proton Pass's agent socket is used if it's there.
+proton_sock=$HOME/.ssh/proton-pass-agent.sock
+if [ -z "${SSH_AUTH_SOCK:-}" ] && [ -S "$proton_sock" ]; then
+	export SSH_AUTH_SOCK=$proton_sock
+	echo "Agent: using Proton Pass's ($proton_sock)."
+fi
+[ -n "${SSH_AUTH_SOCK:-}" ] ||
+	die "SSH_AUTH_SOCK is unset and Proton Pass's agent isn't running: start it (pass-cli ssh-agent daemon start) or point SSH_AUTH_SOCK at the agent that holds the release key ($fp)"
 offered=$(ssh-add -L 2>/dev/null) || offered=""
 if ! grep -qF "$key" <<<"$offered"; then
 	{
@@ -73,6 +80,10 @@ if ! grep -qF "$key" <<<"$offered"; then
 			ssh-add -l 2>/dev/null | sed 's/^/  /'
 		else
 			echo "It offers no keys, or isn't running."
+		fi
+		if [ "$SSH_AUTH_SOCK" = "$proton_sock" ]; then
+			echo "Proton Pass's agent looks for new keys only every hour (--refresh-interval): restart it so it loads the key now:"
+			echo "  pass-cli ssh-agent daemon stop && pass-cli ssh-agent daemon start"
 		fi
 		echo "See CONTRIBUTING.md, \"When the agent doesn't offer the key\". Don't export the private key to a file."
 	} >&2
