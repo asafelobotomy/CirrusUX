@@ -62,6 +62,7 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `ASSISTANT_NAME` | Grok for xai, Claude for anthropic, else Assistant | Name shown in the UI |
 | `CIRRUS_ASSISTANT_DAILY_TOKENS` | `200000` | Daily token budget |
 | `CIRRUS_DIGEST_ASSISTANT` | off | `1` lets the 08:00 digest ask the assistant for a summary |
+| `CIRRUS_UPDATE_CHECK` | `daily` | `daily`: the gateway asks GitHub once a day which CirrusUX release is the latest. `off`: only when you press Check on the Updates page |
 | `CIRRUS_GIT` | off | `1` turns on Git hosting (docs/GIT.md). Needs git 2.30 or newer on the gateway |
 | `CIRRUS_GIT_DIR` | `$CIRRUS_DATA_DIR/git` | Where the Git repositories are kept |
 | `CIRRUS_GIT_URL` | the panel's address | The address in clone URLs, e.g. `https://homeserver.example.ts.net` (no path) |
@@ -121,7 +122,7 @@ setting; each module's file in `deploy/host/modules/` describes its own.
 | `HOST_TZ` | — | base: time zone to set |
 | `HOST_AUTO_UPDATES` | `no` | base: `no` switches off apt's daily upgrade timer |
 | `CIRRUS_ROLE` | `single` | cirrusux: `single`, `server` or `gateway` |
-| `CIRRUS_ACTIONS` | `yes` | cirrusux: `no` installs a read-only sudoers rule |
+| `CIRRUS_ACTIONS` | `yes` | cirrusux: `no` installs a read-only sudoers rule, and no upgrade rule on a split setup's gateway machine |
 | `CIRRUS_SERVER_NAME`, `CIRRUS_ALLOWED_USERS` | — | cirrusux: written into a new gateway.env |
 | `CIRRUS_RELEASE` | this copy | cirrusux: folder holding `bin/` and `deploy/`. Leave it out with a release from `install.sh`, so `upgrade` and `rollback` take effect |
 | `CIRRUS_TAILSCALE_SERVE` | `no` | cirrusux: `yes` publishes the panel on the tailnet with `tailscale serve --https=443` (single and gateway roles) |

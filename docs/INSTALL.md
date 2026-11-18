@@ -353,15 +353,35 @@ nothing out, unless `CIRRUS_DIGEST_ASSISTANT=1`.
 
 ## Upgrading
 
-Installed with `install.sh`:
+From the panel: the **Updates** page shows the latest release beside what
+each machine runs, with an **Upgrade** button when a newer one is out and
+**Back to…** for the release before. Each asks first, shows the command it
+runs, and is logged with its undo. It works for machines installed with
+`install.sh`; a copy built from source is upgraded by hand (below).
+
+- The gateway asks GitHub which release is the latest once a day, and
+  whenever you press **Check now**. `CIRRUS_UPDATE_CHECK=off` in
+  `gateway.env` stops the daily check. Nothing is installed by itself.
+- The button runs the same `cirrusux-setup upgrade` as below, as a
+  background job, so it changes whatever applying the new release changes
+  on that machine. A firewall or SSH change still waits for its own
+  confirmation at a terminal and rolls back without it.
+- In a single setup one button upgrades everything. In a split setup the
+  gateway machine and the server each have their own; the server's needs
+  it awake. The panel restarts with the gateway, so reload the page after.
+- The panel can upgrade a machine once it runs a release that has this
+  (0.9.0 or newer). Before that, and on a gateway that runs runit instead
+  of systemd, use the terminal.
+
+At a terminal, installed with `install.sh`:
 
 ```bash
 sudo cirrusux-setup upgrade           # the latest release; or: upgrade v0.8.0
 sudo cirrusux-setup rollback          # back to the release before
 ```
 
-`upgrade` downloads and checks the release the same way `install.sh` does,
-and points `current` at it. It then shows what applying it would change,
+`upgrade` downloads and checks the release the same way `install.sh` does
+(its signature, then its checksum), and points `current` at it. It then shows what applying it would change,
 asks, and applies it: new binaries, units and sudoers rules, with the
 services restarted. It goes online only when you run it. `rollback` swaps
 `current` with `previous` (the one release kept before it) and applies that
@@ -379,5 +399,6 @@ In a split setup the gateway and the server are upgraded separately. The server
 tells the gateway which version of CirrusUX it runs and which actions it knows,
 so if the server's side is older the panel says so at the top of the page. Any
 action the older side can't do stays switched off (with a note on the button)
-until you run `sudo cirrusux-setup upgrade` on that machine; reading the status
-keeps working.
+until that machine is upgraded, from the Updates page or with
+`sudo cirrusux-setup upgrade` there; reading the status keeps working. The
+upgrade itself is never switched off by a mismatch.

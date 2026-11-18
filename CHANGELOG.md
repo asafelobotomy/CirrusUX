@@ -7,6 +7,35 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Added
+
+- CirrusUX can be upgraded from the panel. The Updates page shows the
+  latest release beside what each machine runs, with an Upgrade button when
+  a newer one is out and "Back to…" for the release before. Each asks
+  first, runs the same `cirrusux-setup upgrade` or `rollback` as at a
+  terminal, as a background job, and is logged with its undo. In a split
+  setup the gateway machine and the server each have their own button; the
+  gateway machine gets the root helper and one sudoers rule for this
+  (`/etc/sudoers.d/cirrusux-upgrade`), which `CIRRUS_ACTIONS=no` leaves out.
+  Run `sudo cirrusux-setup upgrade` once more at a terminal to get to this
+  release; from then on the panel can do it.
+- The gateway asks GitHub once a day which CirrusUX release is the latest,
+  and whenever you press Check now. This is the one thing CirrusUX looks up
+  without being asked; `CIRRUS_UPDATE_CHECK=off` in `gateway.env` stops the
+  daily check. Nothing is installed until you confirm it.
+- Releases are signed. `install.sh` (and so `cirrusux-setup upgrade` and the
+  panel) unpacks a release only if its `SHA256SUMS` carries a signature from
+  the release key, which is kept away from GitHub. A release from before
+  signing installs with `install.sh --unsigned`. It needs `ssh-keygen`
+  (the `openssh-client` package). `scripts/sign-release.sh` signs a release.
+
+### Changed
+
+- The Updates page is shown on every server, not only those with the apps
+  module, since CirrusUX's own release is there.
+- A version mismatch between the gateway and the server no longer switches
+  off the upgrade that ends it, and its notice points to the Updates page.
+
 ## [0.8.1] - 2026-11-11
 
 ### Fixed

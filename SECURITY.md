@@ -31,8 +31,13 @@ These are design rules; a way around any of them is a security problem:
 - Containers are reached through a filter that allows a fixed list of
   Docker API calls.
 - Images are pinned by digest; `:latest` is refused.
-- Nothing is sent anywhere without being asked: no telemetry, no automatic
-  updates.
+- Nothing is sent anywhere without being asked, and nothing installs
+  itself: no telemetry, no automatic updates. The one thing looked up
+  unasked is which CirrusUX release is the latest: the gateway asks
+  GitHub once a day (`CIRRUS_UPDATE_CHECK=off` stops it) and sends
+  nothing but the request.
+- A CirrusUX release is installed only if it is signed with the release
+  key (below), whether from `install.sh` or from the panel.
 - An app from CirrusStore runs only if root on the server trusts its
   source (below), and the root helper has checked its signature itself.
 
@@ -70,3 +75,24 @@ trust:
   official catalogue in the meantime.
 
 Report a way around any of these as a vulnerability.
+
+## How releases are trusted
+
+- **Signed away from GitHub.** Each release's `SHA256SUMS` is signed with
+  the release key after the build, and `install.sh` checks that signature
+  (with `ssh-keygen`) and then the bundle's checksum before unpacking
+  anything. The key's public half is in `install.sh`; the private half is
+  held by the maintainers in an SSH agent and never reaches GitHub or its
+  build runners. A release or account changed on GitHub can't produce a
+  bundle that installs.
+- **The panel adds no new way in.** Upgrading from the panel runs
+  `cirrusux-setup upgrade` through the root helper, with one argument: a
+  release tag, checked against `vX.Y.Z` by the gateway, the agent and the
+  helper. The gateway only passes on the release its last check found. The
+  download, the signature check and the apply are the same code as at a
+  terminal.
+- **The first signed release** can't be checked by the copy of
+  `install.sh` already on a machine, since that copy predates signing.
+  Download `install.sh` afresh for that one upgrade if you want the check.
+- A release from before signing began installs only with
+  `install.sh --unsigned`, which says so.

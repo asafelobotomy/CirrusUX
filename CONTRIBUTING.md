@@ -49,6 +49,7 @@ make bump V=x.y.z                       # VERSION, web/package.json, a dated CHA
 git commit -am 'Release vX.Y.Z'
 git tag -a vX.Y.Z -m 'CirrusUX X.Y.Z'
 git push origin main vX.Y.Z
+scripts/sign-release.sh vX.Y.Z          # once the release workflow has finished
 ```
 
 The tag starts `.github/workflows/release.yml`. It builds a bundle for each
@@ -56,6 +57,18 @@ CPU with `scripts/bundle.sh` (bin/, deploy/, install.sh and the docs) and
 attests the bundles. It then publishes them, with `install.sh` and
 `SHA256SUMS`, as the GitHub release that `install.sh` and
 `cirrusux-setup upgrade` download.
+
+A release installs nowhere until it is signed: `install.sh` and the panel's
+Upgrade button accept it only with a `SHA256SUMS.sig` made by the release
+key, whose public half is `RELEASE_KEY` in `install.sh`.
+`scripts/sign-release.sh` downloads the release, checks every file against
+`SHA256SUMS` and GitHub's build attestation, signs `SHA256SUMS` and uploads
+the signature. The private key stays in an SSH agent (a password manager's,
+a hardware key's): point `SSH_AUTH_SOCK` at it. It is never written to
+disk, and GitHub never has it, so a release changed on GitHub fails the
+check. Replacing the key means a release with a new `RELEASE_KEY`; machines
+on older releases then upgrade once with `install.sh --unsigned` or a fresh
+`install.sh`.
 
 `make bump` does not commit or tag. Releases follow semantic versioning
 (before 1.0.0, one minor version per plan phase). From 1.0.0, what a
@@ -87,7 +100,7 @@ needs the offline key; only the maintainer runs it.
   which feeds the list each snapshot reports, so a newer panel can switch off
   what an older server lacks. Bump `snapshot.Protocol` only when the snapshot
   or a command changes in a way an older side can't read, not for a new action.
-- **Nothing runs by itself** that phones out: checks run only when asked.
+- **Nothing runs by itself** that phones out: checks run only when asked. The one exception is the gateway's daily look at which CirrusUX release is the latest (`CIRRUS_UPDATE_CHECK=off` stops it); it installs nothing.
 - **Plain English** in the UI and docs: short sentences, no jargon a home
   user wouldn't know.
 - Tests for new behaviour, especially anything that runs as root.

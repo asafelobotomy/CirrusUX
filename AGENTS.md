@@ -8,6 +8,7 @@ Full build, test, local-run and release steps are in `CONTRIBUTING.md`. For agen
 - Test everything CI runs: `make test`. Also `go test -race ./...` (CI), and `make test-host` (needs `shellcheck`, `nft`, user namespaces). The test fails on unformatted files: `gofmt -w .`.
 - Run locally with demo data, two terminals: `make dev-gateway` (http://127.0.0.1:8064) and `make dev-agent`.
 - `make store-site KEY=...` signs the CirrusStore catalogue and needs the offline key; don't run it.
+- `scripts/sign-release.sh vX.Y.Z` signs a published release with the release key, which an SSH agent holds (CONTRIBUTING.md, Releases). A release installs nowhere until it is signed.
 
 ## Layout
 - `cmd/`: `gateway`, `agent`, `helper` (root via sudo), `dockerfilter`, `idle`, `cirrusstore`. `internal/`: the Go packages (`gateway`, `agent`, `helperapi`, `catalogue` with `apps/*.json`, `store`, `assistant`, `idle`, `githost` (Git hosting, docs/GIT.md), ...).
@@ -18,7 +19,7 @@ Full build, test, local-run and release steps are in `CONTRIBUTING.md`. For agen
 - No source file over 400 lines, comments and blanks included (`scripts/check-file-length.sh`); split by what the parts do.
 - Catalogue images are pinned by tag and digest, never `:latest`.
 - No secrets and no personal details (real addresses, MACs, host names) in the repo; use `homeserver`, `192.0.2.x`, `aa:bb:cc:dd:ee:ff`.
-- Anything that changes the server is confirmed by a person, logged, and undoable where possible. Nothing runs by itself that phones out.
+- Anything that changes the server is confirmed by a person, logged, and undoable where possible. Nothing runs by itself that phones out, with one exception: the gateway asks GitHub once a day which CirrusUX release is the latest (`CIRRUS_UPDATE_CHECK=off` stops it). Installing a release is still a confirmed action.
 - Plain English in UI and docs. Add tests for new behaviour, especially root-run code. AGPL-3.0-or-later.
 - Versions: `VERSION` is the source. Bump with `make bump V=x.y.z` (writes `VERSION`, `web/package.json`, and a dated CHANGELOG section from `[Unreleased]`); it does not commit or tag. Then commit, tag and push as in CONTRIBUTING.md. Record changes under `## [Unreleased]` in `CHANGELOG.md`.
 
