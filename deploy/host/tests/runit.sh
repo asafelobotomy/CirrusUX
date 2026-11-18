@@ -60,3 +60,30 @@ grep -q "sv restart $ROOT/etc/service/cirrusux-gateway" $T/calls || fail "no sv 
 [ -f $T/forbidden ] && { cat $T/forbidden; fail "systemctl or timedatectl called"; }
 grep -q tailscaled $T/calls && fail "tailscaled touched"
 echo "4 new binary: sv restart; systemctl, timedatectl and tailscaled never touched"
+
+# tailscale serve: an older Tailscale keeps 127.0.0.1 and says why; one
+# that serves Unix sockets moves the panel onto CIRRUS_SOCKET, once.
+cat > $T/stub/tailscale <<'S'
+#!/bin/sh
+echo "tailscale $*" >> "$STUBDIR/calls"
+case "$1 $2" in
+"serve --help") [ -f "$STUBDIR/new-ts" ] && echo "  e.g. unix:/tmp/myservice.sock" ;;
+"serve status") cat "$STUBDIR/served" 2>/dev/null ;;
+"serve --bg") echo "$*" > "$STUBDIR/served" ;;
+esac
+exit 0
+S
+printf 'HOST_TZ=Europe/London\nCIRRUS_ROLE=gateway\nCIRRUS_SERVER_NAME=atlas\nCIRRUS_TAILSCALE_SERVE=yes\n' > $CONFIG
+$H/cirrusux-setup apply cirrusux > $T/out 2>&1
+grep -q "can't serve a Unix socket" $T/out && grep -q "https=443 http://127.0.0.1:8064" $T/served || { cat $T/out; fail "older Tailscale"; }
+grep -q '^CIRRUS_SOCKET=' $E/gateway.env && fail "socket set without support"
+touch $T/new-ts
+: > $T/calls
+$H/cirrusux-setup apply cirrusux > $T/out 2>&1
+[ "$(grep -c '^CIRRUS_SOCKET=/run/cirrusux-gateway/gateway.sock$' $E/gateway.env)" = 1 ] || { cat $T/out; fail "CIRRUS_SOCKET not set"; }
+grep -q "https=443 unix:/run/cirrusux-gateway/gateway.sock" $T/served || { cat $T/out; fail "serve not moved to the socket"; }
+grep -q "sv restart $ROOT/etc/service/cirrusux-gateway" $T/calls || fail "gateway not restarted for the socket"
+grep -q "install -d -m 755 -o cirrusux -g cirrusux /run/cirrusux-gateway" $ROOT/etc/sv/cirrusux-gateway/run || fail "run script makes no socket folder"
+$H/cirrusux-setup check cirrusux > $T/out 2>&1 || { cat $T/out; fail "re-check after the socket"; }
+grep -q "tailscale serve → unix:" $T/out || { cat $T/out; fail "re-check"; }
+echo "5 tailscale serve: older Tailscale stays on 127.0.0.1; newer moves the panel onto the socket"

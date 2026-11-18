@@ -33,7 +33,9 @@ Examples: `deploy/gateway/gateway.env.example`,
 
 | Setting | Default | What it does |
 |---|---|---|
-| `CIRRUS_LISTEN` | `127.0.0.1:8064` | Address to listen on. Keep it on loopback: the front end (`tailscale serve` or a reverse proxy) publishes it |
+| `CIRRUS_LISTEN` | `127.0.0.1:8064` | Address to listen on. Keep it on loopback: the front end (`tailscale serve` or a reverse proxy) publishes it. With `CIRRUS_SOCKET` set it serves only the agent's routes (`/agent/`, which need its token) |
+| `CIRRUS_SOCKET` | — | A Unix socket to serve the panel on, e.g. `/run/cirrusux-gateway/gateway.sock`. Only the socket's user, `CIRRUS_SOCKET_GROUP` and root can open it, and only requests that come through it are signed in, so no other program on the machine can pose as a signed-in person through 127.0.0.1. `cirrusux-setup` sets it when Tailscale can serve a socket (`tailscale serve --https=443 unix:<path>`); with a reverse proxy, point the proxy at it |
+| `CIRRUS_SOCKET_GROUP` | — | A group that may open `CIRRUS_SOCKET` besides the gateway's user: your reverse proxy's (the gateway's user must be in it). tailscaled runs as root and needs none |
 | `CIRRUS_DATA_DIR` | `/var/lib/cirrusux-gateway` | Snapshot cache, settings, audit log |
 | `CIRRUS_AGENT_TOKEN` | — (required) | Shared secret with the agent, 32+ characters |
 | `CIRRUS_SERVER_NAME` | `server` | The server's name in the UI and the audit log |

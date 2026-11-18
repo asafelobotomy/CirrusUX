@@ -17,6 +17,14 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   hosting. With a reverse proxy (`CIRRUS_AUTH=header`), set `CIRRUS_HOSTS`
   to its name: until then any name is still answered, and the gateway
   warns at start.
+- The panel can be served on a Unix socket (`CIRRUS_SOCKET`) that only
+  the front end can open. Only requests through it are signed in, and
+  127.0.0.1 keeps just the agent's routes, so no other program on the
+  machine can pose as a signed-in person by sending the identity header to
+  127.0.0.1. With `CIRRUS_TAILSCALE_SERVE=yes`, `cirrusux-setup apply` moves
+  the panel onto `/run/cirrusux-gateway/gateway.sock` when Tailscale can
+  serve a socket, and warns when it can't. A reverse proxy can be pointed at
+  it (`CIRRUS_SOCKET_GROUP`, docs/INSTALL.md).
 - `CIRRUS_DEV=1`, which signs everyone in, is refused unless
   `CIRRUS_LISTEN` is a loopback address.
 - The agent refuses a `CIRRUS_GATEWAY_URL` that would send its token

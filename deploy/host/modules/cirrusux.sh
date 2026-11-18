@@ -226,23 +226,51 @@ _cx_restart() {
 	fi
 }
 
-# _cx_serve publishes the gateway's address (CIRRUS_LISTEN) on the tailnet
-# over HTTPS, through the machine's own tailscaled. Tailscale signs people
-# in; the gateway stays on 127.0.0.1.
+# _cx_serve publishes the panel on the tailnet over HTTPS, through the
+# machine's own tailscaled. Tailscale signs people in. Where tailscale serve
+# can proxy to a Unix socket, the panel moves
+# onto one (CIRRUS_SOCKET) that only root's tailscaled can open, so no other
+# program here can pose as a signed-in person; 127.0.0.1 keeps only the
+# agent's routes. Older Tailscale gets 127.0.0.1, as before.
 _cx_serve() {
-	local listen target
-	listen=$(sed -n 's/^CIRRUS_LISTEN=//p' "$ROOT/etc/cirrusux/gateway.env" 2>/dev/null | tail -1)
-	target=http://${listen:-127.0.0.1:8064}
+	local env=$ROOT/etc/cirrusux/gateway.env listen sock target
 	if ! command -v tailscale >/dev/null; then
 		warn "CIRRUS_TAILSCALE_SERVE=yes, but Tailscale isn't installed: see https://tailscale.com/download/linux"
 		return 0
 	fi
-	if tailscale serve status 2>/dev/null | grep -qF "$target"; then
+	sock=$(sed -n 's/^CIRRUS_SOCKET=//p' "$env" 2>/dev/null | tail -1)
+	if [ -z "$sock" ] && [ -f "$env" ]; then
+		if tailscale serve --help 2>&1 | grep -q 'unix:'; then
+			sock=$CX_SOCKET
+			change "serve the panel on $sock, which only tailscaled can open (CIRRUS_SOCKET in gateway.env)" \
+				"remove CIRRUS_SOCKET from gateway.env and restart cirrusux-gateway" _cx_socket_on "$env" "$sock"
+		else
+			warn "this Tailscale can't serve a Unix socket, so the panel stays on 127.0.0.1, where any program on this machine could pose as a signed-in person. Update Tailscale and apply again"
+		fi
+	fi
+	if [ -n "$sock" ]; then
+		target=unix:$sock
+	else
+		listen=$(sed -n 's/^CIRRUS_LISTEN=//p' "$env" 2>/dev/null | tail -1)
+		target=http://${listen:-127.0.0.1:8064}
+	fi
+	if tailscale serve status 2>/dev/null | grep -qF "${target#unix:}"; then
 		ok "the panel is on the tailnet (tailscale serve → $target)"
 		return 0
 	fi
 	change "publish the panel on the tailnet: tailscale serve --bg --https=443 $target" \
 		"tailscale serve --https=443 off" _cx_serve_on "$target"
+}
+
+# Where setup puts the panel's socket (the gateway unit's RuntimeDirectory).
+CX_SOCKET=/run/cirrusux-gateway/gateway.sock
+
+_cx_socket_on() {
+	backup "$1"
+	printf '%s\n' "# Set by cirrusux-setup: the panel is served here, for tailscale serve only." "CIRRUS_SOCKET=$2" >>"$1"
+	if unit_active cirrusux-gateway.service; then
+		restart_unit cirrusux-gateway.service
+	fi
 }
 
 _cx_serve_on() {

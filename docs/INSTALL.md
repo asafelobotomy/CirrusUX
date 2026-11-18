@@ -300,13 +300,22 @@ On the server itself (single) or the always-on machine (split).
 
 Put a front end before the gateway, which signs people in:
 
-- **Tailscale** (`CIRRUS_AUTH=tailscale`):
-  `sudo tailscale serve --bg --https=443 http://127.0.0.1:8064`, then open
-  `https://<machine>.<tailnet>.ts.net/`.
+- **Tailscale** (`CIRRUS_AUTH=tailscale`): with `CIRRUS_TAILSCALE_SERVE=yes`,
+  setup does this for you. By hand, set
+  `CIRRUS_SOCKET=/run/cirrusux-gateway/gateway.sock` in `gateway.env`,
+  restart the gateway, and run
+  `sudo tailscale serve --bg --https=443 unix:/run/cirrusux-gateway/gateway.sock`;
+  then open `https://<machine>.<tailnet>.ts.net/`. A Tailscale too old to
+  serve a socket says so: use `http://127.0.0.1:8064` instead, and know
+  that any program on the machine could then pose as a signed-in person.
 - **A reverse proxy with sign-in** (`CIRRUS_AUTH=header`): Authelia,
   Authentik or oauth2-proxy in front, passing the user in
-  `CIRRUS_AUTH_HEADER`. Keep the gateway on 127.0.0.1 so nothing can reach it
-  around the proxy.
+  `CIRRUS_AUTH_HEADER`. Point it at the socket (`CIRRUS_SOCKET`, with
+  `CIRRUS_SOCKET_GROUP` set to the proxy's group): Caddy
+  `reverse_proxy unix//run/cirrusux-gateway/gateway.sock`, nginx
+  `proxy_pass http://unix:/run/cirrusux-gateway/gateway.sock:;`. Have it set
+  `X-Forwarded-Host`, and list its name in `CIRRUS_HOSTS`. A proxy that can
+  only reach TCP can use 127.0.0.1:8064 without `CIRRUS_SOCKET`.
 
 Logins not in `CIRRUS_ALLOWED_USERS` get 403. Over HTTPS the browser offers
 to install CirrusUX as an app.

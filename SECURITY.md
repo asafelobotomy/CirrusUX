@@ -27,6 +27,9 @@ These are design rules; a way around any of them is a security problem:
 - The panel is reachable only from the LAN and the tailnet by default,
   and answers only on names it knows (`CIRRUS_HOSTS`), so a DNS-rebinding
   page can't reach it through a local browser.
+- With the panel on its socket (`CIRRUS_SOCKET`, set up with Tailscale
+  by `cirrusux-setup`), only the front end is believed about who is
+  signed in: other programs on the machine reach only the agent's routes.
 - The agent's token travels only over HTTPS, or to this machine or a
   Tailscale address.
 - Every change is confirmed by a person; the assistant only proposes.

@@ -15,8 +15,11 @@ import (
 // 600). Secrets are never logged or sent to the browser. See
 // docs/CONFIG.md for every setting.
 type Config struct {
-	Listen  string // 127.0.0.1:8064
-	DataDir string
+	Listen string // 127.0.0.1:8064
+	// Socket, when set, is where the panel is served (socket.go); Listen
+	// then answers only the agent. SocketGroup may open it besides us.
+	Socket, SocketGroup string
+	DataDir             string
 	// Dev skips sign-in and Tailscale power polling. Only for running on a
 	// workstation.
 	Dev        bool
@@ -103,6 +106,8 @@ var assistantPresets = map[string]struct{ base, name string }{
 func ConfigFromEnv() (Config, error) {
 	c := Config{
 		Listen:      env("CIRRUS_LISTEN", "127.0.0.1:8064"),
+		Socket:      os.Getenv("CIRRUS_SOCKET"),
+		SocketGroup: os.Getenv("CIRRUS_SOCKET_GROUP"),
 		DataDir:     env("CIRRUS_DATA_DIR", "/var/lib/cirrusux-gateway"),
 		Dev:         os.Getenv("CIRRUS_DEV") == "1",
 		AgentToken:  os.Getenv("CIRRUS_AGENT_TOKEN"),
@@ -129,6 +134,9 @@ func ConfigFromEnv() (Config, error) {
 
 	if c.Dev && !loopbackListen(c.Listen) {
 		return c, fmt.Errorf("CIRRUS_DEV=1 signs everyone in, so CIRRUS_LISTEN must be a loopback address (127.0.0.1:port), not %q", c.Listen)
+	}
+	if c.Socket != "" && !filepath.IsAbs(c.Socket) {
+		return c, errSocketPath
 	}
 	if len(c.AgentToken) < 32 {
 		return c, fmt.Errorf("CIRRUS_AGENT_TOKEN must be set to at least 32 random characters")

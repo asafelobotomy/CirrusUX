@@ -189,7 +189,12 @@ func (s *Server) auth(next http.Handler) http.Handler {
 	})
 }
 
+// fromTrustedProxy reports a request from the front end: through the
+// socket when there is one (socket.go), else from CIRRUS_TRUSTED_PROXIES.
 func (s *Server) fromTrustedProxy(r *http.Request) bool {
+	if s.cfg.Socket != "" {
+		return viaSocket(r)
+	}
 	ap, err := netip.ParseAddrPort(r.RemoteAddr)
 	if err != nil {
 		return false
