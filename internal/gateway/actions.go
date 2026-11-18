@@ -306,6 +306,7 @@ func (s *Server) agentResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordCommand(c)
+	s.buildResult(c)
 	w.WriteHeader(http.StatusNoContent)
 }
 
