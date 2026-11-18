@@ -7,12 +7,18 @@
 #   less install.sh
 #   sudo bash install.sh
 #
-#   install.sh [--version vX.Y.Z] [--from DIR] [--no-init]
+#   install.sh [--version vX.Y.Z] [--from DIR] [--no-init] [--unsigned]
 #
 #   --version   that release instead of the latest
-#   --from DIR  a release already downloaded: DIR holds its .tar.gz and
-#               SHA256SUMS (no network needed)
+#   --from DIR  a release already downloaded: DIR holds its .tar.gz,
+#               SHA256SUMS and SHA256SUMS.sig (no network needed)
 #   --no-init   only unpack it; `cirrusux-setup upgrade` uses this
+#   --unsigned  accept a release with no signature (those before signing
+#               began); its checksum is still checked
+#
+# A release is unpacked only if its SHA256SUMS is signed with the CirrusUX
+# release key below (checked with ssh-keygen) and the bundle matches it. The
+# key is kept away from GitHub, so a release changed there fails the check.
 #
 # Releases go in /opt/cirrusux/releases/vX.Y.Z, owned by root; `current`
 # points at the one in use and `previous` at the one before, for
@@ -22,7 +28,13 @@ set -euo pipefail
 
 REPO=${CIRRUS_REPO:-asafelobotomy/CirrusUX}
 PREFIX=${CIRRUS_PREFIX:-/opt/cirrusux}
-version="" from="" init=yes
+# The release key's public half, as an OpenSSH allowed-signers line.
+# scripts/sign-release.sh signs with the private half. (CIRRUS_SIGNERS
+# replaces it for the tests and for a fork's own releases.)
+RELEASE_KEY=''
+SIGNERS=${CIRRUS_SIGNERS-$RELEASE_KEY}
+SIGN_AS=release@cirrusux SIGN_NS=cirrusux-release
+version="" from="" init=yes unsigned=no
 
 die() {
 	printf 'install.sh: %s\n' "$*" >&2
@@ -35,6 +47,7 @@ while [ $# -gt 0 ]; do
 	--version) version=${2:-}; shift 2 || die "--version needs a version" ;;
 	--from) from=${2:-}; shift 2 || die "--from needs a folder" ;;
 	--no-init) init=no; shift ;;
+	--unsigned) unsigned=yes; shift ;;
 	-h | --help) sed -n '2,/^set /{/^set /d;s/^# \{0,1\}//p}' "$0"; exit 0 ;;
 	*) die "unknown option $1 (see --help)" ;;
 	esac
@@ -63,6 +76,26 @@ fetch() {
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# check_signature: $tmp/SHA256SUMS must carry a signature from the release
+# key, in $tmp/SHA256SUMS.sig. Nothing is unpacked before this passes.
+check_signature() {
+	if [ -z "$SIGNERS" ]; then
+		say "This copy of install.sh holds no release key: checking the checksum only."
+		return 0
+	fi
+	if [ "$unsigned" = yes ]; then
+		say "Not checking the signature (--unsigned)."
+		return 0
+	fi
+	[ -s "$tmp/SHA256SUMS.sig" ] ||
+		die "CirrusUX $version isn't signed (no SHA256SUMS.sig): not installed. A release from before signing began installs with --unsigned"
+	command -v ssh-keygen >/dev/null || die "needs ssh-keygen to check the release's signature: sudo apt-get install openssh-client"
+	printf '%s\n' "$SIGNERS" >"$tmp/signers"
+	ssh-keygen -Y verify -f "$tmp/signers" -I "$SIGN_AS" -n "$SIGN_NS" -s "$tmp/SHA256SUMS.sig" <"$tmp/SHA256SUMS" >/dev/null 2>&1 ||
+		die "SHA256SUMS isn't signed with the CirrusUX release key: not installed"
+	say "Signature matches the release key."
+}
+
 if [ -z "$version" ] && [ -n "$from" ]; then
 	# The one bundle for this CPU in the folder names the version.
 	f=$(find "$from" -maxdepth 1 -name "cirrusux-v*-linux-$arch.tar.gz" -printf '%f\n' | sort -V | tail -1)
@@ -86,12 +119,15 @@ if [ -f "$dest/VERSION" ] && [ -x "$dest/deploy/host/cirrusux-setup" ]; then
 else
 	if [ -n "$from" ]; then
 		cp "$from/$name.tar.gz" "$from/SHA256SUMS" "$tmp/" 2>/dev/null || die "$from needs $name.tar.gz and SHA256SUMS"
+		cp "$from/SHA256SUMS.sig" "$tmp/" 2>/dev/null || true
 	else
 		url=https://github.com/$REPO/releases/download/$version
 		say "Downloading CirrusUX $version for $arch…"
 		fetch "$url/$name.tar.gz" "$tmp/$name.tar.gz" || die "couldn't download $url/$name.tar.gz"
 		fetch "$url/SHA256SUMS" "$tmp/SHA256SUMS" || die "couldn't download $url/SHA256SUMS"
+		fetch "$url/SHA256SUMS.sig" "$tmp/SHA256SUMS.sig" 2>/dev/null || rm -f "$tmp/SHA256SUMS.sig"
 	fi
+	check_signature
 	grep -q "  $name.tar.gz\$" "$tmp/SHA256SUMS" || die "SHA256SUMS has no line for $name.tar.gz"
 	(cd "$tmp" && grep "  $name.tar.gz\$" SHA256SUMS | sha256sum -c --quiet -) ||
 		die "$name.tar.gz doesn't match its checksum: not installed"

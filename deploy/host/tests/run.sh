@@ -3,7 +3,7 @@
 # namespace (and network namespace for the firewall), never as real root.
 set -eu
 cd "$(dirname "$0")/.."
-shellcheck -x -s bash cirrusux-setup lib.sh init.sh pair.sh release.sh modules/*.sh files/cirrusux-backup ../../install.sh ../../scripts/bundle.sh
+shellcheck -x -s bash cirrusux-setup lib.sh init.sh pair.sh release.sh modules/*.sh files/cirrusux-backup ../../install.sh ../../scripts/bundle.sh ../../scripts/sign-release.sh
 shellcheck ../gateway/cirrusux-router-check ../gateway/runit/run ../gateway/runit/log/run
 echo "shellcheck: ok"
 if ! unshare -r true 2>/dev/null; then

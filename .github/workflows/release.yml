@@ -38,6 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           [ "v$(cat VERSION)" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME doesn't match VERSION $(cat VERSION)" >&2; exit 1; }
+          # A release whose install.sh holds no release key would install unsigned bundles.
+          grep -q "^RELEASE_KEY='release@cirrusux namespaces=\"cirrusux-release\" ssh-" install.sh || { echo "install.sh holds no release key (RELEASE_KEY)" >&2; exit 1; }
           for arch in amd64 arm64; do
             scripts/bundle.sh "${GITHUB_REF_NAME#v}" "$arch" dist
           done
@@ -58,4 +60,4 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/install.sh dist/SHA256SUMS \
             --title "CirrusUX ${GITHUB_REF_NAME#v}" --verify-tag \
-            --notes "Ready-to-install bundles (static binaries and setup, amd64 and arm64). Install with install.sh, which checks them against SHA256SUMS; see docs/INSTALL.md."
+            --notes "Ready-to-install bundles (static binaries and setup, amd64 and arm64). Install with install.sh, which checks their signature (SHA256SUMS.sig, added once the maintainers have signed the release) and SHA256SUMS; see docs/INSTALL.md."
