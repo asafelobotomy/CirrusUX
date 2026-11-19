@@ -14,7 +14,7 @@ export interface SSHKey {
 export interface Account {
   name: string; uid: number; home: string; shell: string;
   canLogin: boolean; admin: boolean; password: boolean;
-  locked: boolean; lockedByPanel?: boolean;
+  locked: boolean; lockedByPanel?: boolean; createdByPanel?: boolean;
   keys: SSHKey[]; totp: boolean; keysError?: string; groups?: string[];
 }
 
@@ -43,6 +43,15 @@ export interface NetworkInfo {
   hostname: string; interfaces: NetIface[];
   gateway?: string; gatewayIface?: string;
   dns: string[]; search?: string[]; tailscale?: string[]; hidden?: number;
+}
+
+/** Network settings the panel can change (the snapshot's netEdit section). */
+export interface NetEdit {
+  resolved: boolean;
+  dns: string[]; search: string[];
+  tailscale?: { acceptDns: boolean; acceptRoutes: boolean };
+  /** A change that undoes itself at the deadline unless it's kept. */
+  pending?: { kind: string; what: string; deadline: string };
 }
 
 /** The accounts a person logs in with: UID 1000 and up, with a shell. */

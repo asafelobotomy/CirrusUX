@@ -12,12 +12,14 @@ import { confirmGit } from '../git/actions';
 import { installedApp, loadCatalogue, store } from './store.svelte';
 import { d3, offline, sendAction, type ActionReq, type Opts } from './send';
 import { confirmRemove, confirmUpdate } from './actionsStore';
-import { confirmAddKey, confirmLock, confirmRemoveKey } from './actionsAccess';
+import { confirmAddKey, confirmCreateAccount, confirmLock, confirmRemoveAccount, confirmRemoveKey } from './actionsAccess';
+import { confirmDNS, confirmTailscale } from './actionsNetwork';
 
 export { sendAction, type ActionReq } from './send';
 export * from './actionsStore';
 export * from './actionsRelease';
 export * from './actionsAccess';
+export * from './actionsNetwork';
 
 async function liveWake(): Promise<void> {
   try {
@@ -180,6 +182,14 @@ export async function confirmAction(req: ActionReq, o: Opts = {}): Promise<void>
     case 'account_lock':
     case 'account_unlock':
       return confirmLock(a.user, req.action === 'account_lock', o);
+    case 'account_create':
+      return confirmCreateAccount(a.user, a.role === 'admin' ? 'admin' : 'user', o);
+    case 'account_remove':
+      return confirmRemoveAccount(a.user, o);
+    case 'net_dns_set':
+      return confirmDNS(a.servers, a.search, o);
+    case 'net_tailscale_set':
+      return confirmTailscale(a.dns === 'yes', a.routes === 'yes', o);
   }
   if (req.action.startsWith('git_')) return confirmGit(req, undefined, o);
 }

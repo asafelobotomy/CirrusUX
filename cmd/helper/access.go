@@ -36,7 +36,11 @@ func init() {
 		helperapi.CmdSSHKeyRemove: func(a []string) bool {
 			return len(a) == 2 && access.UserRe.MatchString(a[0]) && access.FingerprintRe.MatchString(a[1])
 		},
-		helperapi.CmdAccountLock:   func(a []string) bool { return len(a) == 1 && access.UserRe.MatchString(a[0]) },
+		helperapi.CmdAccountLock: func(a []string) bool { return len(a) == 1 && access.UserRe.MatchString(a[0]) },
+		helperapi.CmdAccountCreate: func(a []string) bool {
+			return len(a) == 2 && access.UserRe.MatchString(a[0]) && (a[1] == "user" || a[1] == "admin")
+		},
+		helperapi.CmdAccountRemove: func(a []string) bool { return len(a) == 1 && access.UserRe.MatchString(a[0]) },
 		helperapi.CmdAccountUnlock: func(a []string) bool { return len(a) == 1 && access.UserRe.MatchString(a[0]) },
 		// Run by the helper as the account itself; not in sudoers.
 		helperapi.CmdKeysIO: func(a []string) bool {
@@ -67,6 +71,22 @@ func accessCommand(ctx context.Context, sub string, args []string) (any, error) 
 		return sshKeyAdd(ctx, args[0], args[1])
 	case helperapi.CmdSSHKeyRemove:
 		return sshKeyRemove(ctx, args[0], args[1])
+	case helperapi.CmdAccountCreate:
+		return accountCreate(ctx, args[0], args[1])
+	case helperapi.CmdAccountRemove:
+		return accountRemove(ctx, args[0])
+	case helperapi.CmdNetStatus:
+		return netStatus(ctx), nil
+	case helperapi.CmdNetDNS:
+		return netDNS(ctx, args[0], args[1])
+	case helperapi.CmdNetTailscale:
+		return netTailscale(ctx, args[0], args[1])
+	case helperapi.CmdNetConfirm:
+		return netConfirm(ctx)
+	case helperapi.CmdNetRevert:
+		return netRevert(ctx)
+	case helperapi.CmdNetRollback:
+		return netRollback(ctx)
 	}
 	return accountLock(ctx, args[0], sub == helperapi.CmdAccountLock)
 }
@@ -276,15 +296,7 @@ func accountLock(ctx context.Context, name string, lock bool) (helperapi.Result,
 		if all[i].Locked {
 			return helperapi.Result{Output: []string{name + " is already locked"}}, nil
 		}
-		var sshd access.SSH
-		if out, err := execx.Run(ctx, execx.Options{}, "sshd", "-T"); err == nil {
-			sshd.Installed = true
-			access.ApplySSHDConfig(&sshd, string(out))
-		}
-		others := slices.ContainsFunc(all, func(a access.Account) bool {
-			return a.Name != name && a.UID >= 1000 && a.Admin && a.CanLogin && !a.Locked && canSignIn(ctx, a, sshd)
-		})
-		if u.Admin && !others {
+		if u.Admin && !otherAdminCanSignIn(ctx, all, name) {
 			return helperapi.Result{}, fmt.Errorf("%s is the only admin who can log in; locking it would shut everyone out", name)
 		}
 		return run(ctx, "usermod", "--expiredate", "1970-01-02", name)
@@ -296,6 +308,19 @@ func accountLock(ctx context.Context, name string, lock bool) (helperapi.Result,
 		return helperapi.Result{}, fmt.Errorf("%s expired on a date someone set; change it with `chage -E`, not the panel", name)
 	}
 	return run(ctx, "usermod", "--expiredate", "", name)
+}
+
+// otherAdminCanSignIn is whether an admin besides name is unlocked and has a
+// way to log in.
+func otherAdminCanSignIn(ctx context.Context, all []access.Account, name string) bool {
+	var sshd access.SSH
+	if out, err := execx.Run(ctx, execx.Options{}, "sshd", "-T"); err == nil {
+		sshd.Installed = true
+		access.ApplySSHDConfig(&sshd, string(out))
+	}
+	return slices.ContainsFunc(all, func(a access.Account) bool {
+		return a.Name != name && a.UID >= 1000 && a.Admin && a.CanLogin && !a.Locked && canSignIn(ctx, a, sshd)
+	})
 }
 
 // canSignIn is whether an account has a way to log in: a password where

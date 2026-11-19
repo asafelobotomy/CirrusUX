@@ -4,12 +4,27 @@
   import AccountCard from '../lib/access/AccountCard.svelte';
   import { live } from '../lib/state/live.svelte';
   import { api, mode } from '../lib/api.svelte';
+  import Button from '../lib/components/Button.svelte';
   import { people } from '../lib/access';
+  import { confirmCreateAccount } from '../lib/state/actions';
+  import { agentCan, needsAgent } from '../lib/state/live.svelte';
+  import { power } from '../lib/state/power.svelte';
+  import { Plus } from '../lib/icons';
 
   const acc = $derived(live.access);
   const ssh = $derived(acc?.ssh);
   const shown = $derived(acc ? [...acc.users.filter((u) => u.uid === 0), ...people(acc)] : []);
   const others = $derived(acc ? acc.users.filter((u) => u.uid >= 1000 && !u.canLogin) : []);
+
+  let newName = $state('');
+  let newRole = $state<'user' | 'admin'>('user');
+  const nameOk = $derived(/^[a-z_][a-z0-9_-]{0,31}$/.test(newName) && !acc?.users.some((u) => u.name === newName));
+  const asleep = $derived(mode.live && power.state !== 'awake');
+  function create() {
+    if (!nameOk) return;
+    confirmCreateAccount(newName, newRole);
+    newName = '';
+  }
 
   // The gateway's own key, which an account can accept for the Terminal.
   let panelKey = $state('');
@@ -62,7 +77,24 @@
     {#if others.length}
       <p class="faint note">Accounts without a login shell (they can't use SSH): {others.slice(0, 12).map((u) => u.name).join(', ')}{others.length > 12 ? ` and ${others.length - 12} more` : ''}.</p>
     {/if}
-    <p class="faint note">Creating and deleting accounts stays on the server (<code>adduser</code>, <code>deluser</code>): the panel adds and removes keys and locks accounts, each confirmed, logged and undoable.</p>
+    <Card title="Add an account" subtitle="A new person who can log in over SSH and SFTP">
+      <form class="new" onsubmit={(e) => { e.preventDefault(); create(); }}>
+        <label for="new-name">Login name</label>
+        <input id="new-name" bind:value={newName} placeholder="alice" autocomplete="off" spellcheck="false" maxlength="32" />
+        <label for="new-role">Can</label>
+        <select id="new-role" bind:value={newRole}>
+          <option value="user">Log in and use their own files</option>
+          <option value="admin">Also run commands as root (administrator)</option>
+        </select>
+        {#if newName && !nameOk}<p class="warn">Use lowercase letters, digits, - and _, starting with a letter, and a name that isn't taken.</p>{/if}
+        <div>
+          <Button type="submit" variant="primary" disabled={!nameOk || asleep || !agentCan('account_create')} title={needsAgent('account_create')}>
+            {#snippet icon()}<Plus />{/snippet}Create account
+          </Button>
+        </div>
+      </form>
+      <p class="faint note">It starts with no password and no key: add a key to it below, and nobody can log in until you do. Accounts made here can be removed here (their files are kept). Other accounts are removed on the server, with <code>deluser</code>.</p>
+    </Card>
     {#if acc.errors?.length}<p class="faint note">Couldn't read: {acc.errors.join('; ')}</p>{/if}
   {/if}
 </div>
@@ -74,6 +106,10 @@
   .facts li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.9rem; }
   .facts li > span:first-child { color: var(--text-muted); }
   .wrap { overflow-wrap: anywhere; }
+  .new { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+  .new label { font-size: 0.85rem; font-weight: 550; }
+  .new input, .new select { padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-2); font: inherit; }
+  .warn { color: var(--warn, var(--text)); font-size: 0.85rem; }
   .note { font-size: 0.82rem; margin-top: var(--space-3); }
   p { font-size: 0.92rem; }
 </style>

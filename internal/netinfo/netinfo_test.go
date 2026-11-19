@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -45,5 +46,28 @@ func TestRead(t *testing.T) {
 	}
 	if !hidden("veth12ab") || hidden("enp1s0") || !hidden("br-0123456789ab") {
 		t.Error("hidden() wrong")
+	}
+}
+
+func TestParseDNS(t *testing.T) {
+	dns, dom, err := ParseDNS("192.0.2.53, 2001:db8::53", "Lan,example.ts.net")
+	if err != nil || !slices.Equal(dns, []string{"192.0.2.53", "2001:db8::53"}) || !slices.Equal(dom, []string{"lan", "example.ts.net"}) {
+		t.Errorf("got %v %v %v", dns, dom, err)
+	}
+	if dns, dom, err := ParseDNS("-", "-"); err != nil || dns != nil || dom != nil {
+		t.Errorf("reset: %v %v %v", dns, dom, err)
+	}
+	for _, bad := range []string{"", "127.0.0.1", "0.0.0.0", "224.0.0.1", "example.com", "fe80::1%eth0", "192.0.2.1,192.0.2.2,192.0.2.3,192.0.2.4", "192.0.2.1;rm"} {
+		if _, _, err := ParseDNS(bad, "-"); err == nil {
+			t.Errorf("servers %q accepted", bad)
+		}
+	}
+	for _, bad := range []string{"lan lan", "-x.com", "a..b", "x\nDNS=1.1.1.1", strings.Repeat("a", 64) + ".com"} {
+		if _, _, err := ParseDNS("192.0.2.1", bad); err == nil {
+			t.Errorf("search %q accepted", bad)
+		}
+	}
+	if JoinList(nil) != "-" || JoinList([]string{"a", "b"}) != "a,b" {
+		t.Error("JoinList")
 	}
 }

@@ -198,6 +198,14 @@ func (c *Collector) Collect(ctx context.Context) snapshot.Snapshot {
 			s.Access = &st
 		}
 	}
+	if has(helperapi.ModNetEdit) {
+		var st helperapi.NetStatus
+		if err := c.helper(ctx, helperapi.CmdNetStatus, &st); err != nil {
+			errf("network settings: %v", err)
+		} else {
+			s.NetEdit = &st
+		}
+	}
 	net := netinfo.Read(c.netPaths())
 	s.Network = &net
 	return s
