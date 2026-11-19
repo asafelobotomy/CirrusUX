@@ -62,10 +62,12 @@ var sampleArgs = map[string][]string{
 	helperapi.CmdSSHKeyRemove:  {"alice", "SHA256:" + strings.Repeat("A", 43)},
 	helperapi.CmdAccountLock:   {"alice"},
 	helperapi.CmdAccountUnlock: {"alice"},
+	helperapi.CmdBuildJob:      {"0123456789abcdef"},
+	helperapi.CmdBuildCancel:   {"0123456789abcdef"},
 }
 
 // internalCommands are started by systemd, never through sudo.
-var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun, helperapi.CmdSelfRun, helperapi.CmdKeysIO}
+var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun, helperapi.CmdSelfRun, helperapi.CmdBuildRun, helperapi.CmdKeysIO}
 
 // agentLines is every command line the agent builds for the helper.
 func agentLines() [][]string {

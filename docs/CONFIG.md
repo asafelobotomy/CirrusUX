@@ -127,6 +127,7 @@ The helper reads `helper.env`, then every `helper.d/*.env` in name order
 | egress | `EGRESS_REPORT` | The outbound-traffic report on the Security page |
 | storage | any of the folders above, `STORAGE_ROOTS` | The Storage page: folder sizes on request, and archive review |
 | apps | `CONTAINER_RUNTIME`, `APPS_DIR`, `APPS_USER`, `MEDIA_ROOTS` (`APPS_ARCHIVE`, `APPS_BIND`) | CirrusStore: installs and removals as background jobs |
+| builds | `BUILDS=yes` and the apps module's `CONTAINER_RUNTIME` (`BUILD_MEMORY_MB`, `BUILD_CPUS`, `BUILD_MAX_MINUTES`, `BUILD_SUBNET`) | Builds of the gateway's Git repositories, each step in a locked-down container ([BUILDS.md](BUILDS.md)) |
 | store | `STORE_OFFICIAL` (`yes`), and the sources in `/etc/cirrusux/store.d/` | CirrusStore's online catalogues: the keys every app from one is checked against before it runs |
 | access | `ACCESS=yes` | The Accounts and File transfer pages: login accounts, their SSH keys (security keys marked), one-time codes, sshd's settings, SFTP and FTPS. With the sudoers `CIRRUS_ACCOUNTS` rules, adding and removing keys and locking accounts (below) |
 

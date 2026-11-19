@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gitHref, parseGitRoute, parsePatch, pathTrail, validRepoName } from '../src/lib/git/diff.ts';
 import { fmtBytes } from '../src/lib/format.ts';
+import { fmtBuildTime, isOver, stateText, stateTone, took } from '../src/lib/git/builds.ts';
 
 test('a patch splits into numbered lines', () => {
   const patch = [
@@ -73,4 +74,25 @@ test('file sizes keep small files readable', () => {
   assert.equal(fmtBytes(2048, false, true), '2.0 kB');
   assert.equal(fmtBytes(52_000, false, true), '52 kB');
   assert.equal(fmtBytes(1_048_577, false, true), '1.0 MB');
+});
+
+test('build routes go to and from addresses', () => {
+  assert.deepEqual(parseGitRoute('notes/builds'), { repo: 'notes', tab: 'builds' });
+  assert.deepEqual(parseGitRoute('notes/build/0123456789abcdef'), { repo: 'notes', tab: 'build', build: '0123456789abcdef' });
+  assert.deepEqual(parseGitRoute('notes/build'), { repo: 'notes', tab: 'builds' });
+  assert.equal(gitHref({ repo: 'notes', tab: 'build', build: 'ab12' }), '#/git/notes/build/ab12');
+  assert.equal(gitHref({ repo: 'notes', tab: 'builds' }), '#/git/notes/builds');
+});
+
+test('build times and states read plainly', () => {
+  assert.equal(fmtBuildTime(45_000), '45 s');
+  assert.equal(fmtBuildTime(192_000), '3 min 12 s');
+  assert.equal(fmtBuildTime(3_840_000), '1 h 4 min');
+  const t0 = '2026-11-18T10:00:00Z';
+  assert.equal(took(t0, '2026-11-18T10:02:00Z', new Date()), '2 min');
+  assert.equal(took(t0, undefined, new Date('2026-11-18T10:00:30Z')), '30 s');
+  assert.equal(took(undefined, undefined, new Date()), '');
+  assert.equal(stateText('queued'), 'Waiting to start');
+  assert.equal(stateTone('failed'), 'bad');
+  assert.ok(isOver('skipped') && !isOver('running'));
 });

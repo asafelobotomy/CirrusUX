@@ -79,6 +79,8 @@ type conf struct {
 	// and FTPS, and (with the sudoers CIRRUS_ACCOUNTS rules) changes keys
 	// and locks accounts.
 	Access bool
+	// Builds: on, and the limits for each step (build_config.go).
+	Build buildConf
 }
 
 // firewallCheck passes when the chain's rules contain Pattern. Chain is an
@@ -292,6 +294,7 @@ func (c conf) features() helperapi.Features {
 	add(hasApt(), helperapi.ModOS)
 	add(len(c.places().Roots) > 0, helperapi.ModStorage)
 	add(c.Access, helperapi.ModAccess)
+	add(c.Build.On && c.ContainerRuntime != "", helperapi.ModBuilds)
 	return f
 }
 
