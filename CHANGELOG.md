@@ -7,6 +7,20 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Added
+
+- Accounts page: **Add an account** makes a standard or administrator
+  account with a home folder, no password and no key (add a key to let it
+  in), and **Remove account** removes one made from the panel, keeping its
+  home folder and files. Never the last admin who can log in. Confirmed,
+  logged and undoable (sudoers `CIRRUS_ACCOUNTS`).
+- Network page: change DNS servers and search domains (a systemd-resolved
+  drop-in) and Tailscale's DNS and subnet routes (`NETWORK_EDIT=yes` in
+  helper.env, sudoers `CIRRUS_NETWORK`). A change undoes itself after two
+  minutes unless you press Keep, so a wrong setting can't lock you out;
+  the undo survives the panel being cut off, and one that outlived a
+  reboot is undone first. IP addresses are left to the server on purpose.
+
 ### Fixed
 
 - `scripts/sign-release.sh` finds Proton Pass's agent whether it is the

@@ -3,8 +3,8 @@
 import * as data from '../demo/data';
 import { agentRuns } from './agentActions';
 import type { Install } from '../release';
-import type { AccessInfo, NetworkInfo } from '../access';
-import { access as sampleAccess, network as sampleNetwork } from '../demo/access';
+import type { AccessInfo, NetEdit, NetworkInfo } from '../access';
+import { access as sampleAccess, netEdit as sampleNetEdit, network as sampleNetwork } from '../demo/access';
 
 export type Health = 'healthy' | 'running' | 'starting' | 'unhealthy' | 'exited';
 
@@ -51,6 +51,8 @@ export const live = $state({
   /** Accounts, SSH keys, SFTP and FTPS (the access module); null when not reported. */
   access: structuredClone(sampleAccess) as AccessInfo | null,
   /** The server's interfaces, gateway and DNS; null from an older agent. */
+  /** DNS and Tailscale settings the panel can change (the network-edit module); null when not reported. */
+  netEdit: structuredClone(sampleNetEdit) as NetEdit | null,
   network: structuredClone(sampleNetwork) as NetworkInfo | null,
   /** The agent speaks an older protocol than the gateway, or a newer one. */
   agentTooOld: false,

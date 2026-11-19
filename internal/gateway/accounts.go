@@ -89,6 +89,59 @@ func init() {
 			return &ActionReq{Action: "account_lock", Args: map[string]string{"user": a["user"]}}
 		},
 	}
+	actionSpecs["account_create"] = actionSpec{
+		label: func(a map[string]string) string {
+			return "Created the " + roleName(a["role"]) + " account " + a["user"]
+		},
+		check: func(a map[string]string, snap *snapshot.Snapshot) error {
+			if snap == nil || snap.Access == nil {
+				return fmt.Errorf("the server hasn't reported its accounts (ACCESS=yes in helper.env)")
+			}
+			if !access.UserRe.MatchString(a["user"]) {
+				return fmt.Errorf("account names are lowercase letters, digits, - and _")
+			}
+			if a["role"] != "user" && a["role"] != "admin" {
+				return fmt.Errorf("role must be user or admin")
+			}
+			if slices.ContainsFunc(snap.Access.Users, func(u access.Account) bool { return u.Name == a["user"] }) {
+				return fmt.Errorf("%s already exists", a["user"])
+			}
+			return nil
+		},
+		// Undoing it removes the account again; its home folder stays.
+		undo: func(a map[string]string) *ActionReq {
+			return &ActionReq{Action: "account_remove", Args: map[string]string{"user": a["user"]}}
+		},
+	}
+	actionSpecs["account_remove"] = actionSpec{
+		label: func(a map[string]string) string { return "Removed the account " + a["user"] + " (home folder kept)" },
+		check: func(a map[string]string, snap *snapshot.Snapshot) error {
+			u, err := account(a, snap)
+			if err != nil {
+				return err
+			}
+			if !u.CreatedByPanel {
+				return fmt.Errorf("%s wasn't made from the panel, so it can only be removed from the server", u.Name)
+			}
+			if u.Admin {
+				a["role"] = "admin"
+			} else {
+				a["role"] = "user"
+			}
+			return nil
+		},
+		// The home folder is kept, so making the account again brings it back.
+		undo: func(a map[string]string) *ActionReq {
+			return &ActionReq{Action: "account_create", Args: map[string]string{"user": a["user"], "role": a["role"]}}
+		},
+	}
+}
+
+func roleName(role string) string {
+	if role == "admin" {
+		return "administrator"
+	}
+	return "standard"
 }
 
 // account finds a person's login account in the last snapshot.
