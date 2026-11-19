@@ -7,6 +7,8 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-19
+
 ### Added
 
 - Accounts page (`ACCESS=yes` in helper.env): the server's login accounts,
