@@ -1,7 +1,7 @@
 {
   "host": "homeserver",
   "protocol": 1,
-  "actions": ["account_lock", "account_unlock", "allow_sleep", "app_install", "app_remove", "app_update", "archive_delete", "backup_run", "container_restart", "container_start", "container_stop", "egress_report", "logs", "os_check", "os_upgrade", "ssh_key_add", "ssh_key_remove", "stay_awake", "storage_scan"],
+  "actions": ["account_create", "account_remove", "net_confirm", "net_dns_set", "net_revert", "net_tailscale_set", "account_lock", "account_unlock", "allow_sleep", "app_install", "app_remove", "app_update", "archive_delete", "backup_run", "container_restart", "container_start", "container_stop", "egress_report", "logs", "os_check", "os_upgrade", "ssh_key_add", "ssh_key_remove", "stay_awake", "storage_scan"],
   "takenAt": "2026-11-01T20:40:00Z",
   "bootAt": "2026-10-30T09:00:00Z",
   "power": {
@@ -268,7 +268,8 @@
     "security",
     "egress",
     "apps",
-    "access"
+    "access",
+    "network-edit"
   ],
   "appsHost": {
     "runtime": "podman",
@@ -303,6 +304,7 @@
       "installed": "2026-11-01T20:40:00Z"
     }
   ],
+  "netEdit": {"resolved": true, "dns": [], "search": [], "tailscale": {"acceptDns": true, "acceptRoutes": false}},
   "access": {
     "ssh": {
       "installed": true,

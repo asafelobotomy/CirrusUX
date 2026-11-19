@@ -21,7 +21,8 @@ Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper features, \
                          /usr/local/sbin/cirrusux-helper av-last, \
                          /usr/local/sbin/cirrusux-helper security-status, \
                          /usr/local/sbin/cirrusux-helper egress-report, \
-                         /usr/local/sbin/cirrusux-helper access-status
+                         /usr/local/sbin/cirrusux-helper access-status, \
+                         /usr/local/sbin/cirrusux-helper net-status
 
 # Phase 2: the actions you confirm in the panel. Leave this alias out to
 # keep the panel read-only.
@@ -48,6 +49,15 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
 Cmnd_Alias CIRRUS_ACCOUNTS = /usr/local/sbin/cirrusux-helper ssh-key-add *, \
                              /usr/local/sbin/cirrusux-helper ssh-key-remove *, \
                              /usr/local/sbin/cirrusux-helper account-lock *, \
-                             /usr/local/sbin/cirrusux-helper account-unlock *
+                             /usr/local/sbin/cirrusux-helper account-unlock *, \
+                             /usr/local/sbin/cirrusux-helper account-create *, \
+                             /usr/local/sbin/cirrusux-helper account-remove *
 
-cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT, CIRRUS_ACCOUNTS
+# Network settings: DNS and Tailscale's DNS and routes. Every change
+# reverts by itself in two minutes unless confirmed.
+Cmnd_Alias CIRRUS_NETWORK = /usr/local/sbin/cirrusux-helper net-dns *, \
+                            /usr/local/sbin/cirrusux-helper net-tailscale *, \
+                            /usr/local/sbin/cirrusux-helper net-confirm, \
+                            /usr/local/sbin/cirrusux-helper net-revert
+
+cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT, CIRRUS_ACCOUNTS, CIRRUS_NETWORK

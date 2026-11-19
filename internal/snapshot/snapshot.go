@@ -62,6 +62,8 @@ type Snapshot struct {
 	Storage *storage.Result `json:"storage,omitempty"`
 	// Access is login accounts, SSH keys, SFTP and FTPS (access module).
 	Access *access.Status `json:"access,omitempty"`
+	// NetEdit is the network settings the panel can change (network-edit module).
+	NetEdit *helperapi.NetStatus `json:"netEdit,omitempty"`
 	// Network is the server's interfaces, gateway and DNS, read without root.
 	Network *netinfo.Info `json:"network,omitempty"`
 	// Problems collecting individual sections; the rest of the snapshot is

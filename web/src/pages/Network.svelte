@@ -1,5 +1,6 @@
 <script lang="ts">
   import Card from '../lib/components/Card.svelte';
+  import NetSettings from '../lib/access/NetSettings.svelte';
   import Badge from '../lib/components/Badge.svelte';
   import { live } from '../lib/state/live.svelte';
   import { mode } from '../lib/api.svelte';
@@ -54,10 +55,10 @@
       </div>
     </Card>
   {/if}
+  <NetSettings />
   <p class="faint note">
-    Reads only. A wrong network setting can cut the panel off from {mode.server}, so changes stay on the server:
-    Wake-on-LAN and Tailscale through <code>NET_*</code> in host.env (<code>sudo cirrusux-setup apply network</code>),
-    addresses through the system's own network tools. Last data {fmtDayTime(power.lastSnapshot)}.
+    {#if live.netEdit}DNS and Tailscale can be changed above, each undoing itself unless kept.{:else}Reads only until <code>NETWORK_EDIT=yes</code> is set in <code>/etc/cirrusux/helper.env</code>.{/if}
+    Addresses and Wake-on-LAN stay on the server, since a wrong address can't undo itself (<code>NET_*</code> in host.env, <code>sudo cirrusux-setup apply network</code>). Last data {fmtDayTime(power.lastSnapshot)}.
   </p>
 </div>
 

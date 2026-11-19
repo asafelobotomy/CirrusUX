@@ -132,6 +132,7 @@ The helper reads `helper.env`, then every `helper.d/*.env` in name order
 | apps | `CONTAINER_RUNTIME`, `APPS_DIR`, `APPS_USER`, `MEDIA_ROOTS` (`APPS_ARCHIVE`, `APPS_BIND`) | CirrusStore: installs and removals as background jobs |
 | builds | `BUILDS=yes` and the apps module's `CONTAINER_RUNTIME` (`BUILD_MEMORY_MB`, `BUILD_CPUS`, `BUILD_MAX_MINUTES`, `BUILD_SUBNET`) | Builds of the gateway's Git repositories, each step in a locked-down container ([BUILDS.md](BUILDS.md)) |
 | store | `STORE_OFFICIAL` (`yes`), and the sources in `/etc/cirrusux/store.d/` | CirrusStore's online catalogues: the keys every app from one is checked against before it runs |
+| network-edit | `NETWORK_EDIT=yes` | The Network page's DNS and Tailscale settings. Needs the sudoers `CIRRUS_NETWORK` rules. Every change undoes itself after two minutes unless kept ([below](#network-changes)) |
 | access | `ACCESS=yes` | The Accounts and File transfer pages: login accounts, their SSH keys (security keys marked), one-time codes, sshd's settings, SFTP and FTPS. With the sudoers `CIRRUS_ACCOUNTS` rules, adding and removing keys and locking accounts (below) |
 
 Paths must be absolute; unit and jail names may only use letters, digits and
@@ -146,7 +147,22 @@ account's expiry date to 2 January 1970, which stops every login, keys
 included; unlocking only clears that date, never one set by hand. The last
 unlocked admin can't be locked, and an account's last key can't be removed
 while sshd has password logins off. Creating and deleting accounts, and
-setting passwords and one-time codes, stay on the server.
+setting passwords and one-time codes, stay on the server. The panel can
+create an account (`useradd`, with a home folder, no password and no key,
+marked "CirrusUX panel" in its comment) and remove one it made (`userdel`,
+home folder kept), never the last admin who can log in.
+
+### Network changes
+
+With `NETWORK_EDIT=yes` the helper can set DNS servers (a drop-in,
+`/etc/systemd/resolved.conf.d/50-cirrusux.conf`, only where systemd-resolved
+runs) and Tailscale's `--accept-dns` and `--accept-routes`. Before a
+change it writes down what it replaces and starts a systemd timer
+(`cirrusux-job-netrevert`) that puts it back after 120 seconds; the Keep
+button stops the timer. The timer runs on the server, so it still fires if
+the change cuts the panel off. One change waits at a time, and a change
+left by a reboot is undone before the next. IP addresses, routes and
+firewall rules are not editable from the panel.
 
 The `cirrusux-setup` modules fill these in for you. Without them, a
 module's settings can point at scripts and units of your own, as long as

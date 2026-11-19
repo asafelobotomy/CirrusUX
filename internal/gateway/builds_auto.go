@@ -102,13 +102,6 @@ func buildSettingsAction(s *Server, _ context.Context, a gitArgs) (*ActionReq, [
 	return gitUndo("git_build_settings", gitArgs{"name": a["name"], "on_push": yesNo(old.OnPush), "wake": yesNo(old.Wake)}), nil, err
 }
 
-func yesNo(b bool) string {
-	if b {
-		return "yes"
-	}
-	return "no"
-}
-
 func checkBuildSettings(a gitArgs, snap *snapshot.Snapshot) error {
 	for _, k := range []string{"on_push", "wake"} {
 		if a[k] != "yes" && a[k] != "no" {

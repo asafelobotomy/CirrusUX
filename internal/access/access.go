@@ -62,6 +62,9 @@ type Account struct {
 	// Groups are the account's groups by name, primary one included, so
 	// the panel can tell whether sshd's AllowGroups lets it in.
 	Groups []string `json:"groups,omitempty"`
+	// CreatedByPanel: made from the Accounts page (its comment says so), so
+	// the panel may also remove it. It never removes any other account.
+	CreatedByPanel bool `json:"createdByPanel,omitempty"`
 	// Password is set (not "!" or "*"): logins with it may work.
 	Password bool `json:"password"`
 	// Locked: the account expired, so no login works, keys included.
@@ -268,7 +271,7 @@ func ParseAccounts(passwd, group string) []Account {
 		out = append(out, Account{
 			Name: f[0], UID: uid, Home: f[5], Shell: f[6], Keys: []Key{}, Groups: groups,
 			CanLogin: !strings.HasSuffix(f[6], "/nologin") && !strings.HasSuffix(f[6], "/false") && f[6] != "",
-			Admin:    uid == 0 || admins[f[0]],
+			Admin:    uid == 0 || admins[f[0]], CreatedByPanel: uid >= 1000 && f[4] == PanelComment,
 		})
 	}
 	return out
@@ -292,6 +295,9 @@ func ApplyShadow(users []Account, shadow string, today int64) {
 		}
 	}
 }
+
+// PanelComment is the comment (GECOS) of an account the panel created.
+const PanelComment = "CirrusUX panel"
 
 // PanelLockDay is the expiry day CirrusUX sets to lock an account: 2 Jan
 // 1970, a date nobody sets by hand, so unlocking only undoes the panel's

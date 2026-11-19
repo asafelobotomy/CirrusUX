@@ -33,6 +33,13 @@ func (a *Agent) accountAction(ctx context.Context, c command, helper func(string
 		return helper(helperapi.CmdAccountLock, user)
 	case "account_unlock":
 		return helper(helperapi.CmdAccountUnlock, user)
+	case "account_create":
+		if c.Args["role"] != "user" && c.Args["role"] != "admin" {
+			return nil, fmt.Errorf("role must be user or admin")
+		}
+		return helper(helperapi.CmdAccountCreate, user, c.Args["role"])
+	case "account_remove":
+		return helper(helperapi.CmdAccountRemove, user)
 	}
 	return nil, fmt.Errorf("unknown action %q", c.Action)
 }
