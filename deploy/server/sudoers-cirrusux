@@ -2,7 +2,8 @@
 # The agent may run only these helper command lines as root, exactly as
 # written. The wildcards are checked again by the helper: journal's unit
 # against cirrusux-<name>.service, archive-delete's name against the archive,
-# self-upgrade's release against vX.Y.Z.
+# self-upgrade's release against vX.Y.Z, build-job's and build-cancel's
+# build against a job ID.
 
 Defaults:cirrusux !lecture, env_reset
 # The helper runs system tools by name, so root's PATH is set here rather
@@ -35,6 +36,8 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
                         /usr/local/sbin/cirrusux-helper storage-scan, \
                         /usr/local/sbin/cirrusux-helper archive-delete *, \
                         /usr/local/sbin/cirrusux-helper self-upgrade *, \
-                        /usr/local/sbin/cirrusux-helper self-rollback
+                        /usr/local/sbin/cirrusux-helper self-rollback, \
+                        /usr/local/sbin/cirrusux-helper build-job *, \
+                        /usr/local/sbin/cirrusux-helper build-cancel *
 
 cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT

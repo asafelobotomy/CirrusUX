@@ -9,10 +9,24 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ### Added
 
+- Builds: a repository's `.cirrus/build.yml` lists steps (an image and
+  commands), and **Run build** on its new Builds tab runs them on the
+  server, each in a fresh container as an unprivileged user, on a network
+  of its own that reaches the internet but not your local network. The tab
+  shows each step and the log as it runs, and a build can be cancelled.
+  Off until `BUILDS=yes` in helper.env (docs/BUILDS.md). Upgrading adds
+  the `build-job` and `build-cancel` sudoers lines it needs.
 - `cirrusstore sign` and `index` can sign through an SSH agent
   (`-agent -pub NAME.pub`), so a catalogue's signing key can stay in a
   password manager that runs one instead of in a file. `cirrusstore
   fromssh` makes a CirrusStore public key from an OpenSSH Ed25519 one.
+
+### Changed
+
+- The built-in catalogue matches the official CirrusStore catalogue again:
+  Home Assistant 2026.11.1, Nextcloud 35.0.2-apache's rebuilt digest, and
+  Picard from `jlesage/musicbrainz-picard` v26.11.1 (Picard 3.0.4), which
+  also runs on arm64.
 
 ## [0.9.0] - 2026-11-18
 

@@ -2,6 +2,8 @@
 // read answers from sample data.
 import { api, mode } from '../api.svelte';
 import * as demo from '../demo/git';
+import * as demoBuilds from '../demo/builds';
+import type { BuildLog, BuildRun } from './builds';
 
 export interface RepoSummary {
   name: string;
@@ -61,6 +63,19 @@ export function revokeToken(id: string): Promise<void> {
   if (!mode.live) return demo.revokeToken(id);
   return api(`/api/git/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+// Builds (docs/BUILDS.md). Starting and cancelling are confirmed first;
+// demo mode shows sample builds and starts nothing.
+export const listBuilds = (name: string): Promise<BuildRun[]> =>
+  mode.live ? api(repoPath(name) + '/builds') : demoBuilds.listBuilds(name);
+export const getBuild = (id: string): Promise<BuildRun> =>
+  mode.live ? api(`/api/git/builds/${encodeURIComponent(id)}`) : demoBuilds.getBuild(id);
+export const getBuildLog = (id: string, from: number): Promise<BuildLog> =>
+  mode.live ? api(`/api/git/builds/${encodeURIComponent(id)}/log` + qs({ from })) : demoBuilds.getBuildLog(id, from);
+export const startBuild = (name: string, ref: string): Promise<BuildRun> =>
+  api(repoPath(name) + '/builds', { method: 'POST', body: JSON.stringify({ ref }) });
+export const cancelBuild = (id: string): Promise<BuildRun> =>
+  api(`/api/git/builds/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
 
 /** Links the browser downloads; demo mode has none. */
 export const rawUrl = (name: string, ref: string, path: string) => repoPath(name) + '/blob' + qs({ ref, path, raw: 1 });

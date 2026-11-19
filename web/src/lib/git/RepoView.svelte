@@ -7,10 +7,12 @@
   import CommitView from './CommitView.svelte';
   import Refs from './Refs.svelte';
   import RepoSettings from './RepoSettings.svelte';
+  import Builds from './Builds.svelte';
+  import BuildView from './BuildView.svelte';
   import { getRepo } from './api';
   import { gitHref, type GitRoute, type GitTab } from './diff';
   import { gitData } from './state.svelte';
-  import { mode } from '../api.svelte';
+  import { has, mode } from '../api.svelte';
   import { FolderGit2 } from '../icons';
 
   let { route }: { route: GitRoute } = $props();
@@ -19,14 +21,16 @@
     return getRepo(route.repo!);
   });
 
-  const TABS: { tab: GitTab; label: string }[] = [
+  // Builds show when the server can run them (docs/BUILDS.md), and in demo mode.
+  const TABS = $derived<{ tab: GitTab; label: string }[]>([
     { tab: 'files', label: 'Files' },
     { tab: 'commits', label: 'Commits' },
+    ...(has('builds') || !mode.live ? [{ tab: 'builds' as GitTab, label: 'Builds' }] : []),
     { tab: 'branches', label: 'Branches' },
     { tab: 'tags', label: 'Tags' },
     { tab: 'settings', label: 'Settings' },
-  ];
-  const active = $derived(route.tab === 'commit' ? 'commits' : route.tab);
+  ]);
+  const active = $derived(route.tab === 'commit' ? 'commits' : route.tab === 'build' ? 'builds' : route.tab);
 
   function pickRef(ref: string) {
     location.hash = gitHref({ repo: route.repo, tab: route.tab === 'commits' ? 'commits' : 'files', ref });
@@ -78,6 +82,10 @@ git push {mode.server} main</pre>
       <Commits repo={r.name} {ref} />
     {:else if route.tab === 'commit' && route.sha}
       <CommitView repo={r.name} sha={route.sha} />
+    {:else if route.tab === 'builds'}
+      <Builds repo={r} />
+    {:else if route.tab === 'build' && route.build}
+      <BuildView repo={r.name} id={route.build} />
     {:else if route.tab === 'branches' || route.tab === 'tags'}
       <Refs repo={r} kind={route.tab} />
     {:else if route.tab === 'settings'}
