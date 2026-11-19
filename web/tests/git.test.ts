@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gitHref, parseGitRoute, parsePatch, pathTrail, validRepoName } from '../src/lib/git/diff.ts';
 import { fmtBytes } from '../src/lib/format.ts';
-import { fmtBuildTime, isOver, stateText, stateTone, took } from '../src/lib/git/builds.ts';
+import { fmtBuildTime, isOver, modeArgs, pushMode, stateText, stateTone, took } from '../src/lib/git/builds.ts';
 
 test('a patch splits into numbered lines', () => {
   const patch = [
@@ -95,4 +95,13 @@ test('build times and states read plainly', () => {
   assert.equal(stateText('queued'), 'Waiting to start');
   assert.equal(stateTone('failed'), 'bad');
   assert.ok(isOver('skipped') && !isOver('running'));
+});
+
+test('the push setting is one choice of three', () => {
+  assert.equal(pushMode({ onPush: false, wake: false }), 'off');
+  assert.equal(pushMode({ onPush: true, wake: false }), 'wait');
+  assert.equal(pushMode({ onPush: true, wake: true }), 'wake');
+  assert.deepEqual(modeArgs('off'), { on_push: 'no', wake: 'no' });
+  assert.deepEqual(modeArgs('wait'), { on_push: 'yes', wake: 'no' });
+  assert.deepEqual(modeArgs('wake'), { on_push: 'yes', wake: 'yes' });
 });

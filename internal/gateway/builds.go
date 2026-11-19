@@ -43,11 +43,18 @@ type BuildRun struct {
 	Pipeline *build.Pipeline `json:"pipeline,omitempty"`
 	// CancelSent: a cancel has gone to the server.
 	CancelSent bool `json:"cancelSent,omitempty"`
+	// Auto: a push started it (builds_auto.go). It waits, undispatched,
+	// until the server is awake; DispatchedAt is when the server was told.
+	Auto         bool       `json:"auto,omitempty"`
+	DispatchedAt *time.Time `json:"dispatchedAt,omitempty"`
 }
 
 // view is a build as the panel sees it.
+// view is a copy that is safe to hand out: it owns its steps, which the
+// store goes on changing, and leaves the pipeline out.
 func (r BuildRun) view() BuildRun {
 	r.Pipeline = nil
+	r.Steps = slices.Clone(r.Steps)
 	return r
 }
 
@@ -57,6 +64,8 @@ const (
 	// A queued build the server never started, or a running one it has
 	// stopped reporting on, is shown as failed after this.
 	buildSilence = 5 * time.Minute
+	// A build a push started waits this long for the server to wake.
+	autoWait = 24 * time.Hour
 )
 
 type buildStore struct {
@@ -95,7 +104,12 @@ func (b *buildStore) logPath(id string) string { return filepath.Join(b.dir, id+
 // expire shows a build the server has gone quiet on as failed.
 func expire(r *BuildRun, now time.Time) bool {
 	switch {
-	case r.State == build.Queued && now.Sub(r.Created) > buildSilence:
+	case r.State == build.Queued && r.Auto && r.DispatchedAt == nil:
+		if now.Sub(r.Created) <= autoWait {
+			return false
+		}
+		r.Error = "The server stayed asleep for a day, so it never started"
+	case r.State == build.Queued && now.Sub(r.Created) > buildSilence && (r.DispatchedAt == nil || now.Sub(*r.DispatchedAt) > buildSilence):
 		r.Error = "The server didn't start it (asleep, or the agent isn't running)"
 	case r.State == build.Running && now.Sub(r.Updated) > buildSilence:
 		r.Error = "The server stopped reporting on it"
@@ -168,7 +182,9 @@ func (b *buildStore) get(id string) (BuildRun, bool) {
 	if expire(r, time.Now()) {
 		_ = b.save(r)
 	}
-	return *r, true
+	c := *r
+	c.Steps = slices.Clone(r.Steps)
+	return c, true
 }
 
 var errNoBuild = errors.New("no such build")
@@ -181,10 +197,13 @@ func (b *buildStore) update(id string, change func(r *BuildRun) error) (BuildRun
 	if !ok {
 		return BuildRun{}, errNoBuild
 	}
-	if err := change(r); err != nil {
-		return *r, err
+	err := change(r)
+	if err == nil {
+		err = b.save(r)
 	}
-	return *r, b.save(r)
+	c := *r
+	c.Steps = slices.Clone(r.Steps)
+	return c, err
 }
 
 // applyStatus takes the status the agent sent.

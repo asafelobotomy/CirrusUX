@@ -9,6 +9,9 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ### Added
 
+- Builds on push: a repository's Settings tab can build every push, once
+  the server is awake or waking it if it sleeps. Off until turned on.
+  Pipelines can list the `branches:` a push builds (docs/BUILDS.md).
 - Accounts page: **Add an account** makes a standard or administrator
   account with a home folder, no password and no key (add a key to let it
   in), and **Remove account** removes one made from the panel, keeping its

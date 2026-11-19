@@ -172,3 +172,24 @@ func TestFirewallBlocksLAN(t *testing.T) {
 		}
 	}
 }
+
+func TestBranchesFilterPushes(t *testing.T) {
+	p, err := Parse([]byte("branches:\n  - main\n  - release/*\nsteps:\n  - name: a\n    image: alpine\n    commands: id\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for branch, want := range map[string]bool{"main": true, "release/1.0": true, "release/": true, "mainline": false, "wip": false, "feature/release/x": false} {
+		if got := p.BuildsOnPush(branch); got != want {
+			t.Errorf("%s: %v", branch, got)
+		}
+	}
+	all, _ := Parse([]byte("steps:\n  - name: a\n    image: alpine\n    commands: id\n"))
+	if !all.BuildsOnPush("anything") {
+		t.Error("a pipeline with no branches: should build every branch")
+	}
+	for _, bad := range []string{"branches: main\n", "branches:\n  - '*'\n", "branches:\n  - -x\n", "branches:\n  - a b\n", "branches:\n  - a*b\n"} {
+		if _, err := Parse([]byte(bad + "steps:\n  - name: a\n    image: alpine\n    commands: id\n")); err == nil {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+}

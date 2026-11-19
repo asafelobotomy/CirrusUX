@@ -25,6 +25,7 @@ const (
 	MaxCommandLen  = 4096
 	MaxEnv         = 30
 	MaxEnvValueLen = 4096
+	MaxBranches    = 20
 	MaxFileBytes   = 64 << 10
 	DefaultMinutes = 30
 	MaxMinutes     = 360
@@ -35,6 +36,10 @@ const (
 type Pipeline struct {
 	Minutes int    `json:"minutes"`
 	Steps   []Step `json:"steps"`
+	// Branches limits which branches a push starts a build for: a name, or
+	// a name ending in * for a prefix. Empty means every branch. Pressing
+	// Run build ignores it.
+	Branches []string `json:"branches,omitempty"`
 }
 
 // Step runs its commands, in order, in a fresh container of Image, with
@@ -51,8 +56,9 @@ var (
 	stepNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,39}$`)
 	// An image reference: optional registry host[:port]/, lower-case path,
 	// optional :tag, optional @sha256:digest.
-	imageRe  = regexp.MustCompile(`^(?:[a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]{1,5})?/)?[a-z0-9]+(?:[._-]+[a-z0-9]+)*(?:/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[0-9a-f]{64})?$`)
-	envKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+	imageRe         = regexp.MustCompile(`^(?:[a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]{1,5})?/)?[a-z0-9]+(?:[._-]+[a-z0-9]+)*(?:/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[0-9a-f]{64})?$`)
+	branchPatternRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}\*?$`)
+	envKeyRe        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
 )
 
 // reservedEnv are set by CirrusUX for every step.
@@ -71,7 +77,7 @@ func Parse(src []byte) (Pipeline, error) {
 	if !ok {
 		return Pipeline{}, fmt.Errorf("the file should start with steps:")
 	}
-	if err := onlyKeys(top, "the file", "steps", "timeout"); err != nil {
+	if err := onlyKeys(top, "the file", "steps", "timeout", "branches"); err != nil {
 		return Pipeline{}, err
 	}
 	p := Pipeline{Minutes: DefaultMinutes}
@@ -82,6 +88,19 @@ func Parse(src []byte) (Pipeline, error) {
 		}
 		if p.Minutes, err = parseMinutes(s); err != nil {
 			return Pipeline{}, err
+		}
+	}
+	if b, ok := top["branches"]; ok && b != nil {
+		list, ok := b.([]any)
+		if !ok {
+			return Pipeline{}, fmt.Errorf("branches: write a list, one branch per line")
+		}
+		for _, x := range list {
+			name, ok := x.(string)
+			if !ok {
+				return Pipeline{}, fmt.Errorf("branches: each is a branch name, such as main or release/*")
+			}
+			p.Branches = append(p.Branches, name)
 		}
 	}
 	steps, ok := top["steps"].([]any)
@@ -184,6 +203,14 @@ func (p Pipeline) Validate() error {
 	if p.Minutes < 1 || p.Minutes > MaxMinutes {
 		return fmt.Errorf("timeout: between 1 minute and %d hours", MaxMinutes/60)
 	}
+	if len(p.Branches) > MaxBranches {
+		return fmt.Errorf("branches: up to %d", MaxBranches)
+	}
+	for _, b := range p.Branches {
+		if !branchPatternRe.MatchString(b) {
+			return fmt.Errorf("branches: %q isn't a branch name, or a prefix ending in *", b)
+		}
+	}
 	if len(p.Steps) == 0 {
 		return fmt.Errorf("steps: there are none")
 	}
@@ -225,4 +252,18 @@ func (p Pipeline) Validate() error {
 		}
 	}
 	return nil
+}
+
+// BuildsOnPush reports whether a push to branch starts a build under this
+// pipeline.
+func (p Pipeline) BuildsOnPush(branch string) bool {
+	if len(p.Branches) == 0 {
+		return true
+	}
+	for _, b := range p.Branches {
+		if prefix, star := strings.CutSuffix(b, "*"); star && strings.HasPrefix(branch, prefix) || b == branch {
+			return true
+		}
+	}
+	return false
 }

@@ -89,7 +89,7 @@
           <a class="gx-link gx-grow" href={gitHref({ repo: repo.name, tab: 'build', build: b.id })}>
             <span class="gx-name">{b.subject || b.commit.slice(0, 8)}</span>
             <span class="faint gx-small" title={fmtDayTime(new Date(b.created))}>
-              {b.ref} · <code class="gx-mono">{b.commit.slice(0, 8)}</code> · {b.who} · {fmtAgo(new Date(b.created))}
+              {b.ref} · <code class="gx-mono">{b.commit.slice(0, 8)}</code> · {b.auto ? 'push by ' : ''}{b.who} · {fmtAgo(new Date(b.created))}
             </span>
           </a>
           {#if b.started}<span class="faint gx-small">{took(b.started, b.finished, now())}</span>{/if}

@@ -95,7 +95,7 @@
         <span class="faint gx-small" title={fmtDayTime(new Date(b.created))}>
           {b.ref} ·
           <a href={gitHref({ repo, tab: 'commit', sha: b.commit })}><code class="gx-mono">{b.commit.slice(0, 8)}</code></a>
-          · started by {b.who} {fmtAgo(new Date(b.created))}
+          · {b.auto ? 'started by a push from' : 'started by'} {b.who} {fmtAgo(new Date(b.created))}
           {#if b.started} · {took(b.started, b.finished, now())}{/if}
         </span>
       </div>

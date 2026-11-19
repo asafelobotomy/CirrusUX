@@ -3,7 +3,7 @@
 import { api, mode } from '../api.svelte';
 import * as demo from '../demo/git';
 import * as demoBuilds from '../demo/builds';
-import type { BuildLog, BuildRun } from './builds';
+import type { BuildLog, BuildRun, BuildSettings } from './builds';
 
 export interface RepoSummary {
   name: string;
@@ -72,6 +72,8 @@ export const getBuild = (id: string): Promise<BuildRun> =>
   mode.live ? api(`/api/git/builds/${encodeURIComponent(id)}`) : demoBuilds.getBuild(id);
 export const getBuildLog = (id: string, from: number): Promise<BuildLog> =>
   mode.live ? api(`/api/git/builds/${encodeURIComponent(id)}/log` + qs({ from })) : demoBuilds.getBuildLog(id, from);
+export const getBuildSettings = (name: string): Promise<BuildSettings> =>
+  mode.live ? api(repoPath(name) + '/build-settings') : demoBuilds.getBuildSettings(name);
 export const startBuild = (name: string, ref: string): Promise<BuildRun> =>
   api(repoPath(name) + '/builds', { method: 'POST', body: JSON.stringify({ ref }) });
 export const cancelBuild = (id: string): Promise<BuildRun> =>

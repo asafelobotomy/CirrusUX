@@ -6,9 +6,9 @@ you pick a branch or tag on its **Builds** tab and press **Run build**. The
 server runs each step in a fresh container, and the panel shows each step's
 result and the whole log as it runs.
 
-It is off until you turn it on, and nothing runs by itself: every build is
-one you start, confirm, and find in the Changelog. Running builds when you
-push is planned (ROADMAP.md).
+It is off until you turn it on. Builds start when you press Run build and
+confirm it, or, for a repository where you've turned on **Builds on push**,
+when someone pushes to it. Every build is in the Changelog.
 
 ## Turning it on
 
@@ -72,6 +72,46 @@ refused with the line number, as is any setting CirrusUX doesn't know,
 
 Each step gets `CI=true`, `CIRRUS_REPO`, `CIRRUS_REF`, `CIRRUS_COMMIT`,
 `CIRRUS_STEP` and `CIRRUS_BUILD`.
+
+## Builds on push
+
+Off for every repository. To turn it on, open the repository's **Settings**
+tab, **Builds on push**, and choose:
+
+- **On every push, once the server is awake.** A push makes a build that
+  waits on the gateway until the server is awake, then goes to it. It waits
+  up to a day.
+- **On every push, waking the server if it sleeps.** The same, and the
+  gateway also sends the wake you'd send from the panel. This is the only
+  thing that wakes the server for a build.
+
+Both are confirmed once, logged, and can be undone from the Changelog.
+
+What a push builds:
+
+- A branch it moved, and only if the commit has a `.cirrus/build.yml`.
+  Tags and deleted branches don't build.
+- Only branches the file lists under `branches:` (a name, or a prefix with
+  `*` at the end), or every branch if it has no list:
+
+  ```yaml
+  branches:
+    - main
+    - release/*
+  steps: …
+  ```
+
+  Pressing **Run build** ignores the list.
+- A pipeline file that doesn't read shows as a failed build, with the
+  reason, so the push that broke it is noticed.
+- A newer push to a branch replaces its build that is still waiting for the
+  server. A build already sent to the server isn't stopped.
+- At most 5 branches per push, however many it moved.
+
+Anyone who can push to the repository (every person you've allowed, and
+every read-write access token) can start builds this way, and decides what
+the steps run, as they could by pressing Run build. The steps are as
+restricted as any build (below).
 
 ## What a step can and can't do
 

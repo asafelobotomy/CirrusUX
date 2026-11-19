@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -34,6 +35,7 @@ func (s *Server) buildRoutes(mux, api *http.ServeMux) {
 	}
 	api.HandleFunc("GET /api/git/repos/{name}/builds", on(s.buildList))
 	api.HandleFunc("POST /api/git/repos/{name}/builds", on(s.buildStart))
+	api.HandleFunc("GET /api/git/repos/{name}/build-settings", on(s.buildSettingsGet))
 	api.HandleFunc("GET /api/git/builds/{id}", on(s.buildGet))
 	api.HandleFunc("GET /api/git/builds/{id}/log", on(s.buildLog))
 	api.HandleFunc("POST /api/git/builds/{id}/cancel", on(s.buildCancel))
@@ -88,6 +90,61 @@ func (s *Server) canBuild(action string, snap *snapshot.Snapshot) (string, int) 
 	return "", 0
 }
 
+// buildProblem is why a build can't be made, with the HTTP status to show.
+type buildProblem struct {
+	code int
+	msg  string
+	// noPipeline: the commit has no pipeline file, which a push to a
+	// repository that builds on push doesn't count as a problem.
+	noPipeline bool
+}
+
+func (e *buildProblem) Error() string { return e.msg }
+
+// prepareBuild finds the commit ref points at and reads its pipeline.
+func (s *Server) prepareBuild(ctx context.Context, name, ref string) (githost.Commit, build.Pipeline, string, error) {
+	commits, err := s.git.Commits(ctx, name, ref, "", 1)
+	if err != nil {
+		code, msg := gitStatus(err)
+		return githost.Commit{}, build.Pipeline{}, ref, &buildProblem{code: code, msg: msg}
+	}
+	if len(commits) == 0 {
+		return githost.Commit{}, build.Pipeline{}, ref, &buildProblem{code: http.StatusBadRequest, msg: "There's nothing to build yet: push some commits first"}
+	}
+	c := commits[0]
+	if ref == "" {
+		ref = c.SHA[:12]
+	}
+	blob, err := s.git.Blob(ctx, name, c.SHA, build.File)
+	var gerr *githost.Error
+	switch {
+	case errors.As(err, &gerr) && gerr.Kind == githost.NotFound:
+		return c, build.Pipeline{}, ref, &buildProblem{code: http.StatusBadRequest, noPipeline: true,
+			msg: "There's no " + build.File + " in " + name + " at " + ref + ". Add one to say what to build (docs/BUILDS.md)."}
+	case err != nil:
+		code, msg := gitStatus(err)
+		return c, build.Pipeline{}, ref, &buildProblem{code: code, msg: msg}
+	case blob.TooLarge || blob.Binary:
+		return c, build.Pipeline{}, ref, &buildProblem{code: http.StatusBadRequest, msg: build.File + " isn't a small text file"}
+	}
+	p, err := build.Parse([]byte(blob.Text))
+	if err != nil {
+		return c, build.Pipeline{}, ref, &buildProblem{code: http.StatusBadRequest, msg: build.File + ": " + err.Error()}
+	}
+	return c, p, ref, nil
+}
+
+// newRun is a queued build of commit c under pipeline p.
+func newRun(name, ref string, c githost.Commit, p build.Pipeline, who string) *BuildRun {
+	now := time.Now()
+	run := &BuildRun{ID: newBuildID(), Repo: name, Ref: ref, Commit: c.SHA, Subject: c.Subject, Who: who,
+		Created: now, Updated: now, State: build.Queued, Pipeline: &p}
+	for _, st := range p.Steps {
+		run.Steps = append(run.Steps, build.StepStatus{Name: st.Name, Image: st.Image, State: build.Waiting})
+	}
+	return run
+}
+
 func (s *Server) buildStart(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var body struct {
@@ -101,54 +158,37 @@ func (s *Server) buildStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, code)
 		return
 	}
-	commits, err := s.git.Commits(r.Context(), name, body.Ref, "", 1)
+	c, p, ref, err := s.prepareBuild(r.Context(), name, body.Ref)
 	if err != nil {
-		gitError(w, err)
+		var bp *buildProblem
+		errors.As(err, &bp)
+		http.Error(w, bp.msg, bp.code)
 		return
 	}
-	if len(commits) == 0 {
-		http.Error(w, "There's nothing to build yet: push some commits first", http.StatusBadRequest)
-		return
-	}
-	c := commits[0]
-	ref := body.Ref
-	if ref == "" {
-		ref = c.SHA[:12]
-	}
-	blob, err := s.git.Blob(r.Context(), name, c.SHA, build.File)
-	var gerr *githost.Error
-	switch {
-	case errors.As(err, &gerr) && gerr.Kind == githost.NotFound:
-		http.Error(w, "There's no "+build.File+" in "+name+" at "+ref+". Add one to say what to build (docs/BUILDS.md).", http.StatusBadRequest)
-		return
-	case err != nil:
-		gitError(w, err)
-		return
-	case blob.TooLarge || blob.Binary:
-		http.Error(w, build.File+" isn't a small text file", http.StatusBadRequest)
-		return
-	}
-	p, err := build.Parse([]byte(blob.Text))
-	if err != nil {
-		http.Error(w, build.File+": "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	now := time.Now()
-	run := &BuildRun{ID: newBuildID(), Repo: name, Ref: ref, Commit: c.SHA, Subject: c.Subject, Who: userOf(r),
-		Created: now, Updated: now, State: build.Queued, Pipeline: &p}
-	for _, st := range p.Steps {
-		run.Steps = append(run.Steps, build.StepStatus{Name: st.Name, Image: st.Image, State: build.Waiting})
-	}
+	run := newRun(name, ref, c, p, userOf(r))
 	if err := s.builds.add(run); err != nil {
 		http.Error(w, "saving the build failed", http.StatusInternalServerError)
 		return
 	}
+	s.queueBuild(run)
+	writeJSONStatus(w, http.StatusAccepted, run.view())
+}
+
+// queueBuild tells the server to start a build.
+func (s *Server) queueBuild(run *BuildRun) {
 	s.queue.Add(&Command{
 		ActionReq: ActionReq{Action: "build_run", Args: map[string]string{"run": run.ID}},
-		Label:     fmt.Sprintf("Started a build of %s at %s (%s)", name, c.SHA[:8], ref),
-		Who:       userOf(r),
+		Label:     buildLabel(run),
+		Who:       run.Who,
 	})
-	writeJSONStatus(w, http.StatusAccepted, run.view())
+}
+
+func buildLabel(run *BuildRun) string {
+	after := ""
+	if run.Auto {
+		after = " after a push"
+	}
+	return fmt.Sprintf("Started a build of %s at %s (%s)%s", run.Repo, run.Commit[:8], run.Ref, after)
 }
 
 func newBuildID() string {
