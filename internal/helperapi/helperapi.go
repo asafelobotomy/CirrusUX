@@ -126,6 +126,8 @@ const (
 	// BuildsDir holds a folder per build: its status and log, readable by
 	// the agent, and its workspace while it runs.
 	BuildsDir = "/var/lib/cirrusux/builds"
+	// BuildCacheDir holds the folders pipelines keep between builds.
+	BuildCacheDir = "/var/lib/cirrusux/build-cache"
 )
 
 // StayAwakeArgs are the only holds the panel can set.

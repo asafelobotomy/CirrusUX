@@ -91,6 +91,7 @@ var gitActionSpecs = map[string]actionSpec{
 			err := s.git.Rename(ctx, a["name"], a["to"])
 			if err == nil && s.buildSettings != nil {
 				s.buildSettings.rename(a["name"], a["to"])
+				s.secrets.rename(a["name"], a["to"])
 			}
 			return gitUndo("git_rename", gitArgs{"name": a["to"], "to": a["name"]}), nil, err
 		},
@@ -116,7 +117,12 @@ var gitActionSpecs = map[string]actionSpec{
 		label: func(a gitArgs) string { return "Deleted " + githost.TrashName(a["trash"]) + " for good" },
 		check: checkGitTrash,
 		local: func(s *Server, ctx context.Context, a gitArgs) (*ActionReq, []string, error) {
-			return nil, nil, s.git.Purge(ctx, a["trash"], a["confirm"])
+			err := s.git.Purge(ctx, a["trash"], a["confirm"])
+			if err == nil && s.secrets != nil {
+				// Gone for good: so are its secrets.
+				s.secrets.drop(githost.TrashName(a["trash"]))
+			}
+			return nil, nil, err
 		},
 	},
 	"git_describe": {

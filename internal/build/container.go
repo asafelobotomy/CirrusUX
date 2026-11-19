@@ -24,6 +24,8 @@ const (
 	UID = 65532
 	// Workspace is where the source is, inside each step.
 	Workspace = "/workspace"
+	// CacheMount is where a pipeline's cache folder is, in each step.
+	CacheMount = "/cache"
 	// Home is the steps' home folder, inside the workspace so that caches
 	// (Go's, npm's) carry on to later steps.
 	Home = Workspace + "/.cirrus-home"
@@ -44,7 +46,7 @@ func ContainerName(job string, step int) string {
 // RunArgs is the argument list for `docker run` or `podman run` (the same
 // for both) for step i of a build, with the source at workspace on the
 // host.
-func RunArgs(r Request, i int, workspace string, lim Limits) []string {
+func RunArgs(r Request, i int, workspace, cache string, lim Limits) []string {
 	s := r.Pipeline.Steps[i]
 	mem := strconv.Itoa(lim.MemoryMB) + "m"
 	args := []string{
@@ -60,16 +62,28 @@ func RunArgs(r Request, i int, workspace string, lim Limits) []string {
 		"--pids-limit", strconv.Itoa(lim.Pids),
 		"--mount", "type=bind,src=" + workspace + ",dst=" + Workspace,
 		"--workdir", Workspace,
-		"--label", "cirrusux.build=" + r.Job,
 	}
+	if cache != "" {
+		args = append(args, "--mount", "type=bind,src="+cache+",dst="+CacheMount)
+	}
+	args = append(args,
+		"--label", "cirrusux.build="+r.Job)
 	env := map[string]string{
 		"HOME": Home, "CI": "true",
 		"CIRRUS_REPO": r.Repo, "CIRRUS_REF": r.Ref, "CIRRUS_COMMIT": r.Commit,
 		"CIRRUS_STEP": s.Name, "CIRRUS_BUILD": r.Job,
 	}
+	if cache != "" {
+		env["CIRRUS_CACHE"] = CacheMount
+	}
 	maps.Copy(env, s.Env) // Validate keeps the pipeline off CirrusUX's names
 	for _, k := range slices.Sorted(maps.Keys(env)) {
 		args = append(args, "--env", k+"="+env[k])
+	}
+	// A secret is named, not given: the runtime takes its value from its own
+	// environment (SecretEnv), so it never shows in a process listing.
+	for _, n := range slices.Sorted(slices.Values(s.Secrets)) {
+		args = append(args, "--env", n)
 	}
 	return append(args, "--entrypoint", "/bin/sh", s.Image, "-c", Script(s.Commands))
 }
@@ -135,3 +149,16 @@ table inet cirrusux_build {
 }
 `
 }
+
+// SecretEnv is the environment the runtime is started with so that it can
+// pass a step's secrets on by name.
+func SecretEnv(r Request, step int) []string {
+	var env []string
+	for _, n := range slices.Sorted(slices.Values(r.Pipeline.Steps[step].Secrets)) {
+		env = append(env, n+"="+r.Secrets[n])
+	}
+	return env
+}
+
+// CacheDir is a cache folder under root.
+func CacheDir(root, repo, key string) string { return root + "/" + repo + "/" + key }

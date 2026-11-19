@@ -19,6 +19,13 @@ type Request struct {
 	Ref      string   `json:"ref"`
 	Commit   string   `json:"commit"`
 	Pipeline Pipeline `json:"pipeline"`
+	// Secrets are the values of the secrets the steps ask for. The helper
+	// keeps them out of the request file it stores.
+	Secrets map[string]string `json:"secrets,omitempty"`
+	// CacheKey names the cache folder the build uses: "push-<name>" or
+	// "manual-<name>", so a build from a push can't fill the cache that a
+	// build with secrets reads. "" when the pipeline has no cache.
+	CacheKey string `json:"cacheKey,omitempty"`
 }
 
 var (
@@ -29,13 +36,24 @@ var (
 
 // ParseRequest reads a request, refusing anything it doesn't know.
 func ParseRequest(b []byte) (Request, error) {
+	r, err := DecodeRequest(b)
+	if err != nil {
+		return r, err
+	}
+	return r, r.Validate()
+}
+
+// DecodeRequest reads a request without checking it, for the helper, which
+// keeps the secrets in a file of their own and adds them back before it
+// validates.
+func DecodeRequest(b []byte) (Request, error) {
 	var r Request
 	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
 	if err := d.Decode(&r); err != nil {
 		return r, fmt.Errorf("build request: %v", err)
 	}
-	return r, r.Validate()
+	return r, nil
 }
 
 func (r Request) Validate() error {
@@ -49,7 +67,45 @@ func (r Request) Validate() error {
 	case r.Ref == "" || len(r.Ref) > 250 || !utf8.ValidString(r.Ref) || strings.ContainsFunc(r.Ref, func(c rune) bool { return c < ' ' || c == 0x7f }):
 		return fmt.Errorf("build request: bad branch or tag")
 	}
-	return r.Pipeline.Validate()
+	if err := r.Pipeline.Validate(); err != nil {
+		return err
+	}
+	return r.checkSecretsAndCache()
+}
+
+var cacheKeyRe = regexp.MustCompile(`^(push|manual)-[a-z0-9][a-z0-9._-]{0,31}$`)
+
+func (r Request) checkSecretsAndCache() error {
+	want := r.Pipeline.SecretNames()
+	if len(r.Secrets) != len(want) {
+		return fmt.Errorf("build request: the secrets don't match what the steps ask for")
+	}
+	for _, n := range want {
+		if err := CheckSecretValue(r.Secrets[n]); err != nil {
+			return fmt.Errorf("build request: secret %s: %v", n, err)
+		}
+	}
+	switch {
+	case r.Pipeline.Cache == "" && r.CacheKey != "":
+		return fmt.Errorf("build request: a cache folder without a cache in the pipeline")
+	case r.Pipeline.Cache != "" && (!cacheKeyRe.MatchString(r.CacheKey) || !strings.HasSuffix(r.CacheKey, "-"+r.Pipeline.Cache)):
+		return fmt.Errorf("build request: bad cache folder")
+	}
+	return nil
+}
+
+// CheckSecretValue says whether a secret's value can be used: long enough
+// that hiding it in logs doesn't wreck them, and text.
+func CheckSecretValue(v string) error {
+	switch {
+	case len(v) < MinSecretLen:
+		return fmt.Errorf("at least %d characters", MinSecretLen)
+	case len(v) > MaxSecretLen:
+		return fmt.Errorf("up to %d characters", MaxSecretLen)
+	case strings.ContainsRune(v, 0) || !utf8.ValidString(v):
+		return fmt.Errorf("text only")
+	}
+	return nil
 }
 
 // States of a build and of its steps.

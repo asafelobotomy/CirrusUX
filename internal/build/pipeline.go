@@ -26,6 +26,9 @@ const (
 	MaxEnv         = 30
 	MaxEnvValueLen = 4096
 	MaxBranches    = 20
+	MaxSecrets     = 20
+	MinSecretLen   = 8
+	MaxSecretLen   = 8192
 	MaxFileBytes   = 64 << 10
 	DefaultMinutes = 30
 	MaxMinutes     = 360
@@ -40,6 +43,9 @@ type Pipeline struct {
 	// a name ending in * for a prefix. Empty means every branch. Pressing
 	// Run build ignores it.
 	Branches []string `json:"branches,omitempty"`
+	// Cache names a per-repository folder that survives between builds,
+	// at /cache in every step. "" is none.
+	Cache string `json:"cache,omitempty"`
 }
 
 // Step runs its commands, in order, in a fresh container of Image, with
@@ -50,6 +56,9 @@ type Step struct {
 	Image    string            `json:"image"`
 	Commands []string          `json:"commands"`
 	Env      map[string]string `json:"env,omitempty"`
+	// Secrets are the names of the repository's secrets this step gets, as
+	// environment variables. Only a build started by hand has them.
+	Secrets []string `json:"secrets,omitempty"`
 }
 
 var (
@@ -58,7 +67,10 @@ var (
 	// optional :tag, optional @sha256:digest.
 	imageRe         = regexp.MustCompile(`^(?:[a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]{1,5})?/)?[a-z0-9]+(?:[._-]+[a-z0-9]+)*(?:/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[0-9a-f]{64})?$`)
 	branchPatternRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}\*?$`)
-	envKeyRe        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+	// Secrets are named like environment variables, in capitals.
+	SecretNameRe = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,63}$`)
+	cacheNameRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
+	envKeyRe     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
 )
 
 // reservedEnv are set by CirrusUX for every step.
@@ -77,7 +89,7 @@ func Parse(src []byte) (Pipeline, error) {
 	if !ok {
 		return Pipeline{}, fmt.Errorf("the file should start with steps:")
 	}
-	if err := onlyKeys(top, "the file", "steps", "timeout", "branches"); err != nil {
+	if err := onlyKeys(top, "the file", "steps", "timeout", "branches", "cache"); err != nil {
 		return Pipeline{}, err
 	}
 	p := Pipeline{Minutes: DefaultMinutes}
@@ -103,6 +115,16 @@ func Parse(src []byte) (Pipeline, error) {
 			p.Branches = append(p.Branches, name)
 		}
 	}
+	if c, ok := top["cache"]; ok && c != nil {
+		name, ok := c.(string)
+		if !ok {
+			return Pipeline{}, fmt.Errorf("cache: write true, or a short name such as v2")
+		}
+		if name == "true" {
+			name = "default"
+		}
+		p.Cache = name
+	}
 	steps, ok := top["steps"].([]any)
 	if !ok {
 		return Pipeline{}, fmt.Errorf("steps: write a list of steps, each starting with - name:")
@@ -126,7 +148,7 @@ func readStep(i int, raw any) (Step, error) {
 	if n, ok := m["name"].(string); ok {
 		where = "step " + n
 	}
-	if err := onlyKeys(m, where, "name", "image", "commands", "env"); err != nil {
+	if err := onlyKeys(m, where, "name", "image", "commands", "env", "secrets"); err != nil {
 		return Step{}, err
 	}
 	var st Step
@@ -153,6 +175,19 @@ func readStep(i int, raw any) (Step, error) {
 		st.Commands = []string{c}
 	default:
 		return Step{}, fmt.Errorf("%s: commands: is needed, as a list", where)
+	}
+	if sec, ok := m["secrets"]; ok && sec != nil {
+		list, ok := sec.([]any)
+		if !ok {
+			return Step{}, fmt.Errorf("%s: secrets: write a list of names, one per line", where)
+		}
+		for _, x := range list {
+			name, ok := x.(string)
+			if !ok {
+				return Step{}, fmt.Errorf("%s: secrets: each is a name such as DEPLOY_TOKEN", where)
+			}
+			st.Secrets = append(st.Secrets, name)
+		}
 	}
 	if e, ok := m["env"]; ok && e != nil {
 		em, ok := e.(map[string]any)
@@ -211,6 +246,9 @@ func (p Pipeline) Validate() error {
 			return fmt.Errorf("branches: %q isn't a branch name, or a prefix ending in *", b)
 		}
 	}
+	if p.Cache != "" && !cacheNameRe.MatchString(p.Cache) {
+		return fmt.Errorf("cache: write true, or a name of lower-case letters, digits, . _ and - (up to 32)")
+	}
 	if len(p.Steps) == 0 {
 		return fmt.Errorf("steps: there are none")
 	}
@@ -239,11 +277,14 @@ func (p Pipeline) Validate() error {
 				return fmt.Errorf("%s: command %d is empty or too long", where, j+1)
 			}
 		}
+		if err := checkSecretNames(where, s); err != nil {
+			return err
+		}
 		if len(s.Env) > MaxEnv {
 			return fmt.Errorf("%s: env: up to %d", where, MaxEnv)
 		}
 		for k, v := range s.Env {
-			if !envKeyRe.MatchString(k) || slices.Contains(reservedEnv, k) || strings.HasPrefix(k, "CIRRUS_") {
+			if !envKeyRe.MatchString(k) || ReservedName(k) {
 				return fmt.Errorf("%s: env %s: names are letters, digits and _, and HOME, CI, PATH and CIRRUS_… are CirrusUX's", where, k)
 			}
 			if len(v) > MaxEnvValueLen || strings.ContainsAny(v, "\x00\n\r") {
@@ -266,4 +307,42 @@ func (p Pipeline) BuildsOnPush(branch string) bool {
 		}
 	}
 	return false
+}
+
+// ReservedName reports whether CirrusUX sets an environment variable
+// itself, so neither env: nor secrets: may use it.
+func ReservedName(k string) bool {
+	return slices.Contains(reservedEnv, k) || strings.HasPrefix(k, "CIRRUS_")
+}
+
+func checkSecretNames(where string, s Step) error {
+	if len(s.Secrets) > MaxSecrets {
+		return fmt.Errorf("%s: secrets: up to %d", where, MaxSecrets)
+	}
+	for i, n := range s.Secrets {
+		switch {
+		case !SecretNameRe.MatchString(n) || ReservedName(n):
+			return fmt.Errorf("%s: secrets: %q isn't a secret name (capitals, digits and _; not HOME, CI, PATH or CIRRUS_…)", where, n)
+		case slices.Contains(s.Secrets[:i], n):
+			return fmt.Errorf("%s: secrets: %s is listed twice", where, n)
+		}
+		if _, clash := s.Env[n]; clash {
+			return fmt.Errorf("%s: %s is both an env: value and a secret", where, n)
+		}
+	}
+	return nil
+}
+
+// SecretNames is every secret the pipeline's steps ask for, sorted.
+func (p Pipeline) SecretNames() []string {
+	var all []string
+	for _, s := range p.Steps {
+		for _, n := range s.Secrets {
+			if !slices.Contains(all, n) {
+				all = append(all, n)
+			}
+		}
+	}
+	slices.Sort(all)
+	return all
 }

@@ -16,6 +16,7 @@ type buildConf struct {
 	MemoryMB   int
 	CPUs       int
 	MaxMinutes int
+	CacheMB    int
 }
 
 // Defaults for a step's container and a build's length.
@@ -23,6 +24,7 @@ const (
 	defaultBuildMemoryMB = 2048
 	defaultBuildCPUs     = 2
 	defaultBuildMinutes  = 60
+	defaultBuildCacheMB  = 5120
 	buildPids            = 1024
 )
 
@@ -42,6 +44,13 @@ func (b buildConf) subnet() string {
 		return build.DefaultSubnet
 	}
 	return b.Subnet
+}
+
+func (b buildConf) cacheMB() int {
+	if b.CacheMB == 0 {
+		return defaultBuildCacheMB
+	}
+	return b.CacheMB
 }
 
 func (b buildConf) maxMinutes() int {
@@ -69,6 +78,7 @@ func init() {
 	}
 	keys["BUILD_MEMORY_MB"] = number(256, 1<<20, func(c *conf) *int { return &c.Build.MemoryMB })
 	keys["BUILD_CPUS"] = number(1, 256, func(c *conf) *int { return &c.Build.CPUs })
+	keys["BUILD_CACHE_MB"] = number(64, 1<<22, func(c *conf) *int { return &c.Build.CacheMB })
 	keys["BUILD_MAX_MINUTES"] = number(1, build.MaxMinutes, func(c *conf) *int { return &c.Build.MaxMinutes })
 }
 

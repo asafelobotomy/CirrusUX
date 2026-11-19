@@ -9,6 +9,7 @@
   import { reload } from './state.svelte';
   import { go } from '../state/ui.svelte';
   import { getBuildSettings } from './api';
+  import Secrets from './Secrets.svelte';
   import { modeArgs, pushMode, type PushMode } from './builds';
   import { has, mode } from '../api.svelte';
   import { gitData } from './state.svelte';
@@ -54,6 +55,7 @@
         <Button size="sm" type="submit" disabled={push === pushNow}>Save…</Button>
       </form>
     </Card>
+    <Secrets {repo} />
   {/if}
 
   <Card title="Default branch" subtitle="What new clones check out, and what the panel shows first.">

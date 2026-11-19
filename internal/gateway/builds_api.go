@@ -36,6 +36,9 @@ func (s *Server) buildRoutes(mux, api *http.ServeMux) {
 	api.HandleFunc("GET /api/git/repos/{name}/builds", on(s.buildList))
 	api.HandleFunc("POST /api/git/repos/{name}/builds", on(s.buildStart))
 	api.HandleFunc("GET /api/git/repos/{name}/build-settings", on(s.buildSettingsGet))
+	api.HandleFunc("GET /api/git/repos/{name}/secrets", on(s.secretList))
+	api.HandleFunc("PUT /api/git/repos/{name}/secrets/{key}", on(s.secretPut))
+	api.HandleFunc("DELETE /api/git/repos/{name}/secrets/{key}", on(s.secretDelete))
 	api.HandleFunc("GET /api/git/builds/{id}", on(s.buildGet))
 	api.HandleFunc("GET /api/git/builds/{id}/log", on(s.buildLog))
 	api.HandleFunc("POST /api/git/builds/{id}/cancel", on(s.buildCancel))
@@ -165,6 +168,10 @@ func (s *Server) buildStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, bp.msg, bp.code)
 		return
 	}
+	if _, err := s.secretsFor(name, p, false); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	run := newRun(name, ref, c, p, userOf(r))
 	if err := s.builds.add(run); err != nil {
 		http.Error(w, "saving the build failed", http.StatusInternalServerError)
@@ -262,7 +269,24 @@ func (s *Server) agentBuild(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "that build isn't waiting to start", http.StatusGone)
 		return
 	}
-	writeJSON(w, build.Request{Job: b.ID, Repo: b.Repo, Ref: b.Ref, Commit: b.Commit, Pipeline: *b.Pipeline})
+	req := build.Request{Job: b.ID, Repo: b.Repo, Ref: b.Ref, Commit: b.Commit, Pipeline: *b.Pipeline}
+	if c := b.Pipeline.Cache; c != "" {
+		// Builds from pushes and builds started by hand keep separate caches.
+		req.CacheKey = "manual-" + c
+		if b.Auto {
+			req.CacheKey = "push-" + c
+		}
+	}
+	// The secrets are read now, so a build gets the values as they are when
+	// the server asks.
+	var err error
+	if req.Secrets, err = s.secretsFor(b.Repo, *b.Pipeline, b.Auto); err != nil {
+		s.failWaiting(b.ID, err.Error())
+		http.Error(w, err.Error(), http.StatusGone)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, req)
 }
 
 func (s *Server) agentBuildSource(w http.ResponseWriter, r *http.Request) {

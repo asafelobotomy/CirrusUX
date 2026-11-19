@@ -50,6 +50,8 @@ type Server struct {
 	builds *buildStore
 	// buildSettings are each repository's build choices (builds_auto.go).
 	buildSettings *buildSettingsStore
+	// secrets are builds' secrets (builds_secrets.go).
+	secrets *secretStore
 	// ctx lives as long as the server; Close cancels it, and with it any
 	// Git action still running.
 	ctx  context.Context
@@ -112,6 +114,7 @@ func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 			s.git, s.gitTokens = h, openGitTokens(filepath.Join(cfg.DataDir, "git-tokens.json"))
 			s.builds = openBuilds(filepath.Join(cfg.DataDir, "builds"))
 			s.buildSettings = openBuildSettings(filepath.Join(cfg.DataDir, "build-settings.json"))
+			s.secrets = openSecrets(filepath.Join(cfg.DataDir, "build-secrets.json"))
 		}
 	}
 	return s
