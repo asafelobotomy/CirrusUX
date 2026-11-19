@@ -8,6 +8,10 @@
   import { validRepoName } from './diff';
   import { reload } from './state.svelte';
   import { go } from '../state/ui.svelte';
+  import { getBuildSettings } from './api';
+  import { modeArgs, pushMode, type PushMode } from './builds';
+  import { has, mode } from '../api.svelte';
+  import { gitData } from './state.svelte';
   import { Trash2 } from '../icons';
 
   let { repo }: { repo: Repo } = $props();
@@ -21,6 +25,14 @@
     branch = repo.defaultBranch;
     newName = repo.name;
   });
+
+  // Builds on push, when the server can build (docs/BUILDS.md).
+  let pushNow = $state<PushMode>('off');
+  let push = $state<PushMode>('off');
+  $effect(() => {
+    void gitData.v;
+    getBuildSettings(repo.name).then((s) => { pushNow = push = pushMode(s); }, () => {});
+  });
 </script>
 
 <div class="stack">
@@ -30,6 +42,19 @@
       <Button size="sm" type="submit" disabled={description === repo.description}>Save…</Button>
     </form>
   </Card>
+
+  {#if has('builds') || !mode.live}
+    <Card title="Builds on push" subtitle="Off unless you turn it on. Only branches the pipeline file names are built, or every branch if it names none. Builds from pushes never get secrets.">
+      <form class="gx-row" onsubmit={(e) => { e.preventDefault(); confirmGit({ action: 'git_build_settings', args: { name: repo.name, ...modeArgs(push) } }, reload); }}>
+        <select bind:value={push} aria-label="Builds on push">
+          <option value="off">Only when I press Run build</option>
+          <option value="wait">On every push, once the server is awake</option>
+          <option value="wake">On every push, waking the server if it sleeps</option>
+        </select>
+        <Button size="sm" type="submit" disabled={push === pushNow}>Save…</Button>
+      </form>
+    </Card>
+  {/if}
 
   <Card title="Default branch" subtitle="What new clones check out, and what the panel shows first.">
     {#if repo.branches.length}

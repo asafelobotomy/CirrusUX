@@ -1,7 +1,7 @@
 // Sample builds for demo mode, shaped like the gateway's answers.
 import { ApiError } from '../api.svelte';
 import { now } from '../time.svelte';
-import type { BuildLog, BuildRun } from '../git/builds';
+import type { BuildLog, BuildRun, BuildSettings } from '../git/builds';
 
 const min = 60_000;
 const at = (minsAgo: number) => new Date(now().getTime() - minsAgo * min).toISOString();
@@ -78,3 +78,5 @@ export async function getBuildLog(id: string, from: number): Promise<BuildLog> {
 }
 
 const withSize = (r: BuildRun): BuildRun => ({ ...r, logSize: (LOGS[r.id] ?? '').length });
+
+export const getBuildSettings = async (_repo: string): Promise<BuildSettings> => ({ onPush: false, wake: false });

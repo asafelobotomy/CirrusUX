@@ -27,7 +27,16 @@ export interface BuildRun {
   started?: string;
   finished?: string;
   logSize: number;
+  /** A push started it. */
+  auto?: boolean;
 }
+
+export interface BuildSettings { onPush: boolean; wake: boolean }
+
+/** The three choices for building on push, as one setting. */
+export type PushMode = 'off' | 'wait' | 'wake';
+export const pushMode = (s: BuildSettings): PushMode => (!s.onPush ? 'off' : s.wake ? 'wake' : 'wait');
+export const modeArgs = (m: PushMode): { on_push: string; wake: string } => ({ on_push: m === 'off' ? 'no' : 'yes', wake: m === 'wake' ? 'yes' : 'no' });
 
 export interface BuildLog { text: string; next: number }
 

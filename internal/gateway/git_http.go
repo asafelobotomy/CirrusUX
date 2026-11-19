@@ -146,6 +146,10 @@ func (s *Server) gitHTTP(w http.ResponseWriter, r *http.Request) {
 		env = append(env, "GIT_PROTOCOL="+p)
 	}
 
+	var before map[string]string // branches, for builds on push
+	if push && r.Method == http.MethodPost {
+		before = s.pushHeads(ctx, repo)
+	}
 	pr, pw := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
@@ -164,6 +168,7 @@ func (s *Server) gitHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("git default branch", "repo", repo, "err", err)
 		}
 		s.record(AuditEntry{Who: caller.Label, What: "Pushed to " + repo})
+		go s.afterPush(repo, caller.Label, before)
 	}
 }
 

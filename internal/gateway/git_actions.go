@@ -88,7 +88,11 @@ var gitActionSpecs = map[string]actionSpec{
 			return checkGitName(a, snap)
 		},
 		local: func(s *Server, ctx context.Context, a gitArgs) (*ActionReq, []string, error) {
-			return gitUndo("git_rename", gitArgs{"name": a["to"], "to": a["name"]}), nil, s.git.Rename(ctx, a["name"], a["to"])
+			err := s.git.Rename(ctx, a["name"], a["to"])
+			if err == nil && s.buildSettings != nil {
+				s.buildSettings.rename(a["name"], a["to"])
+			}
+			return gitUndo("git_rename", gitArgs{"name": a["to"], "to": a["name"]}), nil, err
 		},
 	},
 	"git_delete": {

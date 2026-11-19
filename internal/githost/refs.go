@@ -119,3 +119,20 @@ func (h *Host) RestoreRef(ctx context.Context, name, ref, sha string) error {
 	_, err = h.run(ctx, p, 4096, "update-ref", ref, sha, "")
 	return err
 }
+
+// Heads is every branch of a repository with the commit it points at.
+// It is cheaper than Info, for work done on every push.
+func (h *Host) Heads(ctx context.Context, name string) (map[string]string, error) {
+	if err := h.need(name); err != nil {
+		return nil, err
+	}
+	out, err := h.run(ctx, h.path(name), refsLimit, "for-each-ref", "--format=%(refname:short)%00%(objectname)", "refs/heads")
+	if err != nil {
+		return nil, err
+	}
+	heads := map[string]string{}
+	for _, f := range records(out, 2) {
+		heads[f[0]] = f[1]
+	}
+	return heads, nil
+}

@@ -48,6 +48,8 @@ type Server struct {
 	gitTokens *gitTokenStore
 	// builds are Git hosting's builds (builds.go), nil when it is off.
 	builds *buildStore
+	// buildSettings are each repository's build choices (builds_auto.go).
+	buildSettings *buildSettingsStore
 	// ctx lives as long as the server; Close cancels it, and with it any
 	// Git action still running.
 	ctx  context.Context
@@ -109,6 +111,7 @@ func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 			h.AllowPrivateImport = cfg.GitImportPrivate
 			s.git, s.gitTokens = h, openGitTokens(filepath.Join(cfg.DataDir, "git-tokens.json"))
 			s.builds = openBuilds(filepath.Join(cfg.DataDir, "builds"))
+			s.buildSettings = openBuildSettings(filepath.Join(cfg.DataDir, "build-settings.json"))
 		}
 	}
 	return s
@@ -263,6 +266,7 @@ func (s *Server) agentSnapshot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "store failed", http.StatusInternalServerError)
 		return
 	}
+	s.dispatchBuilds()
 	w.WriteHeader(http.StatusNoContent)
 }
 

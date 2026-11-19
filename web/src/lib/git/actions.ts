@@ -56,6 +56,16 @@ const COPY: Record<string, (a: Args) => Copy> = {
     title: `Restore ${short(a.ref)} in ${a.name}?`, body: `Points ${short(a.ref)} at the commit it had before it was deleted.`,
     confirmLabel: 'Restore', changelog: `Restored ${short(a.ref)} in ${a.name}`, undo: 'Delete it again',
   }),
+  git_build_settings: (a) => ({
+    title: a.on_push !== 'yes' ? `Stop building ${a.name} on push?` : `Build ${a.name} on every push?`,
+    body: a.on_push !== 'yes'
+      ? 'Builds start only when you press Run build.'
+      : `A push to a branch the pipeline builds starts a build, without asking again. It waits until the server is awake${a.wake === 'yes' ? ', and wakes it if it sleeps' : ''}. Builds from pushes never get secrets.`,
+    confirmLabel: 'Save',
+    changelog: a.on_push !== 'yes' ? `Stopped running builds of ${a.name} on push`
+      : `Run builds of ${a.name} on push${a.wake === 'yes' ? ', waking the server if it sleeps' : ''}`,
+    undo: 'Put the old setting back',
+  }),
 };
 
 /** Asks, then runs a Git change on the gateway. onDone runs after it worked. */

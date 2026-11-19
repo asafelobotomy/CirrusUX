@@ -9,6 +9,9 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ### Added
 
+- Builds on push: a repository's Settings tab can build every push, once
+  the server is awake or waking it if it sleeps. Off until turned on.
+  Pipelines can list the `branches:` a push builds (docs/BUILDS.md).
 - Accounts page (`ACCESS=yes` in helper.env): the server's login accounts,
   their SSH keys with security keys (passkeys) marked, one-time codes, and
   sshd's login settings. Add and remove SSH keys and lock or unlock
