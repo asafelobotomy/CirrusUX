@@ -24,7 +24,7 @@ import (
 // signApps wraps each definition in an envelope in dir/apps and signs it.
 // An app keeps its serial while its definition is unchanged (re-signing
 // only moves the expiry); a changed one gets the next serial.
-func signApps(dir string, sec store.Secret, source string, expires time.Time, defs []string) ([]string, error) {
+func signApps(dir string, sec store.Signer, source string, expires time.Time, defs []string) ([]string, error) {
 	if err := os.MkdirAll(filepath.Join(dir, "apps"), 0o755); err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func signApps(dir string, sec store.Secret, source string, expires time.Time, de
 
 // buildIndex lists every signed app in dir/apps (each checked with sec's
 // own public key) in a new index, one serial up from the last.
-func buildIndex(dir string, sec store.Secret, source string, expires, now time.Time) (store.Index, error) {
+func buildIndex(dir string, sec store.Signer, source string, expires, now time.Time) (store.Index, error) {
 	src := store.Source{Name: source, Keys: []store.Key{sec.Public()}}
 	ix := store.Index{Source: source, Serial: 1, Expires: expires.UTC(), Apps: []store.Entry{}}
 	if prev, err := os.ReadFile(filepath.Join(dir, "index.json")); err == nil {
@@ -167,11 +167,15 @@ func readEnvelope(p string) (store.Envelope, error) {
 	return env, json.Unmarshal(b, &env)
 }
 
-func writeSigned(p string, data []byte, sec store.Secret) error {
+func writeSigned(p string, data []byte, sec store.Signer) error {
 	if err := os.WriteFile(p, data, 0o644); err != nil {
 		return err
 	}
-	return os.WriteFile(p+".sig", sec.Sign(data), 0o644)
+	sig, err := sec.SignBytes(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p+".sig", sig, 0o644)
 }
 
 // sameJSON compares two JSON documents ignoring layout and escaping.

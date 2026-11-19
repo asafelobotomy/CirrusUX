@@ -16,13 +16,18 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   shows each step and the log as it runs, and a build can be cancelled.
   Off until `BUILDS=yes` in helper.env (docs/BUILDS.md). Upgrading adds
   the `build-job` and `build-cancel` sudoers lines it needs.
+- `cirrusstore sign` and `index` can sign through an SSH agent
+  (`-agent -pub NAME.pub`), so a catalogue's signing key can stay in a
+  password manager that runs one instead of in a file. `cirrusstore
+  fromssh` makes a CirrusStore public key from an OpenSSH Ed25519 one.
 - `scripts/verify-release.sh vX.Y.Z` checks a published release the way
   `install.sh` does (signature, then every file's checksum) without
   installing it. `scripts/sign-release.sh --check-agent` checks that the
   SSH agent (Proton Pass's by default) offers the release key before a
-  release is tagged, and signing now checks the agent first, shows why the agent refused, and verifies the
-  signature GitHub serves afterwards. CONTRIBUTING.md walks through signing
-  and what to do when the agent doesn't offer the key.
+  release is tagged, and signing now checks the agent first, shows why the
+  agent refused, and verifies the signature GitHub serves afterwards.
+  CONTRIBUTING.md walks through signing and what to do when the agent
+  doesn't offer the key.
 
 ### Changed
 
