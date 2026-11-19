@@ -4,6 +4,8 @@
 package snapshot
 
 import (
+	"cirrusux/internal/access"
+	"cirrusux/internal/netinfo"
 	"time"
 
 	"cirrusux/internal/helperapi"
@@ -58,6 +60,10 @@ type Snapshot struct {
 	OSUpdates *osupdate.Result `json:"osUpdates,omitempty"`
 	// Storage is the last measurement and the archive (storage module).
 	Storage *storage.Result `json:"storage,omitempty"`
+	// Access is login accounts, SSH keys, SFTP and FTPS (access module).
+	Access *access.Status `json:"access,omitempty"`
+	// Network is the server's interfaces, gateway and DNS, read without root.
+	Network *netinfo.Info `json:"network,omitempty"`
 	// Problems collecting individual sections; the rest of the snapshot is
 	// still valid.
 	Errors []string `json:"errors,omitempty"`

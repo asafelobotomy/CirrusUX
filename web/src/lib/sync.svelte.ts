@@ -1,6 +1,7 @@
 // Live mode: keeps the UI in step with the gateway. Polls only the gateway
 // (wherever it runs), never a sleeping server, and only while the tab is visible.
 import { api, ApiError, mode } from './api.svelte';
+import type { AccessInfo, NetworkInfo } from './access';
 import { live } from './state/live.svelte';
 import { power, type PowerState } from './state/power.svelte';
 import { settings } from './state/settings.svelte';
@@ -40,6 +41,8 @@ interface Snap {
   osUpdates?: { checked: string; packages: { name: string; from: string; to: string; security?: boolean }[]; rebootRequired?: boolean; upgraded?: string; upgradedCount?: number };
   jobs?: { id: string; action: 'install' | 'remove' | 'update' | 'os-check' | 'os-upgrade' | 'storage-scan' | 'archive-delete' | 'self-upgrade' | 'self-rollback'; app: string; name: string; state: 'running' | 'done' | 'failed'; step: string; detail?: string; error?: string; started: string; finished?: string }[];
   appsHost?: AppsHost;
+  access?: AccessInfo;
+  network?: NetworkInfo;
 }
 
 interface StateResp {
@@ -56,7 +59,7 @@ function clearSampleData(): void {
   power.lastSnapshot = new Date(0);
   Object.assign(live, {
     containers: [], changelog: [], lastBackupRun: null, backups: [], nextWakes: [], disk: null,
-    folders: [], temps: [], timeline: [], security: null, updates: [], problems: [],
+    folders: [], temps: [], timeline: [], security: null, updates: [], problems: [], access: null, network: null,
   });
 }
 
@@ -109,6 +112,8 @@ function apply(st: StateResp): void {
     ? { banned: s.security.banned ?? null, firewall: s.security.firewall ?? [],
         clamav: s.security.clamav ? { ...s.security.clamav, at: new Date(s.security.clamav.at) } : null }
     : null;
+  live.access = s.access ? { ...s.access, users: s.access.users ?? [] } : null;
+  live.network = s.network ?? null;
   live.timeline = s.timeline.map((t) => ({ from: new Date(t.from), to: d(t.to), state: t.state, reason: t.reason }));
   live.problems = s.errors ?? [];
   live.agentVersion = s.agentVersion ?? '';

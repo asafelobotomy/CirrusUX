@@ -88,6 +88,15 @@ func main() {
 	// Tools are run by name; find them only in root's own folders, whatever
 	// PATH sudo was given.
 	os.Setenv("PATH", rootPath)
+	if os.Args[1] == helperapi.CmdKeysIO {
+		// Runs as a login account, which can't read root's config.
+		out, err := keysIO(os.Args[2], os.Args[3], os.Args[4])
+		if err != nil {
+			fail("%v", err)
+		}
+		os.Stdout.Write(out)
+		return
+	}
 	c, err := loadAll(configPath, confDir)
 	if err != nil {
 		fail("%v", err)
@@ -175,6 +184,9 @@ func main() {
 		out, err = buildCommand(ctx, c, sub, os.Args[2])
 	case helperapi.CmdJournal:
 		out, err = command(ctx, "journalctl", "-u", os.Args[2], "-n", "300", "-o", "short-iso", "--no-pager")
+	case helperapi.CmdAccessStatus, helperapi.CmdSSHKeyAdd, helperapi.CmdSSHKeyRemove, helperapi.CmdAccountLock, helperapi.CmdAccountUnlock:
+		need(helperapi.ModAccess)
+		out, err = accessCommand(ctx, sub, os.Args[2:])
 	case helperapi.CmdEgressReport:
 		need(helperapi.ModEgress)
 		out, err = run(ctx, c.EgressReport, "-n", "20")

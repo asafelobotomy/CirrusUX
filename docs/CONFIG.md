@@ -71,7 +71,33 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `CIRRUS_GIT_URL` | the panel's address | The address in clone URLs, e.g. `https://homeserver.example.ts.net` (no path) |
 | `CIRRUS_GIT_MAX_PUSH_MB` | `1024` | The most one push may send |
 | `CIRRUS_GIT_IMPORT_PRIVATE` | off | `1` lets Git import copy from addresses inside your own network (loopback, private, link-local, 100.64.0.0/10); off, those are refused |
+| `CIRRUS_TERMINAL` | `off` | `on` adds the Terminal page: SSH and SFTP to the server in the browser (below) |
+| `CIRRUS_TERMINAL_HOST` | `CIRRUS_SERVER_HOST` | Where the terminal's `ssh` connects, as the gateway sees it (`localhost` in a single setup) |
+| `CIRRUS_TERMINAL_PORT` | `22` | sshd's port there |
 | `CIRRUS_DEV` | off | `1` for development only: no sign-in, wakes are pretend |
+
+### The terminal
+
+With `CIRRUS_TERMINAL=on` the gateway runs OpenSSH's own `ssh` or `sftp`
+(the `openssh-client` package) in a pseudo-terminal and passes the bytes to
+the browser. sshd on the server signs you in exactly as it would any SSH
+client, so its rules all apply: `SSH_ALLOW`, keys, passwords, one-time
+codes, security keys. Nothing on the server changes to allow it.
+
+- The gateway makes its own key the first time (`CIRRUS_DATA_DIR/terminal/`,
+  owned by the gateway's user). An account accepts it from the Accounts
+  page ("Allow the panel's terminal"), which is an undoable action like any
+  other; without it, the session asks for the account's password.
+- The first connection shows the server's host key: check it before you
+  type `yes`. It is then kept in `CIRRUS_DATA_DIR/terminal/known_hosts`.
+- Every terminal call needs the panel's sign-in and the panel's own request
+  header, reads included, so another site can't open or read a session.
+  A session belongs to whoever opened it, closes after 30 minutes without
+  typing (12 hours at most), and at most 4 are open at once. Opening and
+  closing go in the audit log; what is typed doesn't.
+- The panel's key gives anyone who can sign in to the panel a shell as that
+  account. Accept it only on accounts every panel user may have, and keep
+  `CIRRUS_ALLOWED_USERS` short.
 
 ## agent.env
 
@@ -106,9 +132,21 @@ The helper reads `helper.env`, then every `helper.d/*.env` in name order
 | apps | `CONTAINER_RUNTIME`, `APPS_DIR`, `APPS_USER`, `MEDIA_ROOTS` (`APPS_ARCHIVE`, `APPS_BIND`) | CirrusStore: installs and removals as background jobs |
 | builds | `BUILDS=yes` and the apps module's `CONTAINER_RUNTIME` (`BUILD_MEMORY_MB`, `BUILD_CPUS`, `BUILD_MAX_MINUTES`, `BUILD_SUBNET`) | Builds of the gateway's Git repositories, each step in a locked-down container ([BUILDS.md](BUILDS.md)) |
 | store | `STORE_OFFICIAL` (`yes`), and the sources in `/etc/cirrusux/store.d/` | CirrusStore's online catalogues: the keys every app from one is checked against before it runs |
+| access | `ACCESS=yes` | The Accounts and File transfer pages: login accounts, their SSH keys (security keys marked), one-time codes, sshd's settings, SFTP and FTPS. With the sudoers `CIRRUS_ACCOUNTS` rules, adding and removing keys and locking accounts (below) |
 
 Paths must be absolute; unit and jail names may only use letters, digits and
 `- _ . @`. The helper refuses the file otherwise.
+
+Account changes (access module) only touch accounts with UID 1000 and up
+and a login shell. Keys are read and written by a child process running as
+the account itself, never as root, so a link in a home folder can't send
+root elsewhere; only plain keys are written (no `command=` or other
+options), RSA under 2048 bits and DSA are refused. Locking sets the
+account's expiry date to 2 January 1970, which stops every login, keys
+included; unlocking only clears that date, never one set by hand. The last
+unlocked admin can't be locked, and an account's last key can't be removed
+while sshd has password logins off. Creating and deleting accounts, and
+setting passwords and one-time codes, stay on the server.
 
 The `cirrusux-setup` modules fill these in for you. Without them, a
 module's settings can point at scripts and units of your own, as long as

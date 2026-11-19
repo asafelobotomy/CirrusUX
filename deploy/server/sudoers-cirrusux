@@ -20,7 +20,8 @@ Cmnd_Alias CIRRUS_READ = /usr/local/sbin/cirrusux-helper features, \
                          /usr/local/sbin/cirrusux-helper backup-last, \
                          /usr/local/sbin/cirrusux-helper av-last, \
                          /usr/local/sbin/cirrusux-helper security-status, \
-                         /usr/local/sbin/cirrusux-helper egress-report
+                         /usr/local/sbin/cirrusux-helper egress-report, \
+                         /usr/local/sbin/cirrusux-helper access-status
 
 # Phase 2: the actions you confirm in the panel. Leave this alias out to
 # keep the panel read-only.
@@ -40,4 +41,13 @@ Cmnd_Alias CIRRUS_ACT = /usr/local/sbin/cirrusux-helper stay-awake 30, \
                         /usr/local/sbin/cirrusux-helper build-job *, \
                         /usr/local/sbin/cirrusux-helper build-cancel *
 
-cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT
+# Accounts: add and remove SSH keys, lock and unlock login accounts
+# (ACCESS=yes in helper.env). The helper takes only accounts with UID 1000
+# and up, never locks the last admin, and writes keys as the account
+# itself. Leave this alias out to keep accounts read-only.
+Cmnd_Alias CIRRUS_ACCOUNTS = /usr/local/sbin/cirrusux-helper ssh-key-add *, \
+                             /usr/local/sbin/cirrusux-helper ssh-key-remove *, \
+                             /usr/local/sbin/cirrusux-helper account-lock *, \
+                             /usr/local/sbin/cirrusux-helper account-unlock *
+
+cirrusux ALL=(root) NOPASSWD: CIRRUS_READ, CIRRUS_ACT, CIRRUS_ACCOUNTS

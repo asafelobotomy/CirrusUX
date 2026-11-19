@@ -6,6 +6,7 @@ import { mode } from '../api.svelte';
 export type Route =
   | 'home' | 'services' | 'apps' | 'backups' | 'storage' | 'security'
   | 'updates' | 'media' | 'logs' | 'changelog' | 'git'
+  | 'accounts' | 'network' | 'files' | 'terminal'
   | 'settings' | 'theme-editor' | 'gallery';
 
 /** The page is the address's first part; the rest (ui.sub) is for the

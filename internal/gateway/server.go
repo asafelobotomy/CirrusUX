@@ -67,6 +67,10 @@ type Server struct {
 	// protocol is the agent protocol this gateway speaks; tests change it to
 	// reach the "agent too old" branch.
 	protocol int
+	// terms are the open terminal sessions (terminal.go); termCmd replaces
+	// ssh in tests.
+	terms   terminals
+	termCmd func(kind, user string) []string
 }
 
 // baseContext is the server's own lifetime, for work no request owns.
@@ -139,6 +143,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/release", s.getRelease)
 	api.HandleFunc("POST /api/release/check", s.postReleaseCheck)
 	s.gitRoutes(api)
+	s.terminalRoutes(api)
 	s.buildRoutes(mux, api)
 	// Everything that believes an identity header first checks the name it
 	// was asked for (hosts.go); /agent/ has its own token instead.
@@ -271,6 +276,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		"setup": c.Setup, "tz": c.TZName, "wake": s.power.CanWake(), "wakeVia": c.Wake,
 		"assistant": map[string]any{"enabled": c.AssistantEnabled(), "name": c.Assistant.Name},
 		"git":       s.git != nil,
+		"terminal":  c.Terminal.On,
 	})
 }
 

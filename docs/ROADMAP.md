@@ -38,6 +38,7 @@ What carries forward:
 | Releases | Binaries with checksums, an install script, upgrade and rollback | Done: bundles, `install.sh`, `upgrade` and `rollback` since v0.7.0; v0.7.1 is the first published release. Upgrading from the panel, the daily release check and signed releases since v0.9.0. `.deb` packages moved to after 1.0 |
 | Clean first commit | The public repository starts from a scrubbed tree | Done (9 November 2026); the repository is public |
 | Official catalogue | CirrusStore's signed catalogue at `asafelobotomy.github.io/cirrusstore/` | Done (11 November 2026): 19 apps (the 11 built in, and a Downloads group), each installed, opened and removed through a panel on a Debian 13 test VM first; the signed site verified, and a 0.7.1 panel installed an app from it |
+| Access | Accounts (SSH keys, security keys, one-time codes, locking), File transfer (SFTP, FTPS), Network (read-only) and Terminal (SSH and SFTP in the browser) pages | Built; in review |
 | 8 | Reinstall a real server on the public tooling | Private; its outcome gates 1.0 (§5) |
 | 1.0 | The first stable release | Not started; what is left is in §5 |
 

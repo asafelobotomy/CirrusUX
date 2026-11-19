@@ -101,7 +101,7 @@ _cx_sudoers() {
 	local src=$1 dest=${2:-/etc/sudoers.d/cirrusux} tmp
 	tmp=$(mktemp)
 	if [ "${CIRRUS_ACTIONS:-yes}" = no ]; then
-		sed 's/NOPASSWD: CIRRUS_READ, CIRRUS_ACT$/NOPASSWD: CIRRUS_READ/' "$src" >"$tmp"
+		sed 's/NOPASSWD: CIRRUS_READ, .*$/NOPASSWD: CIRRUS_READ/' "$src" >"$tmp"
 	else
 		cp "$src" "$tmp"
 	fi

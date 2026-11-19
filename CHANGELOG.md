@@ -9,6 +9,17 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ### Added
 
+- Accounts page (`ACCESS=yes` in helper.env): the server's login accounts,
+  their SSH keys with security keys (passkeys) marked, one-time codes, and
+  sshd's login settings. Add and remove SSH keys and lock or unlock
+  accounts, each confirmed, logged and undoable (sudoers `CIRRUS_ACCOUNTS`).
+- File transfer page: SFTP and FTPS status, addresses to connect to, and a
+  warning if FTPS ever allows plain FTP or anonymous logins.
+- Network page: interfaces, addresses, gateway, DNS and Tailscale, read
+  without root. It changes nothing.
+- Terminal page (`CIRRUS_TERMINAL=on` on the gateway): SSH and SFTP to the
+  server in the browser through OpenSSH, signed in by sshd as any client
+  is. Opening and closing sessions are logged.
 - CirrusStore: **Add a source** in the Store's Sources card checks a
   third-party catalogue before you trust it. Give its URL and the
   publisher's public key (the whole `NAME.pub` line, or its last field);

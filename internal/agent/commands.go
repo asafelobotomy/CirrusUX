@@ -132,7 +132,7 @@ var containerVerbs = map[string]string{"container_start": "start", "container_st
 // what the agent says it can do and what it does stay one list.
 var fixedActions = []string{"stay_awake", "allow_sleep", "backup_run", "egress_report", "storage_scan",
 	"archive_delete", "os_check", "os_upgrade", "logs", "app_install", "app_remove", "app_update",
-	"self_upgrade", "self_rollback", "build_run", "build_cancel"}
+	"self_upgrade", "self_rollback", "build_run", "build_cancel", "ssh_key_add", "ssh_key_remove", "account_lock", "account_unlock"}
 
 // Actions is every action this agent runs, sorted. It goes in each snapshot.
 func Actions() []string {
@@ -205,6 +205,8 @@ func (a *Agent) execute(ctx context.Context, c command) ([]string, error) {
 		return helper(helperapi.CmdSelfRollback)
 	case "logs":
 		return a.logs(ctx, c.Args["source"], c.Args["lines"])
+	case "ssh_key_add", "ssh_key_remove", "account_lock", "account_unlock":
+		return a.accountAction(ctx, c, helper)
 	case "build_run":
 		return a.startBuild(ctx, c.Args["run"], helper)
 	case "build_cancel":

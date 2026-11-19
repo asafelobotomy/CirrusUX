@@ -54,6 +54,16 @@ const (
 	CmdSelfUpgrade  = "self-upgrade"
 	CmdSelfRollback = "self-rollback"
 	CmdSelfRun      = "self-run" // the job itself; never sudo
+	// Accounts and SSH: reading is CmdAccessStatus; the changes take a
+	// login name and a key (base64url) or a key's SHA256 fingerprint.
+	CmdAccessStatus  = "access-status"
+	CmdSSHKeyAdd     = "ssh-key-add"
+	CmdSSHKeyRemove  = "ssh-key-remove"
+	CmdAccountLock   = "account-lock"
+	CmdAccountUnlock = "account-unlock"
+	// CmdKeysIO reads or writes one account's authorized_keys, run by the
+	// helper as that account; never sudo.
+	CmdKeysIO = "keys-io"
 	// Builds (docs/BUILDS.md): build-job <job> takes the request and source
 	// the agent left in RequestsDir and starts the build; build-cancel
 	// stops one. build-run is the build itself; systemd starts it, never sudo.
@@ -62,11 +72,18 @@ const (
 	CmdBuildRun    = "build-run"
 )
 
+var keyArgRe = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// ValidKeyArg checks a public key line as the agent passes it: base64url,
+// no padding, 16 to 4000 characters.
+func ValidKeyArg(s string) bool { return len(s) >= 16 && len(s) <= 4000 && keyArgRe.MatchString(s) }
+
 var Commands = []string{
 	CmdFeatures, CmdAppsInfo, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
 	CmdOSCheck, CmdOSUpgrade, CmdJournal, CmdStorageScan, CmdArchiveDelete,
 	CmdSelfUpgrade, CmdSelfRollback, CmdBuildJob, CmdBuildCancel,
+	CmdAccessStatus, CmdSSHKeyAdd, CmdSSHKeyRemove, CmdAccountLock, CmdAccountUnlock,
 }
 
 // GatewayCommands are the only ones the gateway's machine allows in a split
@@ -112,6 +129,7 @@ const (
 	ModApps      = "apps"       // the app store: a container runtime and an apps folder
 	ModOS        = "os"         // Debian package updates, on request
 	ModStorage   = "storage"    // folder sizes and the archive
+	ModAccess    = "access"     // login accounts, SSH keys, SFTP and FTPS
 	ModBuilds    = "builds"     // runs repositories' build pipelines in containers
 )
 

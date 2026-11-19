@@ -75,6 +75,10 @@ type conf struct {
 	// StorageRoots are extra folders the Storage page measures, besides
 	// the apps, media, backup and archive folders.
 	StorageRoots []string
+	// Access: ACCESS=yes, the panel shows login accounts, SSH keys, SFTP
+	// and FTPS, and (with the sudoers CIRRUS_ACCOUNTS rules) changes keys
+	// and locks accounts.
+	Access bool
 	// Builds: on, and the limits for each step (build_config.go).
 	Build buildConf
 }
@@ -139,6 +143,13 @@ var keys = map[string]func(c *conf, v string) error{
 			return fmt.Errorf("yes or no")
 		}
 		c.StoreNoOfficial = v == "no"
+		return nil
+	},
+	"ACCESS": func(c *conf, v string) error {
+		if v != "yes" && v != "no" {
+			return fmt.Errorf("yes or no")
+		}
+		c.Access = v == "yes"
 		return nil
 	},
 	"STORAGE_ROOTS": paths(func(c *conf) *[]string { return &c.StorageRoots }),
@@ -282,6 +293,7 @@ func (c conf) features() helperapi.Features {
 	add(c.ContainerRuntime != "" && c.AppsDir != "" && c.AppsUser != "", helperapi.ModApps)
 	add(hasApt(), helperapi.ModOS)
 	add(len(c.places().Roots) > 0, helperapi.ModStorage)
+	add(c.Access, helperapi.ModAccess)
 	add(c.Build.On && c.ContainerRuntime != "", helperapi.ModBuilds)
 	return f
 }

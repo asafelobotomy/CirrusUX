@@ -3,6 +3,8 @@
 import * as data from '../demo/data';
 import { agentRuns } from './agentActions';
 import type { Install } from '../release';
+import type { AccessInfo, NetworkInfo } from '../access';
+import { access as sampleAccess, network as sampleNetwork } from '../demo/access';
 
 export type Health = 'healthy' | 'running' | 'starting' | 'unhealthy' | 'exited';
 
@@ -46,6 +48,10 @@ export const live = $state({
   install: { managed: true, current: 'v0.8.1', previous: 'v0.8.0' } as Install | null,
   /** Actions the agent runs; empty when it didn't say (an older agent), which allows all. */
   actions: [] as string[],
+  /** Accounts, SSH keys, SFTP and FTPS (the access module); null when not reported. */
+  access: structuredClone(sampleAccess) as AccessInfo | null,
+  /** The server's interfaces, gateway and DNS; null from an older agent. */
+  network: structuredClone(sampleNetwork) as NetworkInfo | null,
   /** The agent speaks an older protocol than the gateway, or a newer one. */
   agentTooOld: false,
   gatewayTooOld: false,
