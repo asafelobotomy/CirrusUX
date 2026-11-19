@@ -3,14 +3,18 @@
 //
 //	cirrusstore keygen -name NAME [-out DIR]
 //	    a new key pair: NAME.key (keep it offline) and NAME.pub
-//	cirrusstore sign -key NAME.key [-source NAME] [-days 180] [-dir .] DEF.json…
+//	cirrusstore sign (-key NAME.key | -agent -pub NAME.pub) [-source NAME] [-days 180] [-dir .] DEF.json…
 //	    wrap each app definition in a signed envelope in DIR/apps
-//	cirrusstore index -key NAME.key [-source NAME] [-days 180] [-dir .]
+//	cirrusstore index (-key NAME.key | -agent -pub NAME.pub) [-source NAME] [-days 180] [-dir .]
 //	    list DIR/apps in a new signed DIR/index.json
+//	cirrusstore fromssh -name NAME KEY.pub
+//	    a CirrusStore public key from an OpenSSH Ed25519 public key
 //	cirrusstore verify -pub NAME.pub [-source NAME] DIR
 //	    check a folder the way a server will
 //
-// The source name defaults to the key's name. See docs/APPS.md.
+// With -agent the signature is made by the SSH agent at $SSH_AUTH_SOCK (a
+// password manager's, say) for the key in NAME.pub, so the key never
+// leaves it. The source name defaults to the key's name. See docs/APPS.md.
 package main
 
 import (
@@ -40,6 +44,8 @@ func main() {
 		err = index(os.Args[2:])
 	case "verify":
 		err = verify(os.Args[2:])
+	case "fromssh":
+		err = fromSSH(os.Args[2:])
 	case "version", "-version", "--version":
 		fmt.Println("cirrusstore", version.String())
 	default:
@@ -54,8 +60,9 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   cirrusstore keygen -name NAME [-out DIR]
-  cirrusstore sign -key NAME.key [-source NAME] [-days 180] [-dir .] DEF.json...
-  cirrusstore index -key NAME.key [-source NAME] [-days 180] [-dir .]
+  cirrusstore sign (-key NAME.key | -agent -pub NAME.pub) [-source NAME] [-days 180] [-dir .] DEF.json...
+  cirrusstore index (-key NAME.key | -agent -pub NAME.pub) [-source NAME] [-days 180] [-dir .]
+  cirrusstore fromssh -name NAME KEY.pub
   cirrusstore verify -pub NAME.pub [-source NAME] DIR`)
 	os.Exit(2)
 }
@@ -92,6 +99,8 @@ func keygen(args []string) error {
 type signing struct {
 	fs     *flag.FlagSet
 	key    *string
+	agent  *bool
+	pub    *string
 	source *string
 	days   *int
 	dir    *string
@@ -102,27 +111,22 @@ func signingFlags(name string) signing {
 	return signing{
 		fs:     fs,
 		key:    fs.String("key", "", "the signing key file (NAME.key)"),
+		agent:  fs.Bool("agent", false, "sign with the SSH agent at $SSH_AUTH_SOCK instead of a key file"),
+		pub:    fs.String("pub", "", "with -agent: the public key to sign with (NAME.pub)"),
 		source: fs.String("source", "", "the source's name (default: the key's)"),
 		days:   fs.Int("days", 180, "days until the signature expires"),
 		dir:    fs.String("dir", ".", "the catalogue folder"),
 	}
 }
 
-func (s signing) load() (store.Secret, string, time.Time, error) {
-	if *s.key == "" {
-		return store.Secret{}, "", time.Time{}, errors.New("-key is required")
-	}
-	b, err := os.ReadFile(*s.key)
+func (s signing) load() (store.Signer, string, time.Time, error) {
+	sec, err := s.signer()
 	if err != nil {
-		return store.Secret{}, "", time.Time{}, err
-	}
-	sec, err := store.ParseSecret(string(b))
-	if err != nil {
-		return sec, "", time.Time{}, err
+		return nil, "", time.Time{}, err
 	}
 	source := *s.source
 	if source == "" {
-		source = sec.Name
+		source = sec.Public().Name
 	}
 	if !store.ValidName(source) {
 		return sec, "", time.Time{}, fmt.Errorf("source name %q", source)
@@ -131,6 +135,42 @@ func (s signing) load() (store.Secret, string, time.Time, error) {
 		return sec, "", time.Time{}, errors.New("-days: 1 to 3650")
 	}
 	return sec, source, time.Now().UTC().Add(time.Duration(*s.days) * 24 * time.Hour).Truncate(time.Second), nil
+}
+
+// signer is the key file, or the agent's key named by -pub.
+func (s signing) signer() (store.Signer, error) {
+	switch {
+	case *s.agent && *s.key != "":
+		return nil, errors.New("-agent and -key are alternatives")
+	case *s.agent:
+		if *s.pub == "" {
+			return nil, errors.New("-agent needs -pub NAME.pub, the key to sign with")
+		}
+		b, err := os.ReadFile(*s.pub)
+		if err != nil {
+			return nil, err
+		}
+		key, err := store.ParseKey(strings.TrimSpace(string(b)))
+		if err != nil {
+			return nil, err
+		}
+		return store.NewAgentSigner(os.Getenv("SSH_AUTH_SOCK"), key)
+	case *s.key == "":
+		return nil, errors.New("-key (or -agent and -pub) is required")
+	}
+	b, err := os.ReadFile(*s.key)
+	if err != nil {
+		return nil, err
+	}
+	return storeSecret(string(b))
+}
+
+func storeSecret(line string) (store.Signer, error) {
+	sec, err := store.ParseSecret(line)
+	if err != nil {
+		return nil, err
+	}
+	return sec, nil
 }
 
 func sign(args []string) error {
@@ -193,5 +233,24 @@ func verify(args []string) error {
 		return err
 	}
 	fmt.Printf("ok: %s serial %d, %d apps, expires %s\n", ix.Source, ix.Serial, len(ix.Apps), ix.Expires.Format(time.DateOnly))
+	return nil
+}
+
+func fromSSH(args []string) error {
+	fs := flag.NewFlagSet("fromssh", flag.ExitOnError)
+	name := fs.String("name", "", "the key's name, usually the source's")
+	_ = fs.Parse(args)
+	if *name == "" || fs.NArg() != 1 {
+		return errors.New("fromssh: -name NAME KEY.pub")
+	}
+	b, err := os.ReadFile(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	key, err := store.KeyFromSSH(*name, string(b))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\nfingerprint %s\n", key, key.Fingerprint())
 	return nil
 }
