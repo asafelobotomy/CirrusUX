@@ -58,10 +58,12 @@ var sampleArgs = map[string][]string{
 	helperapi.CmdArchiveDelete: {"navidrome-20261101-120000"},
 	helperapi.CmdJournal:       {"cirrusux-agent.service"},
 	helperapi.CmdSelfUpgrade:   {"v0.9.0"},
+	helperapi.CmdBuildJob:      {"0123456789abcdef"},
+	helperapi.CmdBuildCancel:   {"0123456789abcdef"},
 }
 
 // internalCommands are started by systemd, never through sudo.
-var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun, helperapi.CmdSelfRun}
+var internalCommands = []string{helperapi.CmdAppRun, helperapi.CmdOSRun, helperapi.CmdStorageRun, helperapi.CmdSelfRun, helperapi.CmdBuildRun}
 
 // agentLines is every command line the agent builds for the helper.
 func agentLines() [][]string {

@@ -16,6 +16,7 @@ sudo bash install.sh  # checks the release, then asks a few questions
 - `docs/CONFIG.md` — every setting and module
 - `docs/APPS.md` — writing and publishing apps for CirrusStore
 - `docs/GIT.md` — Git hosting in the gateway
+- `docs/BUILDS.md` — building and testing those repositories on the server
 - `docs/ROADMAP.md` — the status of every phase and what comes next
 - `docs/history/` — the original design, how phases 4–6 were built, and the November 2026 audit
 - `CONTRIBUTING.md` — building, testing, house rules and the release steps

@@ -8,6 +8,8 @@ you clone, push and pull with ordinary `git` over HTTPS.
 
 It is off until you turn it on.
 
+To build and test a repository on the server, see [BUILDS.md](BUILDS.md).
+
 Not there yet: SSH access, issues and pull requests, editing files in the
 browser, per-repository permissions, and mirrors that sync by themselves.
 Every person on `CIRRUS_ALLOWED_USERS` can do everything with every
