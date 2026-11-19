@@ -79,13 +79,16 @@ cp -r "$R" "$T/changed"; echo tampered >"$T/changed/cirrusux-v1.2.3-linux-amd64.
 cp -r "$R" "$T/extra"; echo x >"$T/extra/extra.sh"
 "$H/scripts/verify-release.sh" --from "$T/extra" >"$T/out" 2>&1 && fail "verified a release with an unlisted file"
 grep -q "not in SHA256SUMS" "$T/out" || fail "unlisted file: $(cat "$T/out")"
+cp -r "$R" "$T/hidden"; echo x >"$T/hidden/.hidden"
+"$H/scripts/verify-release.sh" --from "$T/hidden" >"$T/out" 2>&1 && fail "verified a release with an unlisted hidden file"
+grep -q ".hidden is in the release but not in SHA256SUMS" "$T/out" || fail "hidden file: $(cat "$T/out")"
 cp -r "$R" "$T/wrongkey"; rm "$T/wrongkey/SHA256SUMS.sig"
 ssh-keygen -q -Y sign -f "$T/other" -n cirrusux-release "$T/wrongkey/SHA256SUMS" 2>/dev/null
 "$H/scripts/verify-release.sh" --from "$T/wrongkey" >/dev/null 2>&1 && fail "verified a signature from another key"
 cp -r "$R" "$T/wrongns"; rm "$T/wrongns/SHA256SUMS.sig"
 ssh-keygen -q -Y sign -f "$T/key" -n file "$T/wrongns/SHA256SUMS" 2>/dev/null
 "$H/scripts/verify-release.sh" --from "$T/wrongns" >/dev/null 2>&1 && fail "verified a signature in another namespace"
-echo "4 a changed bundle, an unlisted file, another key and another namespace are refused"
+echo "4 a changed bundle, an unlisted or hidden file, another key and another namespace are refused"
 
 # 5. No SSH_AUTH_SOCK: Proton Pass's socket is used when it's there.
 mkdir -p "$T/home/.ssh"; ln -s "$T/agent.sock" "$T/home/.ssh/proton-pass-agent.sock"

@@ -85,10 +85,13 @@ if [ -n "$version" ]; then
 	done <<<"$listed"
 else
 	# Every file the folder offers is in SHA256SUMS, so nothing rides along unchecked.
+	# dotglob, so a hidden file can't ride along either.
+	shopt -s dotglob nullglob
 	for f in "$dir"/*; do
 		case "${f##*/}" in SHA256SUMS | SHA256SUMS.sig) continue ;; esac
 		grep -qxF "${f##*/}" <<<"$listed" || die "${f##*/} is in the release but not in SHA256SUMS"
 	done
+	shopt -u dotglob nullglob
 fi
 (cd "$dir" && sha256sum -c --quiet --strict SHA256SUMS) || die "a file doesn't match SHA256SUMS"
 echo "Checksums: all $(wc -l <<<"$listed") files match SHA256SUMS."
