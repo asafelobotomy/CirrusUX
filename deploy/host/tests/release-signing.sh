@@ -90,8 +90,29 @@ ssh-keygen -q -Y sign -f "$T/key" -n file "$T/wrongns/SHA256SUMS" 2>/dev/null
 "$H/scripts/verify-release.sh" --from "$T/wrongns" >/dev/null 2>&1 && fail "verified a signature in another namespace"
 echo "4 a changed bundle, an unlisted or hidden file, another key and another namespace are refused"
 
-# 5. No SSH_AUTH_SOCK: Proton Pass's socket is used when it's there.
-mkdir -p "$T/home/.ssh"; ln -s "$T/agent.sock" "$T/home/.ssh/proton-pass-agent.sock"
-(unset SSH_AUTH_SOCK; HOME=$T/home "$H/scripts/sign-release.sh" --check-agent >"$T/out" 2>&1) || fail "Proton Pass's socket: $(cat "$T/out")"
-grep -q "using Proton Pass's" "$T/out" || fail "it should say it uses Proton Pass's agent: $(cat "$T/out")"
-echo "5 with SSH_AUTH_SOCK unset, Proton Pass's agent socket is used"
+# 5. No SSH_AUTH_SOCK: Proton Pass's sockets are tried, the first that offers the key wins.
+# Another agent (no key) stands in for an idle pass-cli daemon.
+mkdir -p "$T/home/.ssh"
+SSH_AUTH_SOCK=$T/idle.sock ssh-agent -a "$T/idle.sock" >/dev/null || fail "second agent"
+idle_pid=$(pgrep -f "ssh-agent -a $T/idle.sock")
+trap 'kill $idle_pid 2>/dev/null; [ -n "$agent_pid" ] && kill "$agent_pid" 2>/dev/null; rm -rf "$T"' EXIT
+check() { (unset SSH_AUTH_SOCK; HOME=$T/home "$H/scripts/sign-release.sh" --check-agent >"$T/out" 2>&1); }
+check && fail "passed with no Proton Pass socket"
+grep -q "no Proton Pass agent socket" "$T/out" || fail "no sockets: $(cat "$T/out")"
+ln -s "$T/agent.sock" "$T/home/.ssh/proton-pass-agent.sock"
+check || fail "pass-cli socket: $(cat "$T/out")"
+grep -q "using Proton Pass's.*proton-pass-agent.sock" "$T/out" || fail "pass-cli socket not used: $(cat "$T/out")"
+rm "$T/home/.ssh/proton-pass-agent.sock"
+ln -s "$T/agent.sock" "$T/home/.ssh/proton-pass-ssh-agent.sock"
+check || fail "desktop socket: $(cat "$T/out")"
+grep -q "using Proton Pass's.*proton-pass-ssh-agent.sock" "$T/out" || fail "desktop socket not used: $(cat "$T/out")"
+# The pass-cli socket exists but offers no key: fall through to the desktop app's.
+ln -s "$T/idle.sock" "$T/home/.ssh/proton-pass-agent.sock"
+check || fail "idle daemon then desktop: $(cat "$T/out")"
+grep -q "using Proton Pass's.*proton-pass-ssh-agent.sock" "$T/out" || fail "should skip the idle daemon: $(cat "$T/out")"
+# Neither offers it: the report names the first that exists.
+rm "$T/home/.ssh/proton-pass-ssh-agent.sock"
+check && fail "passed with a key-less agent"
+grep -q "idle.sock\|proton-pass-agent.sock doesn't offer" "$T/out" || fail "should name the agent: $(cat "$T/out")"
+grep -q "pass-cli ssh-agent daemon stop" "$T/out" || fail "should say how to restart it: $(cat "$T/out")"
+echo "5 with SSH_AUTH_SOCK unset, Proton Pass's daemon or desktop socket is used, whichever offers the key"

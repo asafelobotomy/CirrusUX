@@ -85,9 +85,13 @@ the private key never leaves Proton Pass.
    scripts/sign-release.sh --check-agent  # prints the key's fingerprint; passes only if the agent offers it
    ```
 
-   The script uses `~/.ssh/proton-pass-agent.sock` when `SSH_AUTH_SOCK` is
-   unset. The desktop app's agent works too (Settings, General, "Use Proton
-   Pass as SSH agent"); export the `SSH_AUTH_SOCK` its setup command gives.
+   With `SSH_AUTH_SOCK` unset, the script tries Proton Pass's two sockets
+   and uses the first that offers the key: the pass-cli daemon's
+   `~/.ssh/proton-pass-agent.sock`, then the desktop app's
+   `~/.ssh/proton-pass-ssh-agent.sock` (Settings, General, "Use Proton Pass
+   as SSH agent", with the app unlocked). Either agent will do; you needn't
+   start the daemon if the app's agent is on. A set `SSH_AUTH_SOCK` is used
+   as it is.
    Only public keys are read (`ssh-add -L`).
 2. **Tag and push**, then wait for the release workflow to finish
    (`gh run watch`).
@@ -115,8 +119,9 @@ agent does offer (fingerprints only). The release key's fingerprint is
   seconds). Restart it to load the key now:
   `pass-cli ssh-agent daemon stop && pass-cli ssh-agent daemon start`.
 - **The wrong agent.** `echo $SSH_AUTH_SOCK` should be
-  `~/.ssh/proton-pass-agent.sock` (or the desktop app's socket), not
-  another `ssh-agent` or one forwarded over SSH.
+  `~/.ssh/proton-pass-agent.sock` (pass-cli) or
+  `~/.ssh/proton-pass-ssh-agent.sock` (desktop app), not another
+  `ssh-agent` or one forwarded over SSH. Unset it to let the script pick.
 - **The wrong vault or item.** The agent offers only items of type "SSH
   key", from every vault unless it was started with `--vault-name`; a key
   saved as a note or login, or in the trash, isn't offered.

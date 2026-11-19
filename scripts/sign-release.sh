@@ -15,8 +15,10 @@
 # the release is tagged. Afterwards scripts/verify-release.sh checks the
 # signature GitHub now serves, as install.sh will.
 #
-#   SSH_AUTH_SOCK   the agent that holds the key; unset, Proton Pass's
-#                   (~/.ssh/proton-pass-agent.sock) if it is running
+#   SSH_AUTH_SOCK   the agent that holds the key; unset, Proton Pass's:
+#                   the pass-cli daemon's ~/.ssh/proton-pass-agent.sock or
+#                   the desktop app's ~/.ssh/proton-pass-ssh-agent.sock,
+#                   whichever offers the key
 #   CIRRUS_REPO     another repository than asafelobotomy/CirrusUX
 #   CIRRUS_SIGNERS  another allowed-signers line than install.sh's (tests,
 #                   or a fork's own key)
@@ -63,14 +65,28 @@ printf '%s\n' "$signers" >"$tmp/signers"
 fp=$(ssh-keygen -lf "$tmp/release.pub" | cut -d' ' -f2)
 
 # The agent must offer the release key. Only public keys are listed here.
-# Without SSH_AUTH_SOCK, Proton Pass's agent socket is used if it's there.
-proton_sock=$HOME/.ssh/proton-pass-agent.sock
-if [ -z "${SSH_AUTH_SOCK:-}" ] && [ -S "$proton_sock" ]; then
-	export SSH_AUTH_SOCK=$proton_sock
-	echo "Agent: using Proton Pass's ($proton_sock)."
+# Without SSH_AUTH_SOCK, Proton Pass's sockets are tried in turn: the
+# pass-cli daemon's, then the desktop app's. The first that offers the key
+# is used; if none does, the first that exists is the one reported.
+proton_socks=("$HOME/.ssh/proton-pass-agent.sock" "$HOME/.ssh/proton-pass-ssh-agent.sock")
+offers_key() { SSH_AUTH_SOCK=$1 ssh-add -L 2>/dev/null | grep -qF "$key"; }
+if [ -z "${SSH_AUTH_SOCK:-}" ]; then
+	found=""
+	for sock in "${proton_socks[@]}"; do
+		[ -S "$sock" ] || continue
+		[ -n "$found" ] || found=$sock
+		if offers_key "$sock"; then
+			found=$sock
+			break
+		fi
+	done
+	if [ -n "$found" ]; then
+		export SSH_AUTH_SOCK=$found
+		echo "Agent: using Proton Pass's ($found)."
+	fi
 fi
 [ -n "${SSH_AUTH_SOCK:-}" ] ||
-	die "SSH_AUTH_SOCK is unset and Proton Pass's agent isn't running: start it (pass-cli ssh-agent daemon start) or point SSH_AUTH_SOCK at the agent that holds the release key ($fp)"
+	die "SSH_AUTH_SOCK is unset and no Proton Pass agent socket exists (${proton_socks[*]}): start one (pass-cli ssh-agent daemon start, or turn on the SSH agent in the Proton Pass app) or point SSH_AUTH_SOCK at the agent that holds the release key ($fp)"
 offered=$(ssh-add -L 2>/dev/null) || offered=""
 if ! grep -qF "$key" <<<"$offered"; then
 	{
@@ -81,10 +97,13 @@ if ! grep -qF "$key" <<<"$offered"; then
 		else
 			echo "It offers no keys, or isn't running."
 		fi
-		if [ "$SSH_AUTH_SOCK" = "$proton_sock" ]; then
-			echo "Proton Pass's agent looks for new keys only every hour (--refresh-interval): restart it so it loads the key now:"
+		case " ${proton_socks[*]} " in
+		*" $SSH_AUTH_SOCK "*)
+			echo "Proton Pass's pass-cli agent looks for new keys only every hour (--refresh-interval): restart it so it loads the key now:"
 			echo "  pass-cli ssh-agent daemon stop && pass-cli ssh-agent daemon start"
-		fi
+			echo "The desktop app's agent needs the app unlocked."
+			;;
+		esac
 		echo "See CONTRIBUTING.md, \"When the agent doesn't offer the key\". Don't export the private key to a file."
 	} >&2
 	exit 1

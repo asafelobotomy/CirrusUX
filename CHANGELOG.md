@@ -7,6 +7,13 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Fixed
+
+- `scripts/sign-release.sh` finds Proton Pass's agent whether it is the
+  pass-cli daemon (`~/.ssh/proton-pass-agent.sock`) or the desktop app's
+  (`~/.ssh/proton-pass-ssh-agent.sock`), using whichever offers the
+  release key, when `SSH_AUTH_SOCK` is unset.
+
 ## [0.10.0] - 2026-11-19
 
 ### Added
