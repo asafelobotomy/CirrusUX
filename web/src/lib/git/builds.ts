@@ -79,3 +79,6 @@ export function took(started: string | undefined, finished: string | undefined, 
   const end = finished ? new Date(finished) : now;
   return fmtBuildTime(end.getTime() - new Date(started).getTime());
 }
+
+/** A build secret as the panel sees it: the name and when it was set, never the value. */
+export interface SecretInfo { name: string; updated: string }

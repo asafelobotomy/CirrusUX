@@ -24,6 +24,7 @@ BUILDS=yes
 #BUILD_CPUS=2             # each step's CPUs
 #BUILD_MAX_MINUTES=60     # the longest timeout a pipeline may ask for
 #BUILD_SUBNET=10.231.0.0/24
+#BUILD_CACHE_MB=5120     # the most one cache folder may hold before it starts empty
 ```
 
 The agent runs the helper's `build-job` and `build-cancel` through sudo.
@@ -72,6 +73,42 @@ refused with the line number, as is any setting CirrusUX doesn't know,
 
 Each step gets `CI=true`, `CIRRUS_REPO`, `CIRRUS_REF`, `CIRRUS_COMMIT`,
 `CIRRUS_STEP` and `CIRRUS_BUILD`.
+
+## Secrets and caches
+
+```yaml
+cache: true             # or a name, such as go-1
+steps:
+  - name: deploy
+    image: alpine:3
+    secrets: [DEPLOY_TOKEN]   # or a list, one per line
+    commands:
+      - ./deploy.sh
+```
+
+**Secrets.** Set them on the repository's Settings tab (name and value;
+the value can't be read back). A step gets only the secrets it names, as
+environment variables. Names are capitals, digits and `_`; values are 8
+characters to 8 KB. Up to 20 a step and 50 a repository.
+
+- **Builds from pushes never get secrets.** Anyone who can push could
+  change the pipeline and print them. A pipeline with secrets that a push
+  starts shows as a failed build that says so; press Run build to run it.
+- The value is never on a command line, in the audit log, in the stored
+  request or in an API answer. The runtime gets it through its environment
+  by name, and the file that carries it to the server is deleted when the
+  build starts.
+- Output that holds a secret has it replaced with `***`. That's
+  best-effort: a step that encodes or splits a value can still reveal it.
+- The gateway keeps secrets in plain text in its data folder (mode 0600),
+  so they're in backups of it. Treat the backup like the secrets.
+
+**Caches.** `cache:` gives every step `/cache`, a folder that stays between
+builds (set `GOCACHE`, `npm_config_cache` and the like to point there;
+`CIRRUS_CACHE` holds the path). Pushed and hand-started builds have separate
+caches, so a push can't plant something a build with secrets then uses. A
+cache over `BUILD_CACHE_MB` starts empty (the log says so), and one unused
+for 30 days is removed. To clear a cache, change its name.
 
 ## Builds on push
 

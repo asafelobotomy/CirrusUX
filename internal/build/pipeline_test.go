@@ -127,7 +127,7 @@ func TestRequest(t *testing.T) {
 func TestRunArgsFixed(t *testing.T) {
 	p, _ := Parse([]byte(example))
 	r := Request{Job: "0123456789abcdef", Repo: "notes", Ref: "main", Commit: strings.Repeat("a", 40), Pipeline: p}
-	args := RunArgs(r, 0, "/var/lib/cirrusux/builds/0123456789abcdef/workspace", Limits{MemoryMB: 2048, CPUs: 2, Pids: 1024})
+	args := RunArgs(r, 0, "/var/lib/cirrusux/builds/0123456789abcdef/workspace", "", Limits{MemoryMB: 2048, CPUs: 2, Pids: 1024})
 	s := strings.Join(args, " ")
 	for _, want := range []string{"--network cirrusux-build", "--cap-drop ALL", "--security-opt no-new-privileges",
 		"--user 65532:65532", "--read-only", "--memory 2048m", "--pids-limit 1024", "--env CGO_ENABLED=0", "--env CI=true",
@@ -191,5 +191,99 @@ func TestBranchesFilterPushes(t *testing.T) {
 		if _, err := Parse([]byte(bad + "steps:\n  - name: a\n    image: alpine\n    commands: id\n")); err == nil {
 			t.Errorf("accepted %q", bad)
 		}
+	}
+}
+
+const withSecrets = `cache: v2
+steps:
+  - name: deploy
+    image: alpine
+    secrets:
+      - DEPLOY_TOKEN
+      - SSH_KEY
+    commands:
+      - ./deploy.sh
+`
+
+func TestSecretsAndCache(t *testing.T) {
+	p, err := Parse([]byte(withSecrets))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Cache != "v2" || !reflect.DeepEqual(p.SecretNames(), []string{"DEPLOY_TOKEN", "SSH_KEY"}) {
+		t.Fatalf("%+v", p)
+	}
+	if q, _ := Parse([]byte("cache: true\nsteps:\n  - name: a\n    image: alpine\n    commands: id\n")); q.Cache != "default" {
+		t.Fatalf("cache: true gave %q", q.Cache)
+	}
+	step := "steps:\n  - name: a\n    image: alpine\n    commands: id\n"
+	for name, src := range map[string]string{
+		"lower-case name":  strings.Replace(step, "    commands", "    secrets:\n      - token\n    commands", 1),
+		"reserved":         strings.Replace(step, "    commands", "    secrets:\n      - CIRRUS_X\n    commands", 1),
+		"path":             strings.Replace(step, "    commands", "    secrets:\n      - PATH\n    commands", 1),
+		"twice":            strings.Replace(step, "    commands", "    secrets:\n      - A_B\n      - A_B\n    commands", 1),
+		"also env":         strings.Replace(step, "    commands", "    secrets:\n      - A_B\n    env:\n      A_B: x\n    commands", 1),
+		"secrets not list": strings.Replace(step, "    commands", "    secrets: A_B\n    commands", 1),
+		"bad cache":        "cache: ../x\n" + step,
+		"cache list":       "cache:\n  - a\n" + step,
+	} {
+		if _, err := Parse([]byte(src)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestRequestSecretsAndCache(t *testing.T) {
+	p, _ := Parse([]byte(withSecrets))
+	r := Request{Job: "0123456789abcdef", Repo: "notes", Ref: "main", Commit: strings.Repeat("a", 40), Pipeline: p,
+		Secrets: map[string]string{"DEPLOY_TOKEN": "tok-12345678", "SSH_KEY": "line one 1234\nline two 5678"}, CacheKey: "manual-v2"}
+	if err := r.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mod := range map[string]func(*Request){
+		"missing secret": func(r *Request) { r.Secrets = map[string]string{"DEPLOY_TOKEN": "tok-12345678"} },
+		"extra secret": func(r *Request) {
+			r.Secrets = map[string]string{"DEPLOY_TOKEN": "tok-12345678", "SSH_KEY": "12345678", "OTHER": "12345678"}
+		},
+		"short secret":    func(r *Request) { r.Secrets = map[string]string{"DEPLOY_TOKEN": "short", "SSH_KEY": "12345678"} },
+		"no cache key":    func(r *Request) { r.CacheKey = "" },
+		"cache for other": func(r *Request) { r.CacheKey = "manual-v3" },
+		"bad cache key":   func(r *Request) { r.CacheKey = "../manual-v2" },
+		"unknown kind":    func(r *Request) { r.CacheKey = "admin-v2" },
+	} {
+		c := r
+		mod(&c)
+		if c.Validate() == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	bare := r
+	bare.Pipeline, _ = Parse([]byte("steps:\n  - name: a\n    image: alpine\n    commands: id\n"))
+	bare.Secrets = nil
+	if bare.Validate() == nil {
+		t.Error("a cache folder with no cache in the pipeline was accepted")
+	}
+	bare.CacheKey = ""
+	if err := bare.Validate(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestRunArgsNeverHoldSecretValues(t *testing.T) {
+	p, _ := Parse([]byte(withSecrets))
+	r := Request{Job: "0123456789abcdef", Repo: "notes", Ref: "main", Commit: strings.Repeat("a", 40), Pipeline: p,
+		Secrets: map[string]string{"DEPLOY_TOKEN": "tok-12345678", "SSH_KEY": "abcdefghij"}, CacheKey: "push-v2"}
+	args := RunArgs(r, 0, "/w", "/var/lib/cirrusux/build-cache/notes/push-v2", Limits{MemoryMB: 512, CPUs: 1, Pids: 64})
+	all := strings.Join(args, "\n")
+	if strings.Contains(all, "tok-12345678") || strings.Contains(all, "abcdefghij") {
+		t.Fatalf("a secret's value is on the command line:\n%s", all)
+	}
+	for _, want := range []string{"--env\nDEPLOY_TOKEN\n", "--env\nSSH_KEY\n", "dst=/cache", "CIRRUS_CACHE=/cache"} {
+		if !strings.Contains(all+"\n", want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if env := SecretEnv(r, 0); !reflect.DeepEqual(env, []string{"DEPLOY_TOKEN=tok-12345678", "SSH_KEY=abcdefghij"}) {
+		t.Fatalf("%q", env)
 	}
 }

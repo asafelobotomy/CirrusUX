@@ -175,9 +175,9 @@ func (s *Server) afterPush(repo, who string, before map[string]string) {
 			started++
 		}
 	}
-	if started > 0 {
+	s.dispatchBuilds()
+	if len(s.builds.waiting()) > 0 {
 		s.wakeForBuilds(repo, who)
-		s.dispatchBuilds()
 	}
 }
 
@@ -194,6 +194,13 @@ func (s *Server) pushBuild(ctx context.Context, repo, b, sha, who string) bool {
 	case err != nil && (!errors.As(err, &bp) || bp.code != http.StatusBadRequest):
 		slog.Warn("builds on push", "repo", repo, "branch", b, "err", err)
 		return false
+	}
+	if err == nil {
+		// Steps that use secrets can't run from a push, so the push says so
+		// instead of leaving a build that would fail on the server.
+		if _, serr := s.secretsFor(repo, p, true); serr != nil {
+			err, bp = serr, &buildProblem{code: http.StatusBadRequest, msg: serr.Error()}
+		}
 	}
 	run := newRun(repo, ref, c, p, who)
 	run.Auto = true

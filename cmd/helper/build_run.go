@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,9 +24,12 @@ const maxBuildLog = 4 << 20
 // buildCmd runs a command with its output going to out, and returns its
 // exit code; err is set only when it couldn't run or was stopped. Tests
 // replace it.
-var buildCmd = func(ctx context.Context, out io.Writer, name string, args ...string) (int, error) {
+var buildCmd = func(ctx context.Context, out io.Writer, env []string, name string, args ...string) (int, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdout, cmd.Stderr = out, out
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.WaitDelay = 10 * time.Second
 	err := cmd.Run()
 	var exit *exec.ExitError
@@ -46,8 +50,14 @@ func buildRun(c conf, job string) (helperapi.Result, error) {
 	if err != nil {
 		return helperapi.Result{}, err
 	}
-	req, err := build.ParseRequest(raw)
+	req, err := build.DecodeRequest(raw)
 	if err != nil {
+		return helperapi.Result{}, err
+	}
+	if req.Secrets, err = takeSecrets(dir); err != nil {
+		return helperapi.Result{}, err
+	}
+	if err := req.Validate(); err != nil {
 		return helperapi.Result{}, err
 	}
 	logf, err := os.OpenFile(filepath.Join(dir, "log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|syscall.O_NOFOLLOW, 0o644)
@@ -55,7 +65,13 @@ func buildRun(c conf, job string) (helperapi.Result, error) {
 		return helperapi.Result{}, err
 	}
 	defer logf.Close()
-	b := &builder{c: c, req: req, dir: dir, log: &cappedLog{w: logf, left: maxBuildLog}}
+	capped := &cappedLog{w: logf, left: maxBuildLog}
+	var values []string
+	for _, v := range req.Secrets {
+		values = append(values, v)
+	}
+	masked := build.NewMasker(capped, values)
+	b := &builder{c: c, req: req, dir: dir, log: masked}
 	b.st = build.NewStatus(req, time.Now())
 	b.save()
 
@@ -66,6 +82,7 @@ func buildRun(c conf, job string) (helperapi.Result, error) {
 
 	err = b.run(ctx)
 	defer b.cleanup()
+	defer masked.Flush()
 	switch {
 	case stopped.Err() != nil:
 		b.logf("\nCancelled.\n")
@@ -88,8 +105,10 @@ type builder struct {
 	c   conf
 	req build.Request
 	dir string
-	log *cappedLog
+	log io.Writer // the build's log, with secrets hidden
 	st  build.Status
+	// cache is the host folder mounted at /cache, if the pipeline has one.
+	cache string
 }
 
 func (b *builder) save()                        { saveBuildStatus(b.dir, b.st) }
@@ -97,7 +116,28 @@ func (b *builder) logf(format string, a ...any) { fmt.Fprintf(b.log, format, a..
 func (b *builder) workspace() string            { return filepath.Join(b.dir, "workspace") }
 func (b *builder) rt() string                   { return b.c.ContainerRuntime }
 func (b *builder) cmd(ctx context.Context, args ...string) (int, error) {
-	return buildCmd(ctx, b.log, b.rt(), args...)
+	return buildCmd(ctx, b.log, nil, b.rt(), args...)
+}
+
+// takeSecrets reads the build's secrets and removes their file, so they
+// are on disk only until the build starts.
+func takeSecrets(dir string) (map[string]string, error) {
+	p := filepath.Join(dir, "secrets.json")
+	raw, err := os.ReadFile(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Remove(p); err != nil {
+		return nil, err
+	}
+	var m map[string]string
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("secrets: %v", err)
+	}
+	return m, nil
 }
 
 func (b *builder) run(ctx context.Context) error {
@@ -123,10 +163,10 @@ func (b *builder) prepare(ctx context.Context) error {
 	if err := os.WriteFile(rules, []byte(build.Firewall()), 0o600); err != nil {
 		return err
 	}
-	if code, err := buildCmd(ctx, b.log, "nft", "-f", rules); err != nil || code != 0 {
+	if code, err := buildCmd(ctx, b.log, nil, "nft", "-f", rules); err != nil || code != 0 {
 		return errors.New("couldn't load the firewall rules that keep builds off your network (is nftables installed?), so nothing ran")
 	}
-	if code, _ := buildCmd(ctx, io.Discard, b.rt(), "network", "inspect", build.Network); code != 0 {
+	if code, _ := buildCmd(ctx, io.Discard, nil, b.rt(), "network", "inspect", build.Network); code != 0 {
 		if code, err := b.cmd(ctx, build.NetworkArgs(b.rt(), b.c.Build.subnet())...); err != nil || code != 0 {
 			return fmt.Errorf("couldn't create the %s network", build.Network)
 		}
@@ -147,7 +187,11 @@ func (b *builder) prepare(ctx context.Context) error {
 	if err := os.Mkdir(filepath.Join(ws, ".cirrus-home"), 0o755); err != nil && !os.IsExist(err) {
 		return err
 	}
-	return chownTree(ws, build.UID, build.UID)
+	if err := chownTree(ws, build.UID, build.UID); err != nil {
+		return err
+	}
+	b.cache, err = prepareCache(b.req, b.c.Build.cacheMB(), b.logf)
+	return err
 }
 
 func (b *builder) step(ctx context.Context, i int, s build.Step) error {
@@ -162,11 +206,13 @@ func (b *builder) step(ctx context.Context, i int, s build.Step) error {
 		}
 		return b.stepFailed(i, -1, fmt.Sprintf("Step %s: couldn't pull %s", s.Name, s.Image))
 	}
-	code, err := b.cmd(ctx, build.RunArgs(b.req, i, b.workspace(), b.c.Build.limits())...)
+	// The runtime gets a step's secrets in its environment, by name on the
+	// command line, so they can't be read from a process listing.
+	code, err := buildCmd(ctx, b.log, build.SecretEnv(b.req, i), b.rt(), build.RunArgs(b.req, i, b.workspace(), b.cache, b.c.Build.limits())...)
 	if ctx.Err() != nil || err != nil {
 		// The runtime keeps a container going when its client is stopped.
 		rm, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		buildCmd(rm, io.Discard, b.rt(), "rm", "-f", build.ContainerName(b.req.Job, i))
+		buildCmd(rm, io.Discard, nil, b.rt(), "rm", "-f", build.ContainerName(b.req.Job, i))
 		cancel()
 		if ctx.Err() != nil {
 			return ctx.Err()

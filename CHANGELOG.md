@@ -9,6 +9,10 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ### Added
 
+- Build secrets and caches: a repository's Settings tab holds write-only
+  secrets that a step names in `secrets:`, and `cache:` keeps a `/cache`
+  folder between builds. Builds from pushes never get secrets, and pushed
+  and hand-started builds have separate caches (docs/BUILDS.md).
 - Builds on push: a repository's Settings tab can build every push, once
   the server is awake or waking it if it sleeps. Off until turned on.
   Pipelines can list the `branches:` a push builds (docs/BUILDS.md).

@@ -3,7 +3,7 @@
 import { api, mode } from '../api.svelte';
 import * as demo from '../demo/git';
 import * as demoBuilds from '../demo/builds';
-import type { BuildLog, BuildRun, BuildSettings } from './builds';
+import type { BuildLog, BuildRun, BuildSettings, SecretInfo } from './builds';
 
 export interface RepoSummary {
   name: string;
@@ -74,6 +74,12 @@ export const getBuildLog = (id: string, from: number): Promise<BuildLog> =>
   mode.live ? api(`/api/git/builds/${encodeURIComponent(id)}/log` + qs({ from })) : demoBuilds.getBuildLog(id, from);
 export const getBuildSettings = (name: string): Promise<BuildSettings> =>
   mode.live ? api(repoPath(name) + '/build-settings') : demoBuilds.getBuildSettings(name);
+export const listSecrets = (name: string): Promise<SecretInfo[]> =>
+  mode.live ? api(repoPath(name) + '/secrets') : demoBuilds.listSecrets(name);
+export const putSecret = (name: string, key: string, value: string): Promise<SecretInfo[]> =>
+  api(repoPath(name) + '/secrets/' + encodeURIComponent(key), { method: 'PUT', body: JSON.stringify({ value }) });
+export const deleteSecret = (name: string, key: string): Promise<SecretInfo[]> =>
+  api(repoPath(name) + '/secrets/' + encodeURIComponent(key), { method: 'DELETE' });
 export const startBuild = (name: string, ref: string): Promise<BuildRun> =>
   api(repoPath(name) + '/builds', { method: 'POST', body: JSON.stringify({ ref }) });
 export const cancelBuild = (id: string): Promise<BuildRun> =>

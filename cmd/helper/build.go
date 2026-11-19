@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,6 +27,9 @@ import (
 
 // buildsDir is helperapi.BuildsDir; tests point it elsewhere.
 var buildsDir = helperapi.BuildsDir
+
+// buildCacheDir is helperapi.BuildCacheDir; tests point it elsewhere.
+var buildCacheDir = helperapi.BuildCacheDir
 
 const maxSourceGz = 1 << 30
 
@@ -70,10 +74,21 @@ func buildJob(ctx context.Context, c conf, job string) (helperapi.Result, error)
 		os.RemoveAll(dir)
 		return helperapi.Result{}, err
 	}
+	// The secrets go in a file of their own, which the build reads and
+	// removes before its first step; the request that stays for the week
+	// has none.
+	if len(req.Secrets) > 0 {
+		if err := fsutil.WriteJSON(filepath.Join(dir, "secrets.json"), req.Secrets, 0o600); err != nil {
+			os.RemoveAll(dir)
+			return helperapi.Result{}, err
+		}
+		req.Secrets = nil
+	}
 	if err := fsutil.WriteJSON(filepath.Join(dir, "request.json"), req, 0o600); err != nil {
 		os.RemoveAll(dir)
 		return helperapi.Result{}, err
 	}
+	pruneCaches(buildCacheDir, cacheKeepDays*24*time.Hour, time.Now())
 	saveBuildStatus(dir, build.NewStatus(req, time.Now()))
 	props := []string{"RuntimeMaxSec=" + strconv.Itoa(req.Pipeline.Minutes+15) + "min", "KillMode=mixed", "TimeoutStopSec=60"}
 	unit, err := launchJob(ctx, job, props, helperapi.CmdBuildRun, job)
@@ -97,6 +112,69 @@ func buildCancel(ctx context.Context, job string) (helperapi.Result, error) {
 		return helperapi.Result{}, fmt.Errorf("stopping build %s: %v: %s", job, err, out)
 	}
 	return helperapi.Result{Output: []string{"build " + job + ": stopping"}}, nil
+}
+
+// cacheKeepDays is how long a cache folder nothing has used stays.
+const cacheKeepDays = 30
+
+// pruneCaches removes cache folders no build has used for keep.
+func pruneCaches(root string, keep time.Duration, now time.Time) {
+	repos, _ := os.ReadDir(root)
+	for _, r := range repos {
+		keys, _ := os.ReadDir(filepath.Join(root, r.Name()))
+		left := len(keys)
+		for _, k := range keys {
+			if fi, err := k.Info(); err == nil && k.IsDir() && now.Sub(fi.ModTime()) > keep {
+				os.RemoveAll(filepath.Join(root, r.Name(), k.Name()))
+				left--
+			}
+		}
+		if left == 0 && r.IsDir() {
+			os.Remove(filepath.Join(root, r.Name()))
+		}
+	}
+}
+
+// prepareCache makes the cache folder for a build and returns its path. A
+// folder over the limit is emptied first, which the log says.
+func prepareCache(r build.Request, limitMB int, log func(string, ...any)) (string, error) {
+	if r.CacheKey == "" {
+		return "", nil
+	}
+	dir := build.CacheDir(buildCacheDir, r.Repo, r.CacheKey)
+	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
+		return "", err
+	}
+	if n := dirBytes(dir); n > int64(limitMB)<<20 {
+		log("The cache is %d MB, over the %d MB limit, so it starts empty.\n", n>>20, limitMB)
+		if err := os.RemoveAll(dir); err != nil {
+			return "", err
+		}
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil && !os.IsExist(err) {
+		return "", err
+	}
+	if err := chownTree(dir, build.UID, build.UID); err != nil {
+		return "", err
+	}
+	now := time.Now()
+	_ = os.Chtimes(dir, now, now)
+	log("Cache %s: %d MB\n", r.CacheKey, dirBytes(dir)>>20)
+	return dir, nil
+}
+
+// dirBytes is the size of the files under dir, links not followed.
+func dirBytes(dir string) int64 {
+	var n int64
+	_ = filepath.WalkDir(dir, func(_ string, e fs.DirEntry, err error) error {
+		if err == nil && e.Type().IsRegular() {
+			if fi, err := e.Info(); err == nil {
+				n += fi.Size()
+			}
+		}
+		return nil
+	})
+	return n
 }
 
 func saveBuildStatus(dir string, st build.Status) {
