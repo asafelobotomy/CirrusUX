@@ -3,9 +3,12 @@
 # namespace (and network namespace for the firewall), never as real root.
 set -eu
 cd "$(dirname "$0")/.."
-shellcheck -x -s bash cirrusux-setup lib.sh init.sh pair.sh release.sh modules/*.sh files/cirrusux-backup ../../install.sh ../../scripts/bundle.sh ../../scripts/sign-release.sh
+shellcheck -x -s bash cirrusux-setup lib.sh init.sh pair.sh release.sh modules/*.sh files/cirrusux-backup ../../install.sh ../../scripts/bundle.sh ../../scripts/sign-release.sh ../../scripts/verify-release.sh tests/release-signing.sh
 shellcheck ../gateway/cirrusux-router-check ../gateway/runit/run ../gateway/runit/log/run
 echo "shellcheck: ok"
+# Needs no namespace: it runs as you, with a scratch ssh-agent.
+echo "release signing:"
+bash tests/release-signing.sh || { echo "FAILED: the release-signing test (exit $?)" >&2; exit 1; }
 if ! unshare -r true 2>/dev/null; then
 	echo "skipping module tests: unprivileged user namespaces are off" >&2
 	exit 0
