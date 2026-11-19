@@ -173,3 +173,19 @@ func selfSigned(t *testing.T) []byte {
 	}
 	return out
 }
+
+func TestCanSignIn(t *testing.T) {
+	ctx := context.Background()
+	pw := access.Account{Name: "alice", Password: true}
+	keyed := access.SSH{Installed: true, PubkeyAuth: true}
+	if canSignIn(ctx, pw, keyed) {
+		t.Error("a password counted while sshd has password logins off")
+	}
+	if !canSignIn(ctx, pw, access.SSH{Installed: true, PasswordAuth: true}) {
+		t.Error("a password didn't count while sshd takes passwords")
+	}
+	// No password and no way to read keys: not a way in.
+	if canSignIn(ctx, access.Account{Name: "bob"}, keyed) {
+		t.Error("an account with nothing counted")
+	}
+}

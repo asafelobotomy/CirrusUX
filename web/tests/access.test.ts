@@ -22,6 +22,13 @@ test('AllowUsers and locks decide who may use SSH', () => {
   assert.equal(sshAllowed({ ...ssh, rootLogin: 'no' }, user({ uid: 0, name: 'root' })), false);
 });
 
+test('AllowGroups needs the account to be in one of the groups', () => {
+  const g = { ...ssh, allowGroups: ['ssh-users'] };
+  assert.equal(sshAllowed(g, user({ groups: ['alice', 'ssh-users'] })), true);
+  assert.equal(sshAllowed(g, user({ groups: ['alice'] })), false);
+  assert.equal(sshAllowed({ ...g, allowUsers: ['bob@192.0.2.0/24'] }, user({ groups: ['ssh-users'] })), false);
+});
+
 test('login methods follow what sshd allows', () => {
   assert.deepEqual(loginMethods(ssh, user({ keys: [key(), key(true)], totp: true })), ['2 keys (1 security key)', 'one-time code']);
   assert.deepEqual(loginMethods({ ...ssh, passwordAuth: true }, user({})), ['password']);

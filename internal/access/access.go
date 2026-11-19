@@ -59,6 +59,9 @@ type Account struct {
 	CanLogin bool `json:"canLogin"`
 	// Admin: a member of sudo, wheel or admin (or root itself).
 	Admin bool `json:"admin"`
+	// Groups are the account's groups by name, primary one included, so
+	// the panel can tell whether sshd's AllowGroups lets it in.
+	Groups []string `json:"groups,omitempty"`
 	// Password is set (not "!" or "*"): logins with it may work.
 	Password bool `json:"password"`
 	// Locked: the account expired, so no login works, keys included.
@@ -228,13 +231,23 @@ var AdminGroups = []string{"sudo", "wheel", "admin"}
 // leaving out nobody (65534).
 func ParseAccounts(passwd, group string) []Account {
 	admins := map[string]bool{}
+	member := map[string][]string{} // user -> supplementary groups
+	byGID := map[int]string{}
 	for _, line := range strings.Split(group, "\n") {
 		f := strings.Split(line, ":")
-		if len(f) == 4 && slices.Contains(AdminGroups, f[0]) {
-			for _, u := range strings.Split(f[3], ",") {
-				if u != "" {
-					admins[u] = true
-				}
+		if len(f) != 4 {
+			continue
+		}
+		if gid, err := strconv.Atoi(f[2]); err == nil {
+			byGID[gid] = f[0]
+		}
+		for _, u := range strings.Split(f[3], ",") {
+			if u == "" {
+				continue
+			}
+			member[u] = append(member[u], f[0])
+			if slices.Contains(AdminGroups, f[0]) {
+				admins[u] = true
 			}
 		}
 	}
@@ -248,8 +261,12 @@ func ParseAccounts(passwd, group string) []Account {
 		if err != nil || (uid != 0 && uid < 1000) || uid == 65534 || !UserRe.MatchString(f[0]) {
 			continue
 		}
+		groups := slices.Clone(member[f[0]])
+		if gid, err := strconv.Atoi(f[3]); err == nil && byGID[gid] != "" && !slices.Contains(groups, byGID[gid]) {
+			groups = append(groups, byGID[gid])
+		}
 		out = append(out, Account{
-			Name: f[0], UID: uid, Home: f[5], Shell: f[6], Keys: []Key{},
+			Name: f[0], UID: uid, Home: f[5], Shell: f[6], Keys: []Key{}, Groups: groups,
 			CanLogin: !strings.HasSuffix(f[6], "/nologin") && !strings.HasSuffix(f[6], "/false") && f[6] != "",
 			Admin:    uid == 0 || admins[f[0]],
 		})
