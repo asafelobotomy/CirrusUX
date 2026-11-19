@@ -50,8 +50,11 @@ type BuildRun struct {
 }
 
 // view is a build as the panel sees it.
+// view is a copy that is safe to hand out: it owns its steps, which the
+// store goes on changing, and leaves the pipeline out.
 func (r BuildRun) view() BuildRun {
 	r.Pipeline = nil
+	r.Steps = slices.Clone(r.Steps)
 	return r
 }
 
@@ -179,7 +182,9 @@ func (b *buildStore) get(id string) (BuildRun, bool) {
 	if expire(r, time.Now()) {
 		_ = b.save(r)
 	}
-	return *r, true
+	c := *r
+	c.Steps = slices.Clone(r.Steps)
+	return c, true
 }
 
 var errNoBuild = errors.New("no such build")
@@ -192,10 +197,13 @@ func (b *buildStore) update(id string, change func(r *BuildRun) error) (BuildRun
 	if !ok {
 		return BuildRun{}, errNoBuild
 	}
-	if err := change(r); err != nil {
-		return *r, err
+	err := change(r)
+	if err == nil {
+		err = b.save(r)
 	}
-	return *r, b.save(r)
+	c := *r
+	c.Steps = slices.Clone(r.Steps)
+	return c, err
 }
 
 // applyStatus takes the status the agent sent.
