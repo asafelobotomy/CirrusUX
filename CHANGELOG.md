@@ -9,13 +9,27 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ### Added
 
+- Builds: a repository's `.cirrus/build.yml` lists steps (an image and
+  commands), and **Run build** on its new Builds tab runs them on the
+  server, each in a fresh container as an unprivileged user, on a network
+  of its own that reaches the internet but not your local network. The tab
+  shows each step and the log as it runs, and a build can be cancelled.
+  Off until `BUILDS=yes` in helper.env (docs/BUILDS.md). Upgrading adds
+  the `build-job` and `build-cancel` sudoers lines it needs.
 - `scripts/verify-release.sh vX.Y.Z` checks a published release the way
   `install.sh` does (signature, then every file's checksum) without
   installing it. `scripts/sign-release.sh --check-agent` checks that the
-  SSH agent (Proton Pass's by default) offers the release key before a release is tagged, and signing
-  now checks the agent first, shows why the agent refused, and verifies the
+  SSH agent (Proton Pass's by default) offers the release key before a
+  release is tagged, and signing now checks the agent first, shows why the agent refused, and verifies the
   signature GitHub serves afterwards. CONTRIBUTING.md walks through signing
   and what to do when the agent doesn't offer the key.
+
+### Changed
+
+- The built-in catalogue matches the official CirrusStore catalogue again:
+  Home Assistant 2026.11.1, Nextcloud 35.0.2-apache's rebuilt digest, and
+  Picard from `jlesage/musicbrainz-picard` v26.11.1 (Picard 3.0.4), which
+  also runs on arm64.
 
 ## [0.9.0] - 2026-11-18
 

@@ -54,13 +54,19 @@ const (
 	CmdSelfUpgrade  = "self-upgrade"
 	CmdSelfRollback = "self-rollback"
 	CmdSelfRun      = "self-run" // the job itself; never sudo
+	// Builds (docs/BUILDS.md): build-job <job> takes the request and source
+	// the agent left in RequestsDir and starts the build; build-cancel
+	// stops one. build-run is the build itself; systemd starts it, never sudo.
+	CmdBuildJob    = "build-job"
+	CmdBuildCancel = "build-cancel"
+	CmdBuildRun    = "build-run"
 )
 
 var Commands = []string{
 	CmdFeatures, CmdAppsInfo, CmdIdleStatus, CmdIdleLog, CmdBackupList, CmdBackupLast, CmdAVLast, CmdSecurityStatus,
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
 	CmdOSCheck, CmdOSUpgrade, CmdJournal, CmdStorageScan, CmdArchiveDelete,
-	CmdSelfUpgrade, CmdSelfRollback,
+	CmdSelfUpgrade, CmdSelfRollback, CmdBuildJob, CmdBuildCancel,
 }
 
 // GatewayCommands are the only ones the gateway's machine allows in a split
@@ -86,6 +92,9 @@ const (
 	JobsDir = "/run/cirrusux-jobs"
 	// AppRecordsDir holds installed apps' records, readable by the agent.
 	AppRecordsDir = "/var/lib/cirrusux/apps"
+	// BuildsDir holds a folder per build: its status and log, readable by
+	// the agent, and its workspace while it runs.
+	BuildsDir = "/var/lib/cirrusux/builds"
 )
 
 // StayAwakeArgs are the only holds the panel can set.
@@ -103,6 +112,7 @@ const (
 	ModApps      = "apps"       // the app store: a container runtime and an apps folder
 	ModOS        = "os"         // Debian package updates, on request
 	ModStorage   = "storage"    // folder sizes and the archive
+	ModBuilds    = "builds"     // runs repositories' build pipelines in containers
 )
 
 // Features is what `features` prints.
