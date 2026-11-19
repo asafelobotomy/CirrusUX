@@ -75,6 +75,8 @@ type conf struct {
 	// StorageRoots are extra folders the Storage page measures, besides
 	// the apps, media, backup and archive folders.
 	StorageRoots []string
+	// Builds: on, and the limits for each step (build_config.go).
+	Build buildConf
 }
 
 // firewallCheck passes when the chain's rules contain Pattern. Chain is an
@@ -280,6 +282,7 @@ func (c conf) features() helperapi.Features {
 	add(c.ContainerRuntime != "" && c.AppsDir != "" && c.AppsUser != "", helperapi.ModApps)
 	add(hasApt(), helperapi.ModOS)
 	add(len(c.places().Roots) > 0, helperapi.ModStorage)
+	add(c.Build.On && c.ContainerRuntime != "", helperapi.ModBuilds)
 	return f
 }
 

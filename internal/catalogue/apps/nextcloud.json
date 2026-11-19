@@ -8,7 +8,7 @@
   "group": "Files",
   "image": "docker.io/library/nextcloud",
   "tag": "35.0.2-apache",
-  "digest": "sha256:e0b1a2af52c82c07b7a0e8e59878bd8769e704447734d5d238a836982f51b9c8",
+  "digest": "sha256:786c102155d2717ba0f53a62b3fdd7a1354edc48e800b94dbe32294d9a5752a2",
   "ports": [
     {
       "name": "web",
