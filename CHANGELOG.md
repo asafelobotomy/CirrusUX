@@ -7,8 +7,6 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
-## [0.10.0] - 2026-11-19
-
 ### Added
 
 - Accounts page: **Add an account** makes a standard or administrator
@@ -22,6 +20,11 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   minutes unless you press Keep, so a wrong setting can't lock you out;
   the undo survives the panel being cut off, and one that outlived a
   reboot is undone first. IP addresses are left to the server on purpose.
+
+## [0.10.0] - 2026-11-19
+
+### Added
+
 - Accounts page (`ACCESS=yes` in helper.env): the server's login accounts,
   their SSH keys with security keys (passkeys) marked, one-time codes, and
   sshd's login settings. Add and remove SSH keys and lock or unlock
