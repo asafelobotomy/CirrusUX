@@ -184,8 +184,12 @@ func main() {
 		out, err = buildCommand(ctx, c, sub, os.Args[2])
 	case helperapi.CmdJournal:
 		out, err = command(ctx, "journalctl", "-u", os.Args[2], "-n", "300", "-o", "short-iso", "--no-pager")
-	case helperapi.CmdAccessStatus, helperapi.CmdSSHKeyAdd, helperapi.CmdSSHKeyRemove, helperapi.CmdAccountLock, helperapi.CmdAccountUnlock:
+	case helperapi.CmdAccessStatus, helperapi.CmdSSHKeyAdd, helperapi.CmdSSHKeyRemove, helperapi.CmdAccountLock, helperapi.CmdAccountUnlock,
+		helperapi.CmdAccountCreate, helperapi.CmdAccountRemove:
 		need(helperapi.ModAccess)
+		out, err = accessCommand(ctx, sub, os.Args[2:])
+	case helperapi.CmdNetStatus, helperapi.CmdNetDNS, helperapi.CmdNetTailscale, helperapi.CmdNetConfirm, helperapi.CmdNetRevert, helperapi.CmdNetRollback:
+		need(helperapi.ModNetEdit)
 		out, err = accessCommand(ctx, sub, os.Args[2:])
 	case helperapi.CmdEgressReport:
 		need(helperapi.ModEgress)

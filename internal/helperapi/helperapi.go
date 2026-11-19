@@ -8,6 +8,7 @@ package helperapi
 
 import (
 	"regexp"
+	"time"
 
 	"cirrusux/internal/store"
 )
@@ -61,6 +62,18 @@ const (
 	CmdSSHKeyRemove  = "ssh-key-remove"
 	CmdAccountLock   = "account-lock"
 	CmdAccountUnlock = "account-unlock"
+	// Creating and removing login accounts the panel made (access module).
+	CmdAccountCreate = "account-create" // <name> user|admin
+	CmdAccountRemove = "account-remove" // <name>; keeps the home folder
+	// Network settings (network-edit module): DNS servers and Tailscale's
+	// preferences, each undone by the server after NetRevertSeconds unless
+	// kept. net-status reads; net-rollback is the timer's, never sudo.
+	CmdNetStatus    = "net-status"
+	CmdNetDNS       = "net-dns"       // <servers|-> <search|->
+	CmdNetTailscale = "net-tailscale" // yes|no (accept DNS) yes|no (accept routes)
+	CmdNetConfirm   = "net-confirm"
+	CmdNetRevert    = "net-revert"
+	CmdNetRollback  = "net-rollback"
 	// CmdKeysIO reads or writes one account's authorized_keys, run by the
 	// helper as that account; never sudo.
 	CmdKeysIO = "keys-io"
@@ -83,7 +96,8 @@ var Commands = []string{
 	CmdStayAwake, CmdAllowSleep, CmdNudgeAwake, CmdBackupRun, CmdEgressReport, CmdAppJob,
 	CmdOSCheck, CmdOSUpgrade, CmdJournal, CmdStorageScan, CmdArchiveDelete,
 	CmdSelfUpgrade, CmdSelfRollback, CmdBuildJob, CmdBuildCancel,
-	CmdAccessStatus, CmdSSHKeyAdd, CmdSSHKeyRemove, CmdAccountLock, CmdAccountUnlock,
+	CmdAccessStatus, CmdSSHKeyAdd, CmdSSHKeyRemove, CmdAccountLock, CmdAccountUnlock, CmdAccountCreate, CmdAccountRemove,
+	CmdNetStatus, CmdNetDNS, CmdNetTailscale, CmdNetConfirm, CmdNetRevert,
 }
 
 // GatewayCommands are the only ones the gateway's machine allows in a split
@@ -120,17 +134,18 @@ var StayAwakeArgs = []string{"30", "120", "forever"}
 // Modules a machine can have, set up in the helper's config file
 // (/etc/cirrusux/helper.env). Containers need none of them.
 const (
-	ModSleep     = "sleep"      // an idle checker that suspends the server
-	ModStayAwake = "stay-awake" // holds that keep it awake
-	ModBackup    = "backup"     // a systemd unit that makes system backups
-	ModAV        = "av"         // a ClamAV scan log
-	ModSecurity  = "security"   // fail2ban jail and firewall checks
-	ModEgress    = "egress"     // the outbound-traffic report
-	ModApps      = "apps"       // the app store: a container runtime and an apps folder
-	ModOS        = "os"         // Debian package updates, on request
-	ModStorage   = "storage"    // folder sizes and the archive
-	ModAccess    = "access"     // login accounts, SSH keys, SFTP and FTPS
-	ModBuilds    = "builds"     // runs repositories' build pipelines in containers
+	ModSleep     = "sleep"        // an idle checker that suspends the server
+	ModStayAwake = "stay-awake"   // holds that keep it awake
+	ModBackup    = "backup"       // a systemd unit that makes system backups
+	ModAV        = "av"           // a ClamAV scan log
+	ModSecurity  = "security"     // fail2ban jail and firewall checks
+	ModEgress    = "egress"       // the outbound-traffic report
+	ModApps      = "apps"         // the app store: a container runtime and an apps folder
+	ModOS        = "os"           // Debian package updates, on request
+	ModStorage   = "storage"      // folder sizes and the archive
+	ModAccess    = "access"       // login accounts, SSH keys, SFTP and FTPS
+	ModNetEdit   = "network-edit" // DNS servers and Tailscale preferences, with automatic rollback
+	ModBuilds    = "builds"       // runs repositories' build pipelines in containers
 )
 
 // Features is what `features` prints.
@@ -208,3 +223,43 @@ var UnitRe = regexp.MustCompile(`^cirrusux-[a-z0-9-]{1,40}\.service$`)
 
 // JobRe matches a job's ID: 8 to 32 hex digits.
 var JobRe = regexp.MustCompile(`^[0-9a-f]{8,32}$`)
+
+// Network settings that can be undone by the server itself.
+const (
+	// NetPendingFile holds the change waiting to be kept, readable by the agent.
+	NetPendingFile = "/var/lib/cirrusux/net-pending.json"
+	// NetRevertSeconds is how long a change waits to be kept.
+	NetRevertSeconds = 120
+	// NetRevertUnit is the timer that undoes it.
+	NetRevertUnit = "cirrusux-job-netrevert"
+)
+
+// TSPrefs are the Tailscale preferences the panel changes.
+type TSPrefs struct {
+	AcceptDNS    bool `json:"acceptDns"`
+	AcceptRoutes bool `json:"acceptRoutes"`
+}
+
+// NetPending is a change the server will undo at Deadline unless it's kept.
+type NetPending struct {
+	Kind     string    `json:"kind"` // dns or tailscale
+	What     string    `json:"what"`
+	Deadline time.Time `json:"deadline"`
+	// What it was before: the drop-in's text (DNSHad says there was one), or
+	// Tailscale's preferences.
+	DNSHad  bool     `json:"dnsHad,omitempty"`
+	DNSPrev string   `json:"dnsPrev,omitempty"`
+	TSPrev  *TSPrefs `json:"tsPrev,omitempty"`
+}
+
+// NetStatus is what net-status prints.
+type NetStatus struct {
+	// Resolved: systemd-resolved is running, so DNS can be set here.
+	Resolved bool `json:"resolved"`
+	// DNS and Search are what the panel set (empty: the system's own).
+	DNS    []string `json:"dns"`
+	Search []string `json:"search"`
+	// Tailscale is nil when Tailscale isn't installed or running.
+	Tailscale *TSPrefs    `json:"tailscale,omitempty"`
+	Pending   *NetPending `json:"pending,omitempty"`
+}

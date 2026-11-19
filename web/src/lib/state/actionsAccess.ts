@@ -81,3 +81,47 @@ export function confirmLock(name: string, lock: boolean, o: Opts = {}): void {
     },
   });
 }
+
+export function confirmCreateAccount(name: string, role: 'user' | 'admin', o: Opts = {}): void {
+  if (offline('account_create')) return;
+  const what = role === 'admin' ? 'an administrator account' : 'a standard account';
+  ask({
+    ...o,
+    title: `Create ${name}?`,
+    body: `Makes ${what} on ${mode.server} with a home folder. It has no password and no key, so nobody can log in as ${name} until you add a key on this page.${role === 'admin' ? ' Administrators can run commands as root.' : ''}`,
+    command: `useradd --create-home --shell /bin/bash${role === 'admin' ? ' --groups sudo' : ''} ${name}`,
+    undo: `userdel ${name} (its home folder is kept)`,
+    confirmLabel: 'Create account',
+    danger: role === 'admin',
+    changelog: `Created the ${role === 'admin' ? 'administrator' : 'standard'} account ${name}`,
+    run: () => {
+      if (mode.live) {
+        void sendAction({ action: 'account_create', args: { user: name, role } }, `Created the account ${name}`);
+        return;
+      }
+      live.access?.users.push({ name, uid: 1100 + (live.access.users.length), home: `/home/${name}`, shell: '/bin/bash', canLogin: true, admin: role === 'admin', password: false, locked: false, createdByPanel: true, keys: [], totp: false });
+      toast('Demo: account created (nothing on a server changed).', 'ok');
+    },
+  });
+}
+
+export function confirmRemoveAccount(name: string, o: Opts = {}): void {
+  if (offline('account_remove')) return;
+  ask({
+    ...o,
+    title: `Remove ${name}?`,
+    body: `${name} can no longer log in. Its home folder and files stay where they are, so nothing is deleted. Only accounts made from this page can be removed here, and never the last admin who can log in.`,
+    command: `userdel ${name}`,
+    undo: `useradd --create-home ${name} (the kept home folder is reused)`,
+    danger: true,
+    confirmLabel: 'Remove account',
+    changelog: `Removed the account ${name} (home folder kept)`,
+    run: () => {
+      if (mode.live) {
+        void sendAction({ action: 'account_remove', args: { user: name } }, `Removed the account ${name}`);
+        return;
+      }
+      if (live.access) live.access.users = live.access.users.filter((u) => u.name !== name);
+    },
+  });
+}

@@ -1,5 +1,5 @@
 // Sample accounts and network for the demo (no gateway).
-import type { AccessInfo, NetworkInfo } from '../access';
+import type { AccessInfo, NetEdit, NetworkInfo } from '../access';
 
 const key = (type: string, fp: string, comment: string, sk = false) => ({
   type, fingerprint: 'SHA256:' + fp.padEnd(43, 'A'), comment, securityKey: sk, public: `${type} AAAAC3NzaC1lZDI1NTE5AAAAI${fp}`,
@@ -33,3 +33,5 @@ export const network: NetworkInfo = {
   ],
   gateway: '192.0.2.1', gatewayIface: 'enp1s0', dns: ['192.0.2.1'], search: ['lan'], tailscale: ['100.64.0.10'], hidden: 6,
 };
+
+export const netEdit: NetEdit = { resolved: true, dns: [], search: [], tailscale: { acceptDns: true, acceptRoutes: false } };

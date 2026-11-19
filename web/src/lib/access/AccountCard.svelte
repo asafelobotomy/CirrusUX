@@ -2,7 +2,7 @@
   import Card from '../components/Card.svelte';
   import Badge from '../components/Badge.svelte';
   import Button from '../components/Button.svelte';
-  import { confirmAddKey, confirmLock, confirmRemoveKey } from '../state/actions';
+  import { confirmAddKey, confirmLock, confirmRemoveAccount, confirmRemoveKey } from '../state/actions';
   import { agentCan, needsAgent } from '../state/live.svelte';
   import { power } from '../state/power.svelte';
   import { mode } from '../api.svelte';
@@ -115,6 +115,11 @@
         </Button>
       {:else}
         <span class="faint">Expired by a date set on the server (chage -E); the panel leaves it as it is.</span>
+      {/if}
+      {#if user.createdByPanel}
+        <Button size="sm" variant="ghost" title="Keeps the home folder and its files" disabled={asleep || !agentCan('account_remove')} onclick={() => confirmRemoveAccount(user.name)}>
+          {#snippet icon()}<Trash2 />{/snippet}Remove account
+        </Button>
       {/if}
     </div>
   {/if}

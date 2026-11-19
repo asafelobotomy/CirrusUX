@@ -78,7 +78,8 @@ type conf struct {
 	// Access: ACCESS=yes, the panel shows login accounts, SSH keys, SFTP
 	// and FTPS, and (with the sudoers CIRRUS_ACCOUNTS rules) changes keys
 	// and locks accounts.
-	Access bool
+	Access  bool
+	NetEdit bool
 	// Builds: on, and the limits for each step (build_config.go).
 	Build buildConf
 }
@@ -143,6 +144,13 @@ var keys = map[string]func(c *conf, v string) error{
 			return fmt.Errorf("yes or no")
 		}
 		c.StoreNoOfficial = v == "no"
+		return nil
+	},
+	"NETWORK_EDIT": func(c *conf, v string) error {
+		if v != "yes" && v != "no" {
+			return fmt.Errorf("yes or no")
+		}
+		c.NetEdit = v == "yes"
 		return nil
 	},
 	"ACCESS": func(c *conf, v string) error {
@@ -294,6 +302,7 @@ func (c conf) features() helperapi.Features {
 	add(hasApt(), helperapi.ModOS)
 	add(len(c.places().Roots) > 0, helperapi.ModStorage)
 	add(c.Access, helperapi.ModAccess)
+	add(c.NetEdit, helperapi.ModNetEdit)
 	add(c.Build.On && c.ContainerRuntime != "", helperapi.ModBuilds)
 	return f
 }
