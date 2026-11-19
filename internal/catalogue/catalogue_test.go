@@ -113,6 +113,8 @@ func TestParseRejects(t *testing.T) {
 		"relative mount":  {`"path":"/data"`, `"path":"data"`},
 		"writable config": {`"kind":"data"`, `"kind":"data","writable":true`},
 		"bad id":          {`"id":"demo"`, `"id":"Demo App"`},
+		"script website":  {`"group":"Apps"`, `"group":"Apps","website":"javascript:alert(1)"`},
+		"http website":    {`"group":"Apps"`, `"group":"Apps","website":"http://example.org"`},
 	} {
 		if !strings.Contains(good, edit[0]) {
 			t.Fatalf("%s: test edit doesn't apply", name)

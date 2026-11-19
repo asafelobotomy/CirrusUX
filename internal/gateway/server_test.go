@@ -17,11 +17,15 @@ const token = "0123456789abcdef0123456789abcdef"
 
 func newTestServer(t *testing.T) (*Server, http.Handler) {
 	t.Helper()
+	return newTestServerWith(t, testConfig())
+}
+
+func newTestServerWith(t *testing.T, cfg Config) (*Server, http.Handler) {
+	t.Helper()
 	store, err := OpenStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := testConfig()
 	web := fstest.MapFS{
 		"index.html":           {Data: []byte("<!doctype html>")},
 		"manifest.webmanifest": {Data: []byte(`{"name":"CirrusUX"}`)},
@@ -40,6 +44,8 @@ func testConfig() Config {
 		ServerName: "atlas", ServerHost: "atlas", GatewayName: "gw", Setup: "split",
 		TZ: time.UTC, TZName: "UTC", Auth: "tailscale", AuthHeader: "Remote-User",
 		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}, Wake: "none",
+		// httptest asks for example.com.
+		Hosts: []string{"example.com"},
 	}
 }
 

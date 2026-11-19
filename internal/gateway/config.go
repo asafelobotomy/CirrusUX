@@ -15,8 +15,11 @@ import (
 // 600). Secrets are never logged or sent to the browser. See
 // docs/CONFIG.md for every setting.
 type Config struct {
-	Listen  string // 127.0.0.1:8064
-	DataDir string
+	Listen string // 127.0.0.1:8064
+	// Socket, when set, is where the panel is served (socket.go); Listen
+	// then answers only the agent. SocketGroup may open it besides us.
+	Socket, SocketGroup string
+	DataDir             string
 	// Dev skips sign-in and Tailscale power polling. Only for running on a
 	// workstation.
 	Dev        bool
@@ -44,6 +47,10 @@ type Config struct {
 	AuthHeader     string
 	TrustedProxies []netip.Prefix
 	AllowedUsers   []string
+	// Hosts are names the panel answers on besides addresses, short names
+	// and *.ts.net (CIRRUS_HOSTS): a reverse proxy's name, say. Other names
+	// are refused, which stops DNS-rebinding pages (hosts.go).
+	Hosts []string
 
 	// Power and wake (split setup only).
 	TailscalePeer string // the server's Tailscale name; "" skips Tailscale
@@ -99,6 +106,8 @@ var assistantPresets = map[string]struct{ base, name string }{
 func ConfigFromEnv() (Config, error) {
 	c := Config{
 		Listen:      env("CIRRUS_LISTEN", "127.0.0.1:8064"),
+		Socket:      os.Getenv("CIRRUS_SOCKET"),
+		SocketGroup: os.Getenv("CIRRUS_SOCKET_GROUP"),
 		DataDir:     env("CIRRUS_DATA_DIR", "/var/lib/cirrusux-gateway"),
 		Dev:         os.Getenv("CIRRUS_DEV") == "1",
 		AgentToken:  os.Getenv("CIRRUS_AGENT_TOKEN"),
@@ -110,6 +119,7 @@ func ConfigFromEnv() (Config, error) {
 		Auth:         env("CIRRUS_AUTH", "tailscale"),
 		AuthHeader:   env("CIRRUS_AUTH_HEADER", "Remote-User"),
 		AllowedUsers: splitList(os.Getenv("CIRRUS_ALLOWED_USERS")),
+		Hosts:        hostList(os.Getenv("CIRRUS_HOSTS")),
 
 		WakeBroadcast:   env("CIRRUS_WAKE_BROADCAST", "255.255.255.255:9"),
 		WakeCmd:         strings.Fields(os.Getenv("CIRRUS_WAKE_CMD")),
@@ -122,6 +132,12 @@ func ConfigFromEnv() (Config, error) {
 	}
 	c.ServerHost = env("CIRRUS_SERVER_HOST", c.ServerName)
 
+	if c.Dev && !loopbackListen(c.Listen) {
+		return c, fmt.Errorf("CIRRUS_DEV=1 signs everyone in, so CIRRUS_LISTEN must be a loopback address (127.0.0.1:port), not %q", c.Listen)
+	}
+	if c.Socket != "" && !filepath.IsAbs(c.Socket) {
+		return c, errSocketPath
+	}
 	if len(c.AgentToken) < 32 {
 		return c, fmt.Errorf("CIRRUS_AGENT_TOKEN must be set to at least 32 random characters")
 	}
@@ -283,6 +299,35 @@ func parsePrefixes(s string) ([]netip.Prefix, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// loopbackListen reports whether a listen address only takes connections
+// from this machine.
+func loopbackListen(listen string) bool {
+	h, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return false
+	}
+	if h == "localhost" {
+		return true
+	}
+	a, err := netip.ParseAddr(h)
+	return err == nil && a.IsLoopback()
+}
+
+// hostList reads CIRRUS_HOSTS: names, lowercased, without a port or a
+// trailing dot. ".example.com" also takes every name under example.com.
+func hostList(s string) []string {
+	var out []string
+	for _, h := range splitList(s) {
+		if hh, _, err := net.SplitHostPort(h); err == nil {
+			h = hh
+		}
+		if h = strings.TrimSuffix(h, "."); h != "" {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 func hostname() string {

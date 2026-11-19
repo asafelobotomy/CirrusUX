@@ -33,7 +33,9 @@ Examples: `deploy/gateway/gateway.env.example`,
 
 | Setting | Default | What it does |
 |---|---|---|
-| `CIRRUS_LISTEN` | `127.0.0.1:8064` | Address to listen on. Keep it on loopback: the front end (`tailscale serve` or a reverse proxy) publishes it |
+| `CIRRUS_LISTEN` | `127.0.0.1:8064` | Address to listen on. Keep it on loopback: the front end (`tailscale serve` or a reverse proxy) publishes it. With `CIRRUS_SOCKET` set it serves only the agent's routes (`/agent/`, which need its token) |
+| `CIRRUS_SOCKET` | — | A Unix socket to serve the panel on, e.g. `/run/cirrusux-gateway/gateway.sock`. Only the socket's user, `CIRRUS_SOCKET_GROUP` and root can open it, and only requests that come through it are signed in, so no other program on the machine can pose as a signed-in person through 127.0.0.1. `cirrusux-setup` sets it when Tailscale can serve a socket (`tailscale serve --https=443 unix:<path>`); with a reverse proxy, point the proxy at it |
+| `CIRRUS_SOCKET_GROUP` | — | A group that may open `CIRRUS_SOCKET` besides the gateway's user: your reverse proxy's (the gateway's user must be in it). tailscaled runs as root and needs none |
 | `CIRRUS_DATA_DIR` | `/var/lib/cirrusux-gateway` | Snapshot cache, settings, audit log |
 | `CIRRUS_AGENT_TOKEN` | — (required) | Shared secret with the agent, 32+ characters |
 | `CIRRUS_SERVER_NAME` | `server` | The server's name in the UI and the audit log |
@@ -46,6 +48,7 @@ Examples: `deploy/gateway/gateway.env.example`,
 | `CIRRUS_AUTH_HEADER` | `Remote-User` | The header a reverse proxy sets (header mode) |
 | `CIRRUS_TRUSTED_PROXIES` | `127.0.0.1,::1` | Addresses or prefixes the identity header is believed from |
 | `CIRRUS_ALLOWED_USERS` | — (required) | Comma-separated logins allowed in |
+| `CIRRUS_HOSTS` | — | Names the panel answers on, besides addresses, short names (`homeserver`), `*.ts.net`, this machine's name and `CIRRUS_GIT_URL`'s host. A name starting with `.` takes every name under it. Other names get 421, which stops a web page that points its own name at 127.0.0.1 (DNS rebinding) from using the panel. Header mode: list your reverse proxy's name here; until you do, any name is answered and the gateway warns at start |
 | `CIRRUS_WAKE` | `none` (`command` if a command is set) | Split only: `wol`, `command` or `none` |
 | `CIRRUS_WAKE_MAC` | — (the agent reports it) | `wol`, optional: the server's MAC address. Without it the gateway uses the one the agent last reported; set it only to override that, or if the agent hasn't reported yet |
 | `CIRRUS_WAKE_BROADCAST` | `255.255.255.255:9` | `wol`: where the magic packet goes |

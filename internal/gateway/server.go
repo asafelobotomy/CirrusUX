@@ -88,6 +88,7 @@ func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 	s := &Server{zone: time.UTC, protocol: snapshot.Protocol, cfg: cfg, store: store, power: power, web: web, queue: NewQueue(), registry: &registry.Client{}, storeClient: newStoreClient()}
 	s.ctx, s.stop = context.WithCancel(context.Background())
 	s.newReleaseDefaults()
+	s.warnOpenHosts()
 	if cfg.TZ != nil {
 		s.zone = cfg.TZ
 		store.zone = cfg.TZ
@@ -138,12 +139,14 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/release/check", s.postReleaseCheck)
 	s.gitRoutes(api)
 	s.buildRoutes(mux, api)
-	mux.Handle("/api/", s.auth(api))
+	// Everything that believes an identity header first checks the name it
+	// was asked for (hosts.go); /agent/ has its own token instead.
+	mux.Handle("/api/", s.hostGate(s.auth(api)))
 	if s.git != nil {
-		mux.HandleFunc("/git/", s.gitHTTP)
+		mux.Handle("/git/", s.hostGate(http.HandlerFunc(s.gitHTTP)))
 	}
 
-	mux.Handle("/", s.auth(http.HandlerFunc(s.static)))
+	mux.Handle("/", s.hostGate(s.auth(http.HandlerFunc(s.static))))
 	return securityHeaders(mux)
 }
 
@@ -190,7 +193,12 @@ func (s *Server) auth(next http.Handler) http.Handler {
 	})
 }
 
+// fromTrustedProxy reports a request from the front end: through the
+// socket when there is one (socket.go), else from CIRRUS_TRUSTED_PROXIES.
 func (s *Server) fromTrustedProxy(r *http.Request) bool {
+	if s.cfg.Socket != "" {
+		return viaSocket(r)
+	}
 	ap, err := netip.ParseAddrPort(r.RemoteAddr)
 	if err != nil {
 		return false
