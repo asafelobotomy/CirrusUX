@@ -16,6 +16,10 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   shows each step and the log as it runs, and a build can be cancelled.
   Off until `BUILDS=yes` in helper.env (docs/BUILDS.md). Upgrading adds
   the `build-job` and `build-cancel` sudoers lines it needs.
+- `cirrusstore sign` and `index` can sign through an SSH agent
+  (`-agent -pub NAME.pub`), so a catalogue's signing key can stay in a
+  password manager that runs one instead of in a file. `cirrusstore
+  fromssh` makes a CirrusStore public key from an OpenSSH Ed25519 one.
 
 ### Changed
 
