@@ -59,6 +59,10 @@ func main() {
 		slog.Error("CIRRUS_GATEWAY_URL and CIRRUS_AGENT_TOKEN are required")
 		os.Exit(2)
 	}
+	if err := agent.CheckGatewayURL(*gateway); err != nil {
+		slog.Error("config", "err", err)
+		os.Exit(2)
+	}
 	a := agent.New(agent.Config{GatewayURL: *gateway, Token: token, Interval: *interval, DemoFile: *demo}, c)
 	if err := a.Run(ctx); err != nil {
 		slog.Error("agent stopped", "err", err)

@@ -39,6 +39,15 @@ func main() {
 		slog.Error("config", "err", err)
 		os.Exit(2)
 	}
+	// The panel's socket first, before anything else runs (its mode is set
+	// through the process's umask).
+	var sock net.Listener
+	if cfg.Socket != "" {
+		if sock, err = gateway.ListenSocket(cfg.Socket, cfg.SocketGroup); err != nil {
+			slog.Error("socket", "err", err)
+			os.Exit(1)
+		}
+	}
 	store, err := gateway.OpenStore(cfg.DataDir)
 	if err != nil {
 		slog.Error("store", "err", err)
@@ -61,14 +70,27 @@ func main() {
 	go gw.RunDigest(ctx)
 	go gw.RunReleaseCheck(ctx)
 
-	srv := &http.Server{
-		Addr:              cfg.Listen,
-		Handler:           gw.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		// Requests end with the process, so the agent's long poll doesn't
-		// hold up a shutdown.
-		BaseContext: func(net.Listener) context.Context { return ctx },
+	newServer := func(h http.Handler) *http.Server {
+		return &http.Server{
+			Addr:              cfg.Listen,
+			Handler:           h,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			// Requests end with the process, so the agent's long poll doesn't
+			// hold up a shutdown.
+			BaseContext: func(net.Listener) context.Context { return ctx },
+		}
+	}
+	srv, panel := newServer(gw.Handler()), (*http.Server)(nil)
+	if sock != nil {
+		// The panel is on the socket; the TCP address keeps the agent's routes.
+		srv, panel = newServer(gw.AgentHandler()), newServer(gw.SocketHandler())
+		go func() {
+			if err := panel.Serve(sock); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("serve socket", "err", err)
+				os.Exit(1)
+			}
+		}()
 	}
 	stopped := make(chan struct{})
 	go func() {
@@ -78,8 +100,11 @@ func main() {
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(sctx)
+		if panel != nil {
+			_ = panel.Shutdown(sctx) // also removes the socket file
+		}
 	}()
-	slog.Info("gateway listening", "version", version.String(), "addr", cfg.Listen, "dev", cfg.Dev, "setup", cfg.Setup, "server", cfg.ServerName, "assistant", cfg.AssistantEnabled())
+	slog.Info("gateway listening", "version", version.String(), "addr", cfg.Listen, "socket", cfg.Socket, "dev", cfg.Dev, "setup", cfg.Setup, "server", cfg.ServerName, "assistant", cfg.AssistantEnabled())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("serve", "err", err)
 		os.Exit(1)

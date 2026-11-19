@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"path"
 	"regexp"
 	"slices"
@@ -192,6 +193,9 @@ func (a App) Validate() error {
 		return bad("digest: sha256:<64 hex>, the tag's image digest")
 	case len(a.Ports) == 0:
 		return bad("at least one port")
+	case a.Website != "" && !httpsURL(a.Website):
+		// The panel links to it: a javascript: or data: link would run in it.
+		return bad("website %q: an https:// address", a.Website)
 	}
 
 	ports := map[string]bool{}
@@ -269,6 +273,13 @@ func (a App) Validate() error {
 		return bad("check: an existing port name and a path starting with /")
 	}
 	return nil
+}
+
+// httpsURL reports an absolute https:// address with a host and nothing
+// a link could misuse.
+func httpsURL(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil && !strings.ContainsAny(s, " \t\r\n\"'<>\\")
 }
 
 // ValidDigest reports whether d is an image digest: sha256 and 64 hex digits.

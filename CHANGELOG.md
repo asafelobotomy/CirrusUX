@@ -20,6 +20,16 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 - Terminal page (`CIRRUS_TERMINAL=on` on the gateway): SSH and SFTP to the
   server in the browser through OpenSSH, signed in by sshd as any client
   is. Opening and closing sessions are logged.
+- CirrusStore: **Add a source** in the Store's Sources card checks a
+  third-party catalogue before you trust it. Give its URL and the
+  publisher's public key (the whole `NAME.pub` line, or its last field);
+  the gateway fetches the catalogue once, checks every file against that
+  key exactly as Check CirrusStore would, and lists its apps with any that
+  would be left out or clash with an app you already have. It shows the
+  key's fingerprint to compare with the publisher's, and the
+  `STORE_SOURCES` entry to add on the server. Nothing is kept and nothing
+  changes on the server: trusting a source is still done by root, with
+  `cirrusux-setup apply store`.
 - Builds: a repository's `.cirrus/build.yml` lists steps (an image and
   commands), and **Run build** on its new Builds tab runs them on the
   server, each in a fresh container as an unprivileged user, on a network
@@ -27,6 +37,10 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   shows each step and the log as it runs, and a build can be cancelled.
   Off until `BUILDS=yes` in helper.env (docs/BUILDS.md). Upgrading adds
   the `build-job` and `build-cancel` sudoers lines it needs.
+- `cirrusstore sign` and `index` can sign through an SSH agent
+  (`-agent -pub NAME.pub`), so a catalogue's signing key can stay in a
+  password manager that runs one instead of in a file. `cirrusstore
+  fromssh` makes a CirrusStore public key from an OpenSSH Ed25519 one.
 
 ### Changed
 
@@ -34,6 +48,36 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
   Home Assistant 2026.11.1, Nextcloud 35.0.2-apache's rebuilt digest, and
   Picard from `jlesage/musicbrainz-picard` v26.11.1 (Picard 3.0.4), which
   also runs on arm64.
+
+### Security
+
+- The panel answers only on names it knows: addresses, short names,
+  `*.ts.net`, this machine's name, `CIRRUS_GIT_URL`'s host and the new
+  `CIRRUS_HOSTS`. A web page that points its own name at 127.0.0.1 (DNS
+  rebinding) could otherwise reach the gateway from a browser on the same
+  machine, set the identity header itself and use the panel and Git
+  hosting. With a reverse proxy (`CIRRUS_AUTH=header`), set `CIRRUS_HOSTS`
+  to its name: until then any name is still answered, and the gateway
+  warns at start.
+- The panel can be served on a Unix socket (`CIRRUS_SOCKET`) that only
+  the front end can open. Only requests through it are signed in, and
+  127.0.0.1 keeps just the agent's routes, so no other program on the
+  machine can pose as a signed-in person by sending the identity header to
+  127.0.0.1. With `CIRRUS_TAILSCALE_SERVE=yes`, `cirrusux-setup apply` moves
+  the panel onto `/run/cirrusux-gateway/gateway.sock` when Tailscale can
+  serve a socket, and warns when it can't. A reverse proxy can be pointed at
+  it (`CIRRUS_SOCKET_GROUP`, docs/INSTALL.md).
+- `CIRRUS_DEV=1`, which signs everyone in, is refused unless
+  `CIRRUS_LISTEN` is a loopback address.
+- The agent refuses a `CIRRUS_GATEWAY_URL` that would send its token
+  unencrypted (plain `http://` to anything but this machine or a Tailscale
+  address), and follows no redirects, which could carry the token along.
+- A Git import no longer lets git follow redirects: the gateway follows
+  them itself, refusing any that lead inside your network, so a public
+  address can't redirect an import to the router or another LAN service.
+  Renamed repositories that redirect still import.
+- An app definition's `website` must be an `https://` address, so a
+  third-party CirrusStore source can't put a `javascript:` link in the panel.
 
 ## [0.9.0] - 2026-11-18
 

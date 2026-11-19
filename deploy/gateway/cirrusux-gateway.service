@@ -13,6 +13,11 @@ ExecStart=/usr/local/bin/cirrusux-gateway
 # /var/lib/cirrusux belongs to root (setup and the helper keep state there).
 StateDirectory=cirrusux-gateway
 StateDirectoryMode=0700
+# The panel's socket (CIRRUS_SOCKET=/run/cirrusux-gateway/gateway.sock). The
+# folder can be passed through; the socket itself is 660, so only this user,
+# CIRRUS_SOCKET_GROUP and root (tailscaled) can open it.
+RuntimeDirectory=cirrusux-gateway
+RuntimeDirectoryMode=0755
 Restart=on-failure
 RestartSec=5s
 # A wake command or the router check may go through sudo (one fixed rule

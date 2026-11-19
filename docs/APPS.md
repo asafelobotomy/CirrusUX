@@ -279,26 +279,56 @@ or `bin/cirrusstore` in a release):
 | `cirrusstore keygen -name NAME` | A new key pair: `NAME.key` (mode 600; keep it offline) and `NAME.pub` |
 | `cirrusstore sign -key NAME.key DEF.json…` | Wraps each definition in a signed envelope in `apps/`, keeping the serial if it's unchanged and adding one if not |
 | `cirrusstore index -key NAME.key` | Lists `apps/` in a new signed `index.json`, one serial up |
+| `cirrusstore fromssh -name NAME KEY.pub` | Prints the CirrusStore public key for an OpenSSH Ed25519 public key |
 | `cirrusstore verify -pub NAME.pub DIR` | Checks a folder the way a server will, including that the index and the envelopes agree |
 
 `-source` names the source (default: the key's name), `-days` sets the
 expiry (default 180), and `-dir` the catalogue folder (default `.`).
 
-A release of a catalogue, from a folder of definitions in `defs/`:
+### Signing with an SSH agent
+
+`sign` and `index` can leave the signing to an SSH agent, such as the one in
+a password manager, so the key is never a file. Give `-agent` instead of
+`-key`, and `-pub` for the key to sign with:
 
 ```bash
-cirrusstore sign -key ~/offline/friends.key -dir site defs/*.json
-cirrusstore index -key ~/offline/friends.key -dir site
-cirrusstore verify -pub friends.pub site
+cirrusstore sign  -agent -pub cirrusstore.pub -dir site defs/*.json
+cirrusstore index -agent -pub cirrusstore.pub -dir site
 ```
 
-Then publish `site/` as it is. Only `NAME.pub` is ever shared.
+The agent is the one at `$SSH_AUTH_SOCK`. The key must be an Ed25519 key,
+and the agent must offer it, or nothing is signed. Ed25519 signatures are
+the same whoever makes them, so servers see no difference. The tool checks
+each signature against `-pub` before it writes it. An agent may ask its
+owner to approve each signature, and `sign` and `index` ask once per file.
+
+An existing signing key (`NAME.key`) isn't an SSH key file, and the tool
+can't load it into an agent. Its seed is a standard Ed25519 seed, so it can
+be turned into an OpenSSH key by other tools; the public key stays the
+same, `-pub` is the `NAME.pub` already published, and no release is needed.
+Otherwise, to move to an agent, make an Ed25519 key in it, turn
+its public half into a CirrusStore key with `cirrusstore fromssh`, and add
+that line to `internal/store/official.pub` in a release: a source may have
+several keys, and a file is accepted if any of them signed it. Only sign
+with the new key once the servers you care about run that release, because
+an older one has never heard of it and would refuse the files. The old key
+can be dropped in a later release.
 
 ## Hosting your own source
 
 Any static HTTPS host works (GitHub Pages, a bucket, a plain web server).
 The source's name is the one in your key and every file (lowercase letters,
 digits and `-`; `cirrusstore` and `built-in` are taken).
+
+To check it first, open **Add a source** in the Store's Sources card and
+give the catalogue's URL and `friends.pub` (the whole line, or just its last
+field). The gateway fetches the catalogue once and checks every file
+against that key, as Check CirrusStore would. It lists the apps it offers,
+marks any that would be left out (a bad signature, a definition CirrusUX
+refuses, such as one asking for privileged mode or host networking) or that
+clash with an app id you already have, and shows the key's fingerprint and
+the exact `STORE_SOURCES` entry to use. Nothing is cached, and nothing
+changes on the server.
 
 To trust it, the server's owner adds it to `host.env` and runs the store
 module:
@@ -312,8 +342,10 @@ sudo cirrusux-setup apply store
 That writes `/etc/cirrusux/store.d/friends.source` (root, mode 644). The
 panel lists the source with its key's fingerprint (`SHA256:…`): compare it
 with the one `cirrusstore keygen` printed for you, over a channel other
-than the one the key came by. The panel can't add a source; only root on
-the server can.
+than the one the key came by. The panel can check a source but can't add
+one; only root on the server can. To drop a source, take it out of
+`STORE_SOURCES` and apply the store module again (a dated copy of its file
+stays).
 
 App ids are unique across sources. If yours has an id that a built-in or
 official app already uses, CirrusStore shows yours as unavailable, with the

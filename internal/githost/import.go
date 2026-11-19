@@ -49,12 +49,21 @@ func (h *Host) Import(ctx context.Context, name, rawURL string) error {
 	tmp := filepath.Join(h.Dir, ".tmp-"+name+"-"+hex.EncodeToString(b))
 	defer os.RemoveAll(tmp)
 	extra := []string{"GIT_ALLOW_PROTOCOL=https"}
-	if u.User != nil {
+	switch {
+	case u.User != nil:
 		pw, _ := u.User.Password()
 		auth := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(u.User.Username()+":"+pw))
 		// Not followed to another address: the header would go along.
 		extra = append(extra, "GIT_CONFIG_PARAMETERS="+configParams("http.extraHeader", auth, "http.followRedirects", "false"))
 		u.User = nil
+	case !h.AllowPrivateImport:
+		// git would follow a redirect into this network without asking, so
+		// the redirects are followed here, each checked, and git gets the
+		// final address and follows nothing (import_redirect.go).
+		if u, err = h.followImport(ctx, u); err != nil {
+			return err
+		}
+		extra = append(extra, "GIT_CONFIG_PARAMETERS="+configParams("http.followRedirects", "false"))
 	}
 	err = h.exec(ctx, h.Dir, nil, extra, "clone", "--bare", "-q", "--", u.String(), tmp)
 	if err != nil {
@@ -97,13 +106,27 @@ func (h *Host) checkImportHost(ctx context.Context, host string) error {
 		ips = found
 	}
 	for _, ip := range ips {
-		ip = ip.Unmap()
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-			ip.IsUnspecified() || ip.IsMulticast() || cgnat.Contains(ip) {
-			return errf(Invalid, "That address points inside your own network. Set CIRRUS_GIT_IMPORT_PRIVATE=1 to allow it")
+		if h.inside(ip) {
+			return errInside
 		}
 	}
 	return nil
+}
+
+var errInside = errf(Invalid, "That address points inside your own network. Set CIRRUS_GIT_IMPORT_PRIVATE=1 to allow it")
+
+// inside reports an address on this machine or its network.
+func (h *Host) inside(ip netip.Addr) bool {
+	if h.insideFn != nil {
+		return h.insideFn(ip)
+	}
+	return insideNetwork(ip)
+}
+
+func insideNetwork(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() || ip.IsMulticast() || cgnat.Contains(ip)
 }
 
 // cgnat is 100.64.0.0/10, which Tailscale uses.

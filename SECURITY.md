@@ -24,7 +24,14 @@ These are design rules; a way around any of them is a security problem:
 
 - Secrets never reach the browser, URLs or logs, and the router password
   never reaches the panel at all.
-- The panel is reachable only from the LAN and the tailnet by default.
+- The panel is reachable only from the LAN and the tailnet by default,
+  and answers only on names it knows (`CIRRUS_HOSTS`), so a DNS-rebinding
+  page can't reach it through a local browser.
+- With the panel on its socket (`CIRRUS_SOCKET`, set up with Tailscale
+  by `cirrusux-setup`), only the front end is believed about who is
+  signed in: other programs on the machine reach only the agent's routes.
+- The agent's token travels only over HTTPS, or to this machine or a
+  Tailscale address.
 - Every change is confirmed by a person; the assistant only proposes.
 - The gateway reaches the server's root only through the helper's fixed
   sudoers lines, and the helper checks every argument it's given.
@@ -51,7 +58,10 @@ trust:
   binaries; third-party keys are in `/etc/cirrusux/store.d/`, written by
   `cirrusux-setup` from `host.env`. The helper refuses files there that
   root doesn't own or others can write. The panel shows each key's
-  fingerprint, but it can't add, change or remove a source.
+  fingerprint, but it can't add, change or remove a source. It can check
+  one before you trust it (the gateway fetches that catalogue once with
+  the key you give, verifies it and keeps nothing); the result is a line
+  for `host.env`, which root applies.
 - **The helper checks again.** The gateway fetches and verifies catalogues
   only for browsing. An install or update hands the helper the exact signed
   envelope, and the helper verifies it against its own keys (signature,
