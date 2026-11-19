@@ -46,6 +46,8 @@ type Server struct {
 	// git is Git hosting, nil when off (docs/GIT.md).
 	git       *githost.Host
 	gitTokens *gitTokenStore
+	// builds are Git hosting's builds (builds.go), nil when it is off.
+	builds *buildStore
 	// ctx lives as long as the server; Close cancels it, and with it any
 	// Git action still running.
 	ctx  context.Context
@@ -101,6 +103,7 @@ func NewServer(cfg Config, store *Store, power *Power, web fs.FS) *Server {
 		} else {
 			h.AllowPrivateImport = cfg.GitImportPrivate
 			s.git, s.gitTokens = h, openGitTokens(filepath.Join(cfg.DataDir, "git-tokens.json"))
+			s.builds = openBuilds(filepath.Join(cfg.DataDir, "builds"))
 		}
 	}
 	return s
@@ -134,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/release", s.getRelease)
 	api.HandleFunc("POST /api/release/check", s.postReleaseCheck)
 	s.gitRoutes(api)
+	s.buildRoutes(mux, api)
 	mux.Handle("/api/", s.auth(api))
 	if s.git != nil {
 		mux.HandleFunc("/git/", s.gitHTTP)

@@ -64,6 +64,9 @@ func (a *Agent) Run(ctx context.Context) error {
 	defer tick.Stop()
 
 	go a.commandLoop(ctx)
+	if a.cfg.DemoFile == "" {
+		go a.resumeBuilds(ctx)
+	}
 	nextPush, retryUntil := firstSchedule(a.cycle(ctx), time.Now(), a.cfg.Interval)
 	last := time.Now().Round(0)
 

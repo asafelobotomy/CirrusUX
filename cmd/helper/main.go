@@ -57,6 +57,9 @@ var argChecks = map[string]func(a []string) bool{
 		}
 		return a[0] == "upgrade" && selfupgrade.VersionRe.MatchString(a[2]) || a[0] == "rollback" && a[2] == "-"
 	},
+	helperapi.CmdBuildJob:    func(a []string) bool { return len(a) == 1 && helperapi.JobRe.MatchString(a[0]) },
+	helperapi.CmdBuildCancel: func(a []string) bool { return len(a) == 1 && helperapi.JobRe.MatchString(a[0]) },
+	helperapi.CmdBuildRun:    func(a []string) bool { return len(a) == 1 && helperapi.JobRe.MatchString(a[0]) },
 	helperapi.CmdStorageRun: func(a []string) bool {
 		return len(a) == 3 && (a[0] == "scan" || a[0] == "delete") && helperapi.JobRe.MatchString(a[1]) && entryRe.MatchString(a[2])
 	},
@@ -167,6 +170,9 @@ func main() {
 	case helperapi.CmdStorageRun:
 		need(helperapi.ModStorage)
 		out, err = storageRun(c, os.Args[2], os.Args[3], os.Args[4])
+	case helperapi.CmdBuildJob, helperapi.CmdBuildCancel, helperapi.CmdBuildRun:
+		need(helperapi.ModBuilds)
+		out, err = buildCommand(ctx, c, sub, os.Args[2])
 	case helperapi.CmdJournal:
 		out, err = command(ctx, "journalctl", "-u", os.Args[2], "-n", "300", "-o", "short-iso", "--no-pager")
 	case helperapi.CmdEgressReport:

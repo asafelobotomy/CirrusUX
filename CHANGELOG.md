@@ -7,6 +7,16 @@ gets a minor version; from 1.0.0, docs/ROADMAP.md says what stays stable.
 
 ## [Unreleased]
 
+### Added
+
+- Builds: a repository's `.cirrus/build.yml` lists steps (an image and
+  commands), and **Run build** on its new Builds tab runs them on the
+  server, each in a fresh container as an unprivileged user, on a network
+  of its own that reaches the internet but not your local network. The tab
+  shows each step and the log as it runs, and a build can be cancelled.
+  Off until `BUILDS=yes` in helper.env (docs/BUILDS.md). Upgrading adds
+  the `build-job` and `build-cancel` sudoers lines it needs.
+
 ### Changed
 
 - The built-in catalogue matches the official CirrusStore catalogue again:
