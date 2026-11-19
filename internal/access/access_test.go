@@ -98,10 +98,13 @@ alice:x:1000:1000:Alice:/home/alice:/bin/bash
 media:x:1001:1001::/home/media:/usr/sbin/nologin
 nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
 `
-	group := "sudo:x:27:alice\nusers:x:100:media\n"
+	group := "sudo:x:27:alice\nusers:x:100:media\nalice:x:1000:\n"
 	us := ParseAccounts(passwd, group)
 	if len(us) != 3 {
 		t.Fatalf("got %d accounts: %+v", len(us), us)
+	}
+	if g := us[1].Groups; len(g) != 2 || g[0] != "sudo" || g[1] != "alice" {
+		t.Errorf("alice's groups: %v", g)
 	}
 	if !us[0].Admin || !us[1].Admin || us[2].Admin {
 		t.Errorf("admins wrong: %+v", us)

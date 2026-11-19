@@ -276,8 +276,13 @@ func accountLock(ctx context.Context, name string, lock bool) (helperapi.Result,
 		if all[i].Locked {
 			return helperapi.Result{Output: []string{name + " is already locked"}}, nil
 		}
+		var sshd access.SSH
+		if out, err := execx.Run(ctx, execx.Options{}, "sshd", "-T"); err == nil {
+			sshd.Installed = true
+			access.ApplySSHDConfig(&sshd, string(out))
+		}
 		others := slices.ContainsFunc(all, func(a access.Account) bool {
-			return a.Name != name && a.UID >= 1000 && a.Admin && a.CanLogin && !a.Locked
+			return a.Name != name && a.UID >= 1000 && a.Admin && a.CanLogin && !a.Locked && canSignIn(ctx, a, sshd)
 		})
 		if u.Admin && !others {
 			return helperapi.Result{}, fmt.Errorf("%s is the only admin who can log in; locking it would shut everyone out", name)
@@ -291,6 +296,25 @@ func accountLock(ctx context.Context, name string, lock bool) (helperapi.Result,
 		return helperapi.Result{}, fmt.Errorf("%s expired on a date someone set; change it with `chage -E`, not the panel", name)
 	}
 	return run(ctx, "usermod", "--expiredate", "", name)
+}
+
+// canSignIn is whether an account has a way to log in: a password where
+// sshd takes passwords, or a key where it takes keys. When sshd's settings
+// can't be read, either counts.
+func canSignIn(ctx context.Context, a access.Account, sshd access.SSH) bool {
+	known := sshd.Installed || sshd.PubkeyAuth || sshd.PasswordAuth
+	if a.Password && (!known || sshd.PasswordAuth) {
+		return true
+	}
+	if known && !sshd.PubkeyAuth {
+		return false
+	}
+	out, err := asUser(ctx, a.Name, "read", "-")
+	if err != nil {
+		return false
+	}
+	text, _, _ := strings.Cut(string(out), "\x00")
+	return len(access.ParseKeys(text)) > 0
 }
 
 // asUser runs keys-io as the account, with its own IDs and no others.

@@ -15,7 +15,7 @@ export interface Account {
   name: string; uid: number; home: string; shell: string;
   canLogin: boolean; admin: boolean; password: boolean;
   locked: boolean; lockedByPanel?: boolean;
-  keys: SSHKey[]; totp: boolean; keysError?: string;
+  keys: SSHKey[]; totp: boolean; keysError?: string; groups?: string[];
 }
 
 export interface SSHInfo {
@@ -48,16 +48,18 @@ export interface NetworkInfo {
 /** The accounts a person logs in with: UID 1000 and up, with a shell. */
 export const people = (a: AccessInfo | null): Account[] => (a?.users ?? []).filter((u) => u.uid >= 1000 && u.canLogin);
 
-/** Whether a user may log in over SSH under sshd's AllowUsers / AllowGroups (groups aren't resolved here). */
+/** Whether a user may log in over SSH under sshd's AllowUsers and AllowGroups (both must let them in). */
 export function sshAllowed(ssh: SSHInfo, u: Account): boolean {
   if (u.locked || !u.canLogin) return false;
   if (u.uid === 0 && ssh.rootLogin === 'no') return false;
   const allow = ssh.allowUsers ?? [];
-  if (!allow.length) return true;
-  return allow.some((w) => {
+  const byUser = !allow.length || allow.some((w) => {
     const name = w.split('@')[0];
     return name === '*' || name === u.name;
   });
+  const groups = ssh.allowGroups ?? [];
+  const byGroup = !groups.length || groups.some((g) => (u.groups ?? []).includes(g));
+  return byUser && byGroup;
 }
 
 /** The way into each account, in words. */

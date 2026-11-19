@@ -80,6 +80,18 @@ func TestAccountActions(t *testing.T) {
 			t.Errorf("%+v: %v", a, err)
 		}
 	}
+	// A key with options can't be put back as it was, so removing it has no undo.
+	restricted := accessSnap()
+	rk, _ := access.ParseKey(pubKey(5, "ci"))
+	rk.Options = true
+	restricted.Access.Users[1].Keys = append(restricted.Access.Users[1].Keys, rk)
+	c, spec, err = (ActionReq{Action: "ssh_key_remove", Args: map[string]string{"user": "alice", "fingerprint": rk.Fingerprint, "key": "ssh-ed25519 AAAA forged"}}).Validate(&restricted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.undo(c.Args) != nil || c.Args["key"] != "" {
+		t.Errorf("a key with options got an undo: %+v", c.Args)
+	}
 	noAccess := awakeSnap()
 	if _, _, err := (ActionReq{Action: "account_lock", Args: map[string]string{"user": "alice"}}).Validate(&noAccess); err == nil {
 		t.Error("accepted without the access module")

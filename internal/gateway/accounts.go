@@ -44,15 +44,22 @@ func init() {
 			if i < 0 {
 				return fmt.Errorf("%s has no key %s", u.Name, a["fingerprint"])
 			}
-			// Kept for the undo, which puts the same key back.
-			k := u.Keys[i]
-			a["key"] = k.Public
-			if k.Comment != "" {
-				a["key"] += " " + k.Comment
+			// Kept for the undo, which puts the same key back. A key with
+			// options (from=, command=…) can't be put back as it was, and
+			// the panel never writes options, so it has no undo.
+			delete(a, "key")
+			if k := u.Keys[i]; !k.Options {
+				a["key"] = k.Public
+				if k.Comment != "" {
+					a["key"] += " " + k.Comment
+				}
 			}
 			return nil
 		},
 		undo: func(a map[string]string) *ActionReq {
+			if a["key"] == "" {
+				return nil
+			}
 			return &ActionReq{Action: "ssh_key_add", Args: map[string]string{"user": a["user"], "key": a["key"]}}
 		},
 	}
