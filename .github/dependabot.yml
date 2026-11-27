@@ -8,6 +8,11 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+    ignore:
+      # svelte-check 4.x accepts only TypeScript 5 or 6 as a peer, so TS 7 fails npm ci.
+      # Remove this once svelte-check supports TypeScript 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
